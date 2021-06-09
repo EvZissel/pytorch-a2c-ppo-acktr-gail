@@ -13,7 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 from a2c_ppo_acktr import algo, utils
 from a2c_ppo_acktr.arguments import get_args
 from a2c_ppo_acktr.envs import make_vec_envs
-from a2c_ppo_acktr.model import Policy
+from a2c_ppo_acktr.model import Policy, MLPAttnBase, MLPHardAttnBase
 from a2c_ppo_acktr.storage import RolloutStorage
 from evaluation import evaluate
 from a2c_ppo_acktr.utils import save_obj, load_obj
@@ -104,6 +104,11 @@ def main():
                          free_exploration=args.free_exploration, recurrent=args.recurrent_policy,
                          obs_recurrent=args.obs_recurrent, multi_task=True)
 
+    val_envs = make_vec_envs(args.val_env_name, args.seed, args.num_processes,
+                             args.gamma, args.log_dir, device, False, steps=args.task_steps,
+                             free_exploration=args.free_exploration, recurrent=args.recurrent_policy,
+                             obs_recurrent=args.obs_recurrent, multi_task=True)
+
     eval_envs_dic = {}
     for eval_disp_name, eval_env_name in EVAL_ENVS.items():
         eval_envs_dic[eval_disp_name] = make_vec_envs(eval_env_name[0], args.seed, args.num_processes,
@@ -113,11 +118,18 @@ def main():
                                                       free_exploration=args.free_exploration)
     prev_eval_r = {}
     print('done')
-
-    actor_critic = Policy(
-        envs.observation_space.shape,
-        envs.action_space,
-        base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
+    if args.hard_attn:
+        actor_critic = Policy(
+            envs.observation_space.shape,
+            envs.action_space,
+            base=MLPHardAttnBase,
+            base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
+    else:
+        actor_critic = Policy(
+            envs.observation_space.shape,
+            envs.action_space,
+            base=MLPAttnBase,
+            base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
     actor_critic.to(device)
 
     if (args.continue_from_epoch > 0) and args.save_dir != "":
@@ -138,32 +150,39 @@ def main():
         args.entropy_coef,
         lr=args.lr,
         eps=args.eps,
-        max_grad_norm=args.max_grad_norm,
         num_tasks=args.num_processes,
-        use_pcgrad=args.use_pcgrad,
-        use_noisygrad=args.use_noisygrad,
-        use_testgrad=args.use_testgrad,
-        use_graddrop=args.use_graddrop,
-        use_testgrad_median=args.use_testgrad_median,
-        testgrad_quantile=args.testgrad_quantile,
-        use_privacy=args.use_privacy,
-        use_median_grad=args.use_median_grad,
-        use_meanvargrad=args.use_meanvargrad,
-        meanvar_beta=args.meanvar_beta,
-        max_task_grad_norm=args.max_task_grad_norm,
-        grad_noise_ratio=args.grad_noise_ratio,
-        testgrad_alpha=args.testgrad_alpha,
-        testgrad_beta=args.testgrad_beta,
-        no_special_grad_for_critic=args.no_special_grad_for_critic,
+        attention_policy=False,
+        max_grad_norm=args.max_grad_norm,
+        weight_decay=args.weight_decay)
+    val_agent = algo.PPO(
+        actor_critic,
+        args.clip_param,
+        args.ppo_epoch,
+        args.num_mini_batch,
+        args.value_loss_coef,
+        args.entropy_coef,
+        lr=args.val_lr,
+        eps=args.eps,
+        num_tasks=args.num_processes,
+        attention_policy=True,
+        max_grad_norm=args.max_grad_norm,
         weight_decay=args.weight_decay)
 
     rollouts = RolloutStorage(args.num_steps, args.num_processes,
                               envs.observation_space.shape, envs.action_space,
                               actor_critic.recurrent_hidden_state_size)
 
+    val_rollouts = RolloutStorage(args.num_steps, args.num_processes,
+                                  val_envs.observation_space.shape, val_envs.action_space,
+                                  actor_critic.recurrent_hidden_state_size)
+
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
+
+    val_obs = val_envs.reset()
+    val_rollouts.obs[0].copy_(val_obs)
+    val_rollouts.to(device)
 
     episode_rewards = deque(maxlen=10)
 
@@ -174,6 +193,7 @@ def main():
     save_copy = True
     for j in range(args.continue_from_epoch, args.continue_from_epoch+num_updates):
 
+        # policy rollouts
         for step in range(args.num_steps):
             # Sample actions
             actor_critic.eval()
@@ -210,14 +230,51 @@ def main():
 
         rollouts.compute_returns(next_value, args.use_gae, args.gamma,
                                  args.gae_lambda, args.use_proper_time_limits)
+
+        # validation rollouts
+        for step in range(args.num_steps):
+            # Sample actions
+            actor_critic.eval()
+            with torch.no_grad():
+                value, action, action_log_prob, recurrent_hidden_states = actor_critic.act(
+                    val_rollouts.obs[step], val_rollouts.recurrent_hidden_states[step],
+                    val_rollouts.masks[step])
+            actor_critic.train()
+
+            # Obser reward and next obs
+            obs, reward, done, infos = val_envs.step(action)
+
+            # If done then clean the history of observations.
+            masks = torch.FloatTensor(
+                [[0.0] if done_ else [1.0] for done_ in done])
+            bad_masks = torch.FloatTensor(
+                [[0.0] if 'bad_transition' in info.keys() else [1.0]
+                 for info in infos])
+            val_rollouts.insert(obs, recurrent_hidden_states, action,
+                                action_log_prob, value, reward, masks, bad_masks)
+
+        actor_critic.eval()
+        with torch.no_grad():
+            next_value = actor_critic.get_value(
+                val_rollouts.obs[-1], val_rollouts.recurrent_hidden_states[-1],
+                val_rollouts.masks[-1]).detach()
+        actor_critic.train()
+
+        val_rollouts.compute_returns(next_value, args.use_gae, args.gamma,
+                                     args.gae_lambda, args.use_proper_time_limits)
+
         if save_copy:
             prev_weights = copy.deepcopy(actor_critic.state_dict())
             prev_opt_state = copy.deepcopy(agent.optimizer.state_dict())
+            prev_val_opt_state = copy.deepcopy(val_agent.optimizer.state_dict())
             save_copy = False
 
         value_loss, action_loss, dist_entropy = agent.update(rollouts)
 
+        val_value_loss, val_action_loss, val_dist_entropy = val_agent.update(val_rollouts)
+
         rollouts.after_update()
+        val_rollouts.after_update()
 
         # save for every interval-th episode or for the last epoch
         if (j % args.save_interval == 0
@@ -271,6 +328,7 @@ def main():
             if revert:
                 actor_critic.load_state_dict(prev_weights)
                 agent.optimizer.load_state_dict(prev_opt_state)
+                val_agent.optimizer.load_state_dict(prev_val_opt_state)
             else:
                 print(printout)
                 prev_eval_r = eval_r.copy()
@@ -279,6 +337,7 @@ def main():
 
     save_obj(log_dict, os.path.join(logdir, 'log_dict.pkl'))
     envs.close()
+    val_envs.close()
     for eval_disp_name, eval_env_name in EVAL_ENVS.items():
         eval_envs_dic[eval_disp_name].close()
 
