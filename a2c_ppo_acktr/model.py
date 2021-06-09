@@ -203,7 +203,7 @@ class MLPBase(NNBase):
             num_inputs = hidden_size
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
-                               constant_(x, 0), np.sqrt(2))
+                               constant_(x, 0), nn.init.calculate_gain('tanh'))
 
         self.actor = nn.Sequential(
             init_(nn.Linear(num_inputs, hidden_size)), nn.Tanh(),

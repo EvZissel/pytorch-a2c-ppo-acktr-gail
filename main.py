@@ -261,8 +261,8 @@ def main():
         if (args.eval_interval is not None and len(episode_rewards) > 1
                 and j % args.eval_interval == 0):
             actor_critic.eval()
-            # obs_rms = utils.get_vec_normalize(envs).obs_rms
-            obs_rms = 0
+            obs_rms = utils.get_vec_normalize(envs).obs_rms
+            # obs_rms = 0
             eval_r = {}
             printout = f'Seed {args.seed} Iter {j} '
             for eval_disp_name, eval_env_name in EVAL_ENVS.items():
