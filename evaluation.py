@@ -7,6 +7,8 @@ from a2c_ppo_acktr.envs import make_vec_envs
 
 def evaluate(actor_critic, obs_rms, eval_envs_dic, env_name, seed, num_processes, num_tasks, eval_log_dir,
              device, **kwargs):
+
+    eval_envs = eval_envs_dic[env_name]
     eval_episode_rewards = []
 
     for iter in range(0, num_tasks, num_processes):

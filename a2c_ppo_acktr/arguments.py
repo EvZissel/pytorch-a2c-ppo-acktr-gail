@@ -26,6 +26,8 @@ def get_args():
     parser.add_argument(
         '--lr', type=float, default=7e-4, help='learning rate (default: 7e-4)')
     parser.add_argument(
+        '--val_lr', type=float, default=7e-4, help='validation agent learning rate (default: 7e-4)')
+    parser.add_argument(
         '--eps',
         type=float,
         default=1e-5,
@@ -119,6 +121,10 @@ def get_args():
         help='number of environment steps to train (default: 10e6)')
     parser.add_argument(
         '--env-name',
+        default='PongNoFrameskip-v4',
+        help='environment to train on (default: PongNoFrameskip-v4)')
+    parser.add_argument(
+        '--val_env_name',
         default='PongNoFrameskip-v4',
         help='environment to train on (default: PongNoFrameskip-v4)')
     parser.add_argument(
@@ -249,6 +255,16 @@ def get_args():
         type=float,
         default=1.0,
         help='beta threshold parameter in mean - beta*var')
+    parser.add_argument(
+        '--val_improvement_threshold',
+        type=float,
+        default=-1e6,
+        help='threshold on improvement in validation reward for reverting the gradient update')
+    parser.add_argument(
+        '--hard_attn',
+        action='store_true',
+        default=False,
+        help='use hard attention in val agent')
     args = parser.parse_args()
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
