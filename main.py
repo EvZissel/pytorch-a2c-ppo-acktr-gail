@@ -31,9 +31,12 @@ from a2c_ppo_acktr.utils import save_obj, load_obj
 #              'ten_arms': 'h_bandit-randchoose-v3',
 #              'many_arms': 'h_bandit-randchoose-v1'}
 
-EVAL_ENVS = {'five_arms': 'h_bandit-randchoose-v6',
-             'ten_arms': 'h_bandit-randchoose-v5',
-             'many_arms': 'h_bandit-randchoose-v1'}
+# EVAL_ENVS = {'five_arms': ['h_bandit-randchoose-v6', 5],
+#              'ten_arms': ['h_bandit-randchoose-v5', 10],
+#              'many_arms': ['h_bandit-randchoose-v1', 100]}
+
+EVAL_ENVS = {'ten_arms': ['h_bandit-obs-randchoose-v5', 10],
+             'many_arms': ['h_bandit-obs-randchoose-v1', 100]}
 
 # EVAL_ENVS = {'many_arms': 'h_bandit-randchoose-v1'}
 
@@ -108,17 +111,22 @@ def main():
     torch.set_num_threads(1)
     device = torch.device("cuda:0" if args.cuda else "cpu")
 
+    print('making envs...')
     envs = make_vec_envs(args.env_name, args.seed, args.num_processes,
                          args.gamma, args.log_dir, device, False, steps=args.task_steps,
                          free_exploration=args.free_exploration, recurrent=args.recurrent_policy,
                          obs_recurrent=args.obs_recurrent, multi_task=True)
+
     eval_envs_dic = {}
     for eval_disp_name, eval_env_name in EVAL_ENVS.items():
-        eval_envs_dic[eval_disp_name] = make_vec_envs(eval_env_name, args.seed + args.num_processes, args.num_processes,
+        eval_envs_dic[eval_disp_name] = make_vec_envs(eval_env_name[0], args.seed, args.num_processes,
                                                       None, logdir, device, True, steps=args.task_steps,
                                                       recurrent=args.recurrent_policy,
                                                       obs_recurrent=args.obs_recurrent, multi_task=True,
                                                       free_exploration=args.free_exploration)
+    prev_eval_r = {}
+    print('done')
+
     actor_critic = Policy(
         envs.observation_space.shape,
         envs.action_space,
@@ -183,6 +191,8 @@ def main():
     start = time.time()
     num_updates = int(
         args.num_env_steps) // args.num_steps // args.num_processes
+
+    save_copy = True
     for j in range(args.continue_from_epoch, args.continue_from_epoch+num_updates):
 
         if args.use_linear_lr_decay:
@@ -190,7 +200,6 @@ def main():
             utils.update_linear_schedule(
                 agent.optimizer, j, num_updates,
                 agent.optimizer.lr if args.algo == "acktr" else args.lr)
-
         for step in range(args.num_steps):
             # Sample actions
             actor_critic.eval()
@@ -223,14 +232,25 @@ def main():
             next_value = actor_critic.get_value(
                 rollouts.obs[-1], rollouts.recurrent_hidden_states[-1],
                 rollouts.masks[-1]).detach()
+
         actor_critic.train()
 
         rollouts.compute_returns(next_value, args.use_gae, args.gamma,
                                  args.gae_lambda, args.use_proper_time_limits)
+        if save_copy:
+            prev_weights = copy.deepcopy(actor_critic.state_dict())
+            prev_opt_state = copy.deepcopy(agent.optimizer.state_dict())
+            save_copy = False
+        # torch.save([
+        #     actor_critic,
+        #     agent.optimizer.state_dict(),
+        #     getattr(utils.get_vec_normalize(envs), 'obs_rms', None)
+        # ], os.path.join(os.path.join(args.save_dir, args.algo), args.env_name + "-tmp"))
 
         value_loss, action_loss, dist_entropy = agent.update(rollouts)
 
         rollouts.after_update()
+
 
         # save for every interval-th episode or for the last epoch
         if (j % args.save_interval == 0
@@ -257,7 +277,7 @@ def main():
                         np.median(episode_rewards), np.min(episode_rewards),
                         np.max(episode_rewards), dist_entropy, value_loss,
                         action_loss))
-
+        revert = False
         if (args.eval_interval is not None and len(episode_rewards) > 1
                 and j % args.eval_interval == 0):
             actor_critic.eval()
@@ -266,17 +286,30 @@ def main():
             eval_r = {}
             printout = f'Seed {args.seed} Iter {j} '
             for eval_disp_name, eval_env_name in EVAL_ENVS.items():
-                # print(eval_disp_name)
                 eval_r[eval_disp_name] = evaluate(actor_critic, obs_rms, eval_envs_dic, eval_disp_name, args.seed,
-                                                  args.num_processes, logdir, device, steps=args.task_steps,
+                                                  args.num_processes, eval_env_name[1], logdir, device, steps=args.task_steps,
+
                                                   recurrent=args.recurrent_policy, obs_recurrent=args.obs_recurrent,
                                                   multi_task=True, free_exploration=args.free_exploration)
-                summary_writer.add_scalar(f'eval/{eval_disp_name}', eval_r[eval_disp_name], (j+1) * args.num_processes * args.num_steps)
-                log_dict[eval_disp_name].append([(j+1) * args.num_processes * args.num_steps, eval_r[eval_disp_name]])
-                printout += eval_disp_name + ' ' + str(eval_r[eval_disp_name]) + ' '
+                if eval_disp_name in prev_eval_r:
+                    diff = np.array(eval_r[eval_disp_name]) - np.array(prev_eval_r[eval_disp_name])
+                    if eval_disp_name == 'many_arms':
+                        if np.sum(diff > 0) - np.sum(diff < 0) < 0:
+                            print('no update')
+                            revert = True
 
-            summary_writer.add_scalars('eval_combined', eval_r, (j+1) * args.num_processes * args.num_steps)
-            print(printout)
+                summary_writer.add_scalar(f'eval/{eval_disp_name}', np.mean(eval_r[eval_disp_name]),
+                                          (j+1) * args.num_processes * args.num_steps)
+                log_dict[eval_disp_name].append([(j+1) * args.num_processes * args.num_steps, eval_r[eval_disp_name]])
+                printout += eval_disp_name + ' ' + str(np.mean(eval_r[eval_disp_name])) + ' '
+            # summary_writer.add_scalars('eval_combined', eval_r, (j+1) * args.num_processes * args.num_steps)
+            if revert:
+                actor_critic.load_state_dict(prev_weights)
+                agent.optimizer.load_state_dict(prev_opt_state)
+            else:
+                print(printout)
+                prev_eval_r = eval_r.copy()
+            save_copy = True
             actor_critic.train()
 
     save_obj(log_dict, os.path.join(logdir, 'log_dict.pkl'))

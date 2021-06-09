@@ -64,7 +64,19 @@ class TestGrad():
             signs[i] = torch.sign(g_i)
         scores = torch.abs(torch.stack([g[shared] for g in signs]).mean(dim=0))
         active_elements = scores >= self._beta
+
         # print((scores >= 1.0).float().mean())
+        # analysis
+        # cos = nn.CosineSimilarity(dim=0, eps=1e-6)
+        # train_grad = torch.stack([g[shared] for g in grads[:-3]]).mean(dim=0)
+        # val_grad = []
+        # # half = len(train_grad) // 2
+        # update = True
+        # for i in range(3):
+        #     val_grad.append(cos(train_grad[:], grads[-(i+1)][:]))
+        #     update = update and (val_grad[-1] > 0)
+        # print(val_grad, update)
+
         merged_grad = torch.zeros_like(grads[0]).to(grads[0].device)
         stacked_grads = torch.stack([(g * active_elements)[shared] for g in grads])
         if self._use_median:
@@ -80,6 +92,9 @@ class TestGrad():
                                             for g in pc_grad]).sum(dim=0)
         standard_grad = torch.stack([g[shared] for g in grads]).mean(dim=0)
         alpha = special * self._alpha
+        # if update == False:
+        #     print('no update')
+        #     return 0 * standard_grad
         return alpha * merged_grad + (1-alpha) * standard_grad
 
     def _set_grad(self, grads):
