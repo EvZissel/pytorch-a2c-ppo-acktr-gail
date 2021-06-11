@@ -128,6 +128,11 @@ def get_args():
         default='PongNoFrameskip-v4',
         help='environment to train on (default: PongNoFrameskip-v4)')
     parser.add_argument(
+        '--val_agent_steps',
+        type=int,
+        default=1,
+        help='number of PPO steps to train val agent for each agent update')
+    parser.add_argument(
         '--log-dir',
         default='/tmp/gym/',
         help='directory to save agent logs (default: /tmp/gym)')

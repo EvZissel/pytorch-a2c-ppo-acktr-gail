@@ -298,8 +298,8 @@ class MLPHardAttnBase(NNBase):
 
     def forward(self, inputs, rnn_hxs, masks):
         x = inputs
-        m_soft = RelaxedBernoulli(0.1, logits=self.input_attention).sample()
-        m_hard = torch.sign(m_soft - 0.5)
+        m_soft = RelaxedBernoulli(1.0, logits=self.input_attention).sample()
+        m_hard = 0.5 * (torch.sign(m_soft - 0.5) + 1)
         mask = m_hard - m_soft.detach() + m_soft
         x = mask * x
 
