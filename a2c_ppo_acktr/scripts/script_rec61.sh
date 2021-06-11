@@ -41,3 +41,4 @@ wait
 
 echo "obs recurrent 25 arms with 25 validation arms, free exploration, dual_rl. Checking different hyperparamaters soft attention"
 
+echo "Seed 4 Iter 3995 ten_arms 0.88 many_arms 0.84"

@@ -231,38 +231,6 @@ def main():
         rollouts.compute_returns(next_value, args.use_gae, args.gamma,
                                  args.gae_lambda, args.use_proper_time_limits)
 
-        # validation rollouts
-        for step in range(args.num_steps):
-            # Sample actions
-            actor_critic.eval()
-            with torch.no_grad():
-                value, action, action_log_prob, recurrent_hidden_states = actor_critic.act(
-                    val_rollouts.obs[step], val_rollouts.recurrent_hidden_states[step],
-                    val_rollouts.masks[step])
-            actor_critic.train()
-
-            # Obser reward and next obs
-            obs, reward, done, infos = val_envs.step(action)
-
-            # If done then clean the history of observations.
-            masks = torch.FloatTensor(
-                [[0.0] if done_ else [1.0] for done_ in done])
-            bad_masks = torch.FloatTensor(
-                [[0.0] if 'bad_transition' in info.keys() else [1.0]
-                 for info in infos])
-            val_rollouts.insert(obs, recurrent_hidden_states, action,
-                                action_log_prob, value, reward, masks, bad_masks)
-
-        actor_critic.eval()
-        with torch.no_grad():
-            next_value = actor_critic.get_value(
-                val_rollouts.obs[-1], val_rollouts.recurrent_hidden_states[-1],
-                val_rollouts.masks[-1]).detach()
-        actor_critic.train()
-
-        val_rollouts.compute_returns(next_value, args.use_gae, args.gamma,
-                                     args.gae_lambda, args.use_proper_time_limits)
-
         if save_copy:
             prev_weights = copy.deepcopy(actor_critic.state_dict())
             prev_opt_state = copy.deepcopy(agent.optimizer.state_dict())
@@ -271,10 +239,43 @@ def main():
 
         value_loss, action_loss, dist_entropy = agent.update(rollouts)
 
-        val_value_loss, val_action_loss, val_dist_entropy = val_agent.update(val_rollouts)
-
         rollouts.after_update()
-        val_rollouts.after_update()
+
+        # validation rollouts
+        for val_iter in range(args.val_agent_steps):
+            for step in range(args.num_steps):
+                # Sample actions
+                actor_critic.eval()
+                with torch.no_grad():
+                    value, action, action_log_prob, recurrent_hidden_states = actor_critic.act(
+                        val_rollouts.obs[step], val_rollouts.recurrent_hidden_states[step],
+                        val_rollouts.masks[step])
+                actor_critic.train()
+
+                # Obser reward and next obs
+                obs, reward, done, infos = val_envs.step(action)
+
+                # If done then clean the history of observations.
+                masks = torch.FloatTensor(
+                    [[0.0] if done_ else [1.0] for done_ in done])
+                bad_masks = torch.FloatTensor(
+                    [[0.0] if 'bad_transition' in info.keys() else [1.0]
+                     for info in infos])
+                val_rollouts.insert(obs, recurrent_hidden_states, action,
+                                    action_log_prob, value, reward, masks, bad_masks)
+
+            actor_critic.eval()
+            with torch.no_grad():
+                next_value = actor_critic.get_value(
+                    val_rollouts.obs[-1], val_rollouts.recurrent_hidden_states[-1],
+                    val_rollouts.masks[-1]).detach()
+            actor_critic.train()
+
+            val_rollouts.compute_returns(next_value, args.use_gae, args.gamma,
+                                         args.gae_lambda, args.use_proper_time_limits)
+
+            val_value_loss, val_action_loss, val_dist_entropy = val_agent.update(val_rollouts)
+            val_rollouts.after_update()
 
         # save for every interval-th episode or for the last epoch
         if (j % args.save_interval == 0
