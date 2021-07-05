@@ -132,7 +132,7 @@ class PPO():
             )
             privacy_engine.attach(self.optimizer)
 
-    def update(self, rollouts):
+    def update(self, rollouts, attention_update=False):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
             advantages.std() + 1e-5)
@@ -157,14 +157,16 @@ class PPO():
                 task_losses = []
                 for task in range(len(sample)):
                     obs_batch, recurrent_hidden_states_batch, actions_batch, \
-                       value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, \
+                       value_preds_batch, return_batch, masks_batch, attn_masks_batch, old_action_log_probs_batch, \
                             adv_targ = sample[task]
 
                     # Reshape to do in a single forward pass for all steps
                     values, action_log_probs, dist_entropy, _ = self.actor_critic.evaluate_actions(
-                        obs_batch, recurrent_hidden_states_batch, masks_batch,
-                        actions_batch)
+                        obs_batch, recurrent_hidden_states_batch, masks_batch, attn_masks_batch,
+                        actions_batch, attention_act=attention_update)
 
+                    # if attention_update=True, we assume that the log_probs are the attention log_probs.
+                    # This is a hack for now, and it is taken care of in model.py and in dual_rl.py
                     ratio = torch.exp(action_log_probs -
                                       old_action_log_probs_batch)
                     surr1 = ratio * adv_targ

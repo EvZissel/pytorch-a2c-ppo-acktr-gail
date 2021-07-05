@@ -90,6 +90,7 @@ def make_vec_envs(env_name,
                   num_frame_stack=None,
                   multi_task=False,
                   multi_task_index=0,
+                  normalize=True,
                   **kwargs):
     envs = [
         make_env(env_name, seed, i, log_dir, allow_early_resets, **kwargs)
@@ -100,12 +101,12 @@ def make_vec_envs(env_name,
     # else:
     #     envs = DummyVecEnv(envs)
     envs = DummyVecEnv(envs)
-
-    if len(envs.observation_space.shape) == 1:
-        if gamma is None:
-            envs = VecNormalize(envs, norm_reward=False)
-        else:
-            envs = VecNormalize(envs, gamma=gamma)
+    if normalize:
+        if len(envs.observation_space.shape) == 1:
+            if gamma is None:
+                envs = VecNormalize(envs, norm_reward=False)
+            else:
+                envs = VecNormalize(envs, gamma=gamma)
 
     envs = VecPyTorch(envs, device)
 

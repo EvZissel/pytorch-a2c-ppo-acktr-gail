@@ -55,93 +55,19 @@ def main():
         #     summary_writer.add_scalars('eval_combined', eval_r, (j+1) * args.num_processes * args.num_steps)
         #     actor_critic.train()
 
-
-    # res_search = [
-    #     [{'use_noisygrad': False,
-    #       'task_steps': 20}, 'baseline'],
-    #     [{'use_noisygrad': True,
-    #       'task_steps': 20,
-    #      'grad_noise_ratio': 1.7}, 'noise=1.7'],
-    #     [{'use_noisygrad': True,
-    #       'task_steps': 20,
-    #      'grad_noise_ratio': 1.5}, 'noise=1.5'],
-    #     [{'use_noisygrad': True,
-    #       'task_steps': 20,
-    #       'grad_noise_ratio': 1.0}, 'noise=1.0']
-    # ]
-
     res_search = [
-        # [{'use_noisygrad': False,
-        #   'use_privacy': False,
-        #   'use_pcgrad': False,
-        #   'seed': 2,
-        #   'task_steps': 20}, 'baseline'],
-        # [{'use_privacy': True,
-        #   'task_steps': 20,
-        #   'grad_noise_ratio': 1.0,
-        #   'max_task_grad_norm': 1.0}, 'privacy=1.0'],
-        # [{'use_privacy': True,
-        #   'task_steps': 20,
-        #   'grad_noise_ratio': 0.2,
-        #   'max_task_grad_norm': 1.0}, 'privacy=0.2'],
-        [{'use_testgrad': True,
-          'task_steps': 20,
-          'grad_noise_ratio': 0.03}, 'testgrad 0.03'],
         # [{'use_testgrad': True,
         #   'task_steps': 20,
-        #   'grad_noise_ratio': 0.05}, 'testgrad 0.05'],
-        [{'use_testgrad': True,
-          'task_steps': 20,
-          'grad_noise_ratio': 1.0}, 'testgrad 1.0 '],
+        #   'grad_noise_ratio': 0.03}, 'testgrad 0.03'],
         # [{'use_testgrad': True,
         #   'task_steps': 20,
-        #   'grad_noise_ratio': 0.1}, 'testgrad 0.1'],
-        [{'use_testgrad': False,
-          'task_steps': 20}, 'baseline'],
-        # [{'use_pcgrad': True,
-        #   'task_steps': 20}, 'testgrad_'],
-        # [{'use_privacy': True,
-        #   'task_steps': 20,
-        #   'grad_noise_ratio': 1.0,
-        #   'max_task_grad_norm': 3.0}, 'privacy=1.0 grad norm 3.0'],
-        # [{'use_pcgrad': True,
-        #   'task_steps': 20}, 'pcgrad=1.0'],
-        # [{'use_privacy': True,
-        #   'task_steps': 20,
-        #   'grad_noise_ratio': 1.3}, 'privacy=1.3'],
-        # [{'use_noisygrad': True,
-        #   'task_steps': 20,
-        #   'grad_noise_ratio': 1.0,
-        #   'max_task_grad_norm': 1.0}, 'noise=1.0 norm 1.0'],
-        # [{'use_noisygrad': True,
-        #   'task_steps': 20,
-        #   'grad_noise_ratio': 1.0,
-        #   'max_task_grad_norm': 0.5}, 'noise=1.0 norm 0.5'],
-        # [{'use_noisygrad': True,
-        #   'task_steps': 20,
-        #   'grad_noise_ratio': 1.0,
-        #   'max_task_grad_norm': 0.75}, 'noise=1.0 norm 0.75'],
-        # [{'use_noisygrad': True,
-        #   'task_steps': 20,
-        #   'grad_noise_ratio': 1.0,
-        #   'max_task_grad_norm': 0.2}, 'noise=1.0 norm 0.2'],
-        # [{'use_noisygrad': True,
-        #   'task_steps': 20,
-        #   'grad_noise_ratio': 1.3,
-        #   'max_task_grad_norm': 1.0}, 'noise=1.3'],
-        # [{'use_noisygrad': True,
-        #   'task_steps': 20,
-        #   'grad_noise_ratio': 1.5,
-        #   'max_task_grad_norm': 1.0}, 'noise=1.5'],
-        # [{'use_noisygrad': True,
-        #   'task_steps': 20,
-        #   'grad_noise_ratio': 1.7,
-        #   'max_task_grad_norm': 1.0}, 'noise=1.7']
+        #   'grad_noise_ratio': 1.0}, 'testgrad 1.0 '],
+        [{'task_steps': 6}, 'baseline'],
     ]
 
     for s in res_search:
-        res_many = []
-        res_five = []
+        res_train = []
+        res_test = []
         res_type = []
         for subdir, dirs, files in os.walk(logdir):
             for name in dirs:
@@ -155,23 +81,27 @@ def main():
                     if log_dict[key] != val:
                         is_match = False
                 if is_match:
-                    res_many.append(log_dict['many_arms'])
-                    res_five.append(log_dict['five_arms'])
-                    res_type.append(log_dict['use_noisygrad'])
+                    res_train.append(log_dict['partial_train_eval'])
+                    res_test.append(log_dict['test_eval'])
+                    res_type.append(log_dict['cmd'])
 
-        if len(res_many) > 0:
-            res_many = np.array(res_many)
-            res_five = np.array(res_five)
-            t = res_many[0, :, 0]
-            res_many_mean = np.mean(res_many[:, :, 1], axis=0)
-            res_many_std = np.std(res_many[:, :, 1], axis=0)
-            res_five_mean = np.mean(res_five[:, :, 1], axis=0)
-            res_five_std = np.std(res_five[:, :, 1], axis=0)
-            # plt.errorbar(t, res_many_mean, res_many_std, label=s[1])
-            # plt.errorbar(t, res_five_mean, res_five_std, label=s[1])
-            for i in range(res_many.shape[0]):
-                # plt.plot(res_many[i,:,0], res_many[i,:,1], label=s[1])
-                plt.plot(res_five[i, :, 0], res_five[i, :, 1], label=s[1])
+        if len(res_test) > 0:
+            for i in range(len(res_test)):
+                for j in range(len(res_test[i])):
+                    res_test[i][j][1] = np.mean(np.array(res_test[i][j][1]))
+                    res_train[i][j][1] = np.mean(np.array(res_train[i][j][1]))
+            res_test = np.array(res_test)
+            res_train = np.array(res_train)
+            t = res_test[0, :, 0]
+            res_test_mean = np.mean(res_test[:, :, 1], axis=0)
+            res_test_std = np.std(res_test[:, :, 1], axis=0)
+            res_train_mean = np.mean(res_train[:, :, 1], axis=0)
+            res_train_std = np.std(res_train[:, :, 1], axis=0)
+            plt.errorbar(t, res_test_mean, res_test_std, label=s[1])
+            plt.errorbar(t, res_train_mean, res_train_std, label=s[1])
+            # for i in range(res_test.shape[0]):
+            #     plt.plot(res_test[i,:,0], res_test[i,:,1], label=s[1])
+            #     plt.plot(res_train[i, :, 0], res_train[i, :, 1], label=s[1])
     plt.legend()
     plt.show()
     import pdb; pdb.set_trace()
