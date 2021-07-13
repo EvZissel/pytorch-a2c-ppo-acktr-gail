@@ -8,11 +8,12 @@ def _flatten_helper(T, N, _tensor):
 
 class RolloutStorage(object):
     def __init__(self, num_steps, num_processes, obs_shape, action_space,
-                 recurrent_hidden_state_size):
+                 recurrent_hidden_state_size, device):
         self.obs = torch.zeros(num_steps + 1, num_processes, *obs_shape)
         self.recurrent_hidden_states = torch.zeros(
             num_steps + 1, num_processes, recurrent_hidden_state_size)
         self.rewards = torch.zeros(num_steps, num_processes, 1)
+        self.seeds = torch.zeros(num_steps, num_processes, 1)
         self.value_preds = torch.zeros(num_steps + 1, num_processes, 1)
         self.returns = torch.zeros(num_steps + 1, num_processes, 1)
         self.action_log_probs = torch.zeros(num_steps, num_processes, 1)
@@ -33,11 +34,13 @@ class RolloutStorage(object):
         self.num_steps = num_steps
         self.step = 0
         self.num_processes = num_processes
+        self.device = device
 
     def to(self, device):
         self.obs = self.obs.to(device)
         self.recurrent_hidden_states = self.recurrent_hidden_states.to(device)
         self.rewards = self.rewards.to(device)
+        self.seeds = self.seeds.to(device)
         self.value_preds = self.value_preds.to(device)
         self.returns = self.returns.to(device)
         self.action_log_probs = self.action_log_probs.to(device)
@@ -46,7 +49,7 @@ class RolloutStorage(object):
         self.bad_masks = self.bad_masks.to(device)
 
     def insert(self, obs, recurrent_hidden_states, actions, action_log_probs,
-               value_preds, rewards, masks, bad_masks, attn_masks):
+               value_preds, rewards, masks, bad_masks, attn_masks, seeds):
         self.obs[self.step + 1].copy_(obs)
         self.recurrent_hidden_states[self.step +
                                      1].copy_(recurrent_hidden_states)
@@ -54,6 +57,7 @@ class RolloutStorage(object):
         self.action_log_probs[self.step].copy_(action_log_probs)
         self.value_preds[self.step].copy_(value_preds)
         self.rewards[self.step].copy_(rewards)
+        self.seeds[self.step].copy_(seeds)
         self.masks[self.step + 1].copy_(masks)
         self.bad_masks[self.step + 1].copy_(bad_masks)
         self.attn_masks[self.step + 1].copy_(attn_masks)
@@ -267,6 +271,7 @@ class RolloutStorage(object):
             value_preds_batch = []
             return_batch = []
             masks_batch = []
+            attn_masks_batch = []
             old_action_log_probs_batch = []
             adv_targ = []
 
@@ -279,6 +284,9 @@ class RolloutStorage(object):
                 value_preds_batch.append(self.value_preds[:-1, ind])
                 return_batch.append(self.returns[:-1, ind])
                 masks_batch.append(self.masks[:-1, ind])
+                # note the indexing on attention masks - this is the correct indexing such that masks are aligned with
+                # their log probs for the REINFORCE update
+                attn_masks_batch.append(self.attn_masks[1:, ind])
                 old_action_log_probs_batch.append(
                     self.action_log_probs[:, ind])
                 adv_targ.append(advantages[:, ind])
@@ -290,23 +298,25 @@ class RolloutStorage(object):
             value_preds_batch = torch.stack(value_preds_batch, 1)
             return_batch = torch.stack(return_batch, 1)
             masks_batch = torch.stack(masks_batch, 1)
+            attn_masks_batch = torch.stack(attn_masks_batch, 1)
             old_action_log_probs_batch = torch.stack(
                 old_action_log_probs_batch, 1)
             adv_targ = torch.stack(adv_targ, 1)
 
             # States is just a (N, -1) tensor
             recurrent_hidden_states_batch = torch.stack(
-                recurrent_hidden_states_batch, 1).view(N, -1)
+                recurrent_hidden_states_batch, 1).view(N, -1).to(self.device)
 
             # Flatten the (T, N, ...) tensors to (T * N, ...)
-            obs_batch = _flatten_helper(T, N, obs_batch)
-            actions_batch = _flatten_helper(T, N, actions_batch)
-            value_preds_batch = _flatten_helper(T, N, value_preds_batch)
-            return_batch = _flatten_helper(T, N, return_batch)
-            masks_batch = _flatten_helper(T, N, masks_batch)
+            obs_batch = _flatten_helper(T, N, obs_batch).to(self.device)
+            actions_batch = _flatten_helper(T, N, actions_batch).to(self.device)
+            value_preds_batch = _flatten_helper(T, N, value_preds_batch).to(self.device)
+            return_batch = _flatten_helper(T, N, return_batch).to(self.device)
+            masks_batch = _flatten_helper(T, N, masks_batch).to(self.device)
+            attn_masks_batch = _flatten_helper(T, N, attn_masks_batch).to(self.device)
             old_action_log_probs_batch = _flatten_helper(T, N, \
-                    old_action_log_probs_batch)
-            adv_targ = _flatten_helper(T, N, adv_targ)
+                    old_action_log_probs_batch).to(self.device)
+            adv_targ = _flatten_helper(T, N, adv_targ).to(self.device)
 
             yield obs_batch, recurrent_hidden_states_batch, actions_batch, \
-                value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ
+                value_preds_batch, return_batch, masks_batch, attn_masks_batch, old_action_log_probs_batch, adv_targ

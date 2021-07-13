@@ -6,7 +6,7 @@ import torch
 def get_args():
     parser = argparse.ArgumentParser(description='RL')
     parser.add_argument(
-        '--algo', default='a2c', help='algorithm to use: a2c | ppo | acktr')
+        '--algo', default='ppo', help='algorithm to use: a2c | ppo | acktr')
     parser.add_argument(
         '--gail',
         action='store_true',
@@ -70,6 +70,12 @@ def get_args():
     parser.add_argument(
         '--seed', type=int, default=1, help='random seed (default: 1)')
     parser.add_argument(
+        '--start-level', type=int, default=0, help='start level (default: 0)')
+    parser.add_argument(
+        '--num-level', type=int, default=128, help='num level (default: 25)')
+    parser.add_argument(
+        '--distribution-mode', type=str, default='easy', help='distribution mode for environment')
+    parser.add_argument(
         '--cuda-deterministic',
         action='store_true',
         default=False,
@@ -77,12 +83,12 @@ def get_args():
     parser.add_argument(
         '--num-processes',
         type=int,
-        default=16,
+        default=128,
         help='how many training CPU processes to use (default: 16)')
     parser.add_argument(
         '--num-steps',
         type=int,
-        default=5,
+        default=512,
         help='number of forward steps in A2C (default: 5)')
     parser.add_argument(
         '--ppo-epoch',
@@ -92,7 +98,7 @@ def get_args():
     parser.add_argument(
         '--num-mini-batch',
         type=int,
-        default=32,
+        default=1,
         help='number of batches for ppo (default: 32)')
     parser.add_argument(
         '--clip-param',
@@ -107,7 +113,7 @@ def get_args():
     parser.add_argument(
         '--save-interval',
         type=int,
-        default=100,
+        default=10e2,
         help='save interval, one save per n updates (default: 100)')
     parser.add_argument(
         '--eval-interval',
@@ -121,12 +127,12 @@ def get_args():
         help='number of environment steps to train (default: 10e6)')
     parser.add_argument(
         '--env-name',
-        default='PongNoFrameskip-v4',
-        help='environment to train on (default: PongNoFrameskip-v4)')
+        default='maze',
+        help='environment to train on (default: maze)')
     parser.add_argument(
         '--val_env_name',
-        default='PongNoFrameskip-v4',
-        help='environment to train on (default: PongNoFrameskip-v4)')
+        default='maze',
+        help='environment to train on (default: maze)')
     parser.add_argument(
         '--val_agent_steps',
         type=int,
@@ -150,6 +156,12 @@ def get_args():
         action='store_true',
         default=False,
         help='disables CUDA training')
+    parser.add_argument(
+        '--gpu_device',
+        type=int,
+        default = int(0),
+        required = False,
+        help = 'visible device in CUDA')
     parser.add_argument(
         '--use-proper-time-limits',
         action='store_true',
@@ -280,6 +292,11 @@ def get_args():
         action='store_true',
         default=False,
         help='no normalize inputs')
+    parser.add_argument(
+        '--normalize_rew',
+        action='store_true',
+        default=False,
+        help='normalize reword')
     args = parser.parse_args()
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()

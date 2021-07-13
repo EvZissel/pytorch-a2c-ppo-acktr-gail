@@ -104,7 +104,7 @@ def main():
         actor_critic.load_state_dict(actor_critic_.state_dict())
 
     if args.algo != 'ppo':
-        raise "only PPO is supported"
+        raise print("only PPO is supported")
 
     # We have two agents that train different parts of the same neural network on different train/validation tasks
     # training agent

@@ -142,14 +142,16 @@ class PPO():
         dist_entropy_epoch = 0
         for e in range(self.ppo_epoch):
             if self.actor_critic.is_recurrent:
-                # data_generators = [rollouts.recurrent_generator(
-                #     advantages, self.num_mini_batch)]
-                data_generators = [rollouts.single_process_recurrent_generator(
-                    advantages, self.num_mini_batch, process=i) for i in range(self.num_tasks)]
+                data_generators = [rollouts.recurrent_generator(
+                    advantages, self.num_mini_batch)]
+                # data_generators = [rollouts.single_process_recurrent_generator(
+                #     advantages, self.num_mini_batch, process=i) for i in range(self.num_tasks)]
             elif self.num_tasks > 0:
                 assert self.num_tasks == rollouts.num_processes
-                data_generators = [rollouts.single_process_feed_forward_generator(
-                    advantages, process=i, num_mini_batch=self.num_mini_batch) for i in range(self.num_tasks)]
+                # data_generators = [rollouts.single_process_feed_forward_generator(
+                #     advantages, process=i, num_mini_batch=self.num_mini_batch) for i in range(self.num_tasks)]
+                data_generators = [rollouts.recurrent_generator(
+                    advantages, self.num_mini_batch)]
             else:
                 data_generators = [rollouts.feed_forward_generator(
                     advantages, self.num_mini_batch)]
@@ -204,19 +206,21 @@ class PPO():
                     self.optimizer.pc_backward(task_losses)
                 else:
                     total_loss.backward()
-                nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
-                                         self.max_grad_norm)
+                # nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
+                #                          self.max_grad_norm)
                 if self.attention_policy:
                     nn.utils.clip_grad_norm_(self.attention_parameters,
                                              self.max_grad_norm)
                 else:
                     nn.utils.clip_grad_norm_(self.non_attention_parameters,
                                              self.max_grad_norm)
-                self.optimizer.step()
+                # self.optimizer.step()
 
                 value_loss_epoch += value_loss.item()
                 action_loss_epoch += action_loss.item()
                 dist_entropy_epoch += dist_entropy.item()
+
+            self.optimizer.step()
 
         num_updates = self.ppo_epoch * self.num_mini_batch
 
