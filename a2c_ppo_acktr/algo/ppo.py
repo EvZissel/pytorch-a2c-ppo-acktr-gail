@@ -206,8 +206,8 @@ class PPO():
                     self.optimizer.pc_backward(task_losses)
                 else:
                     total_loss.backward()
-                # nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
-                #                          self.max_grad_norm)
+                nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
+                                         self.max_grad_norm)
                 if self.attention_policy:
                     nn.utils.clip_grad_norm_(self.attention_parameters,
                                              self.max_grad_norm)

@@ -164,6 +164,7 @@ def main():
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
+    seeds = torch.zeros(args.num_processes, 1)
 
     episode_rewards = deque(maxlen=10)
 
@@ -178,9 +179,9 @@ def main():
             # Sample actions
             actor_critic.eval()
             with torch.no_grad():
-                value, action, action_log_prob, recurrent_hidden_states = actor_critic.act(
+                value, action, action_log_prob, recurrent_hidden_states, attn_masks = actor_critic.act(
                     rollouts.obs[step], rollouts.recurrent_hidden_states[step],
-                    rollouts.masks[step])
+                    rollouts.masks[step], rollouts.attn_masks[step])
             actor_critic.train()
 
             # Obser reward and next obs
@@ -199,13 +200,13 @@ def main():
                 [[0.0] if 'bad_transition' in info.keys() else [1.0]
                  for info in infos])
             rollouts.insert(obs, recurrent_hidden_states, action,
-                            action_log_prob, value, reward, masks, bad_masks)
+                            action_log_prob, value, reward, masks, bad_masks, attn_masks, seeds)
 
         actor_critic.eval()
         with torch.no_grad():
             next_value = actor_critic.get_value(
                 rollouts.obs[-1], rollouts.recurrent_hidden_states[-1],
-                rollouts.masks[-1]).detach()
+                rollouts.masks[-1], rollouts.attn_masks[-1]).detach()
         actor_critic.train()
 
         rollouts.compute_returns(next_value, args.use_gae, args.gamma,

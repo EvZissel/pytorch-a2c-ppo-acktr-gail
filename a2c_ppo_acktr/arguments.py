@@ -160,7 +160,7 @@ def get_args():
         '--gpu_device',
         type=int,
         default = int(0),
-        required = False,
+        required=False,
         help = 'visible device in CUDA')
     parser.add_argument(
         '--use-proper-time-limits',

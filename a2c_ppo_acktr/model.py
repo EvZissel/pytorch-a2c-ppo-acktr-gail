@@ -284,6 +284,7 @@ class MLPBase(NNBase):
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
                                constant_(x, 0), nn.init.calculate_gain('tanh'))
 
+
         self.actor = nn.Sequential(
             init_(nn.Linear(num_inputs, hidden_size)), nn.Tanh(),
             init_(nn.Linear(hidden_size, hidden_size)), nn.Tanh())
@@ -296,7 +297,7 @@ class MLPBase(NNBase):
 
         self.train()
 
-    def forward(self, inputs, rnn_hxs, masks):
+    def forward(self, inputs, rnn_hxs, masks, att_mask, reuse_masks=False):
         x = inputs
 
         if self.is_recurrent:
@@ -305,7 +306,7 @@ class MLPBase(NNBase):
         hidden_critic = self.critic(x)
         hidden_actor = self.actor(x)
 
-        return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs, None
+        return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs, None, att_mask
 
 
 class MLPAttnBase(NNBase):

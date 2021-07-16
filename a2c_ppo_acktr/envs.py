@@ -15,8 +15,8 @@ from stable_baselines3.common.vec_env import (DummyVecEnv, SubprocVecEnv,
                                               VecEnvWrapper)
 from stable_baselines3.common.vec_env.vec_normalize import \
     VecNormalize as VecNormalize_
-from procgen import ProcgenEnv
-from a2c_ppo_acktr.procgen_wrappers import *
+# from procgen import ProcgenEnv
+# from a2c_ppo_acktr.procgen_wrappers import *
 
 try:
     import dmc2gym
@@ -123,38 +123,37 @@ def make_vec_envs(env_name,
 
     return envs
 
-def make_ProcgenEnvs(num_envs,
-                    env_name,
-                    start_level,
-                    num_levels,
-                    distribution_mode,
-                    use_generated_assets,
-                    use_backgrounds,
-                    restrict_themes,
-                    use_monochrome_assets,
-                    rand_seed,
-                    normalize_rew=False,
-                    no_normalize=False):
-
-    envs = ProcgenEnv(num_envs=num_envs,
-                      env_name=env_name,
-                      start_level=start_level,
-                      num_levels=num_levels,
-                      distribution_mode=distribution_mode,
-                      use_generated_assets=use_generated_assets,
-                      use_backgrounds=use_backgrounds,
-                      restrict_themes=restrict_themes,
-                      use_monochrome_assets=use_monochrome_assets,
-                      rand_seed=rand_seed)
-
-    envs = VecExtractDictObs(envs, "rgb")
-    if normalize_rew:
-        envs = VecNormalize(envs, ob=False)  # normalizing returns, but not the img frames.
-    envs = TransposeFrame(envs)
-    if not no_normalize:
-        envs= ScaledFloatFrame(envs)
-
-    return envs
+# def make_ProcgenEnvs(num_envs,
+#                     env_name,
+#                     start_level,
+#                     num_levels,
+#                     distribution_mode,
+#                     use_generated_assets,
+#                     use_backgrounds,
+#                     restrict_themes,
+#                     use_monochrome_assets,
+#                     rand_seed,
+#                     normalize_rew=False,
+#                     no_normalize=False):
+#
+#     envs = ProcgenEnv(num_envs=num_envs,
+#                       env_name=env_name,
+#                       start_level=start_level,
+#                       num_levels=num_levels,
+#                       distribution_mode=distribution_mode,
+#                       use_generated_assets=use_generated_assets,
+#                       use_backgrounds=use_backgrounds,
+#                       restrict_themes=restrict_themes,
+#                       use_monochrome_assets=use_monochrome_assets,
+#                       rand_seed=rand_seed)
+#
+#     envs = VecExtractDictObs(envs, "rgb")
+#     if normalize_rew:
+#         envs = VecNormalize(envs, ob=False)  # normalizing returns, but not the img frames.
+#     envs = TransposeFrame(envs)
+#     envs= ScaledFloatFrame(envs)
+#
+#     return envs
 
 
 # Checks whether done was caused my timit limits or not
@@ -240,27 +239,27 @@ class VecPyTorch(VecEnvWrapper):
         return obs, reward, done, info
 
 
-# class VecNormalize(VecNormalize_):
-#     def __init__(self, *args, **kwargs):
-#         super(VecNormalize, self).__init__(*args, **kwargs)
-#         self.training = True
-#
-#     def _obfilt(self, obs, update=True):
-#         if self.obs_rms:
-#             if self.training and update:
-#                 self.obs_rms.update(obs)
-#             obs = np.clip((obs - self.obs_rms.mean) /
-#                           np.sqrt(self.obs_rms.var + self.epsilon),
-#                           -self.clipob, self.clipob)
-#             return obs
-#         else:
-#             return obs
-#
-#     def train(self):
-#         self.training = True
-#
-#     def eval(self):
-#         self.training = False
+class VecNormalize(VecNormalize_):
+    def __init__(self, *args, **kwargs):
+        super(VecNormalize, self).__init__(*args, **kwargs)
+        self.training = True
+
+    def _obfilt(self, obs, update=True):
+        if self.obs_rms:
+            if self.training and update:
+                self.obs_rms.update(obs)
+            obs = np.clip((obs - self.obs_rms.mean) /
+                          np.sqrt(self.obs_rms.var + self.epsilon),
+                          -self.clipob, self.clipob)
+            return obs
+        else:
+            return obs
+
+    def train(self):
+        self.training = True
+
+    def eval(self):
+        self.training = False
 
 
 # Derived from

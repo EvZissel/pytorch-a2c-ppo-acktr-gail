@@ -66,8 +66,6 @@ def main():
 
     torch.set_num_threads(1)
     device = torch.device("cuda:{}".format(args.gpu_device) if args.cuda else "cpu")
-    # if args.cuda:
-    #     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_device)
 
     print('making envs...')
     # Training envs
@@ -125,6 +123,7 @@ def main():
     if args.algo != 'ppo':
         raise print("only PPO is supported")
 
+
     # training agent
     agent = algo.PPO(
         actor_critic,
@@ -158,19 +157,16 @@ def main():
     rollouts.obs[0].copy_(torch.FloatTensor(obs))
     # rollouts.to(device)
 
-    episode_rewards = []
     seeds = torch.zeros(args.num_processes, 1)
-    episode_len = []
-    episode_len_buffer = []
-    for _ in range(args.num_processes):
-        episode_len_buffer.append(0)
-
     start = time.time()
     num_updates = int(
         args.num_env_steps) // args.num_steps // args.num_processes
 
     # save_copy = True
     save_image_every = num_updates
+    episode_len_buffer = []
+    for _ in range(args.num_processes):
+        episode_len_buffer.append(0)
     for j in range(args.continue_from_epoch, args.continue_from_epoch+num_updates):
 
         # plot mazes
@@ -186,6 +182,8 @@ def main():
 
         # policy rollouts
         actor_critic.eval()
+        episode_rewards = []
+        episode_len = []
         for step in range(args.num_steps):
             # Sample actions
             with torch.no_grad():
@@ -197,11 +195,13 @@ def main():
             obs, reward, done, infos = envs.step(action.squeeze().cpu().numpy())
 
             for i, info in enumerate(infos):
+                seeds[i] = info["level_seed"]
+                episode_len_buffer[i] += 1
                 if done[i] == True:
                     episode_rewards.append(reward[i])
                     episode_len.append(episode_len_buffer[i])
                     episode_len_buffer[i] = 0
-                seeds[i] = info["level_seed"]
+
 
             # If done then clean the history of observations.
             masks = torch.FloatTensor(
@@ -298,7 +298,7 @@ def main():
     # training done. Save and clean up
     save_obj(log_dict, os.path.join(logdir, 'log_dict.pkl'))
     envs.close()
-    for eval_disp_name, eval_env_name in EVAL_ENVS:
+    for eval_disp_name in EVAL_ENVS:
         eval_envs_dic[eval_disp_name].close()
 
 
