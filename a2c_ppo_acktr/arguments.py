@@ -297,6 +297,11 @@ def get_args():
         action='store_true',
         default=False,
         help='normalize reword')
+    parser.add_argument(
+        '--mask_size',
+        type=int,
+        default=0,
+        help='constant mask size')
     args = parser.parse_args()
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()

@@ -375,3 +375,55 @@ class ScaledFloatFrame(VecEnvWrapper):
     def reset(self):
         obs = self.venv.reset()
         return obs/255.0
+
+class MaskFloatFrame(VecEnvWrapper):
+    def __init__(self, env, l):
+        super().__init__(venv=env)
+        obs_shape = self.observation_space.shape
+        self.observation_space = gym.spaces.Box(low=0, high=1, shape=obs_shape, dtype=np.float32)
+        self.l = l
+        self.r = 0
+        self.g = 0
+        self.b = 0
+
+    def step_wait(self):
+        obs, reward, done, info = self.venv.step_wait()
+        if self.l > 0:
+            obs[:,0,:self.l,:] = self.r
+            obs[:, 0, :, :self.l] = self.r
+            obs[:, 0, -self.l:, :] = self.r
+            obs[:, 0, :, -self.l:] = self.r
+
+            obs[:, 1, :self.l, :] = self.g
+            obs[:, 1, :, :self.l] = self.g
+            obs[:, 1, -self.l:, :] = self.g
+            obs[:, 1, :, -self.l:] = self.g
+
+            obs[:, 2, :self.l, :] = self.b
+            obs[:, 2, :, :self.l] = self.b
+            obs[:, 2, -self.l:, :] = self.b
+            obs[:, 2, :, -self.l:] = self.b
+        return obs, reward, done, info
+
+    def reset(self):
+        obs = self.venv.reset()
+        if self.l > 0:
+            self.r = obs[0,0,63,0]
+            self.g = obs[0,1,63,0]
+            self.b = obs[0,2,63,0]
+
+            obs[:,0,:self.l,:] = self.r
+            obs[:, 0, :, :self.l] = self.r
+            obs[:, 0, -self.l:, :] = self.r
+            obs[:, 0, :, -self.l:] = self.r
+
+            obs[:, 1, :self.l, :] = self.g
+            obs[:, 1, :, :self.l] = self.g
+            obs[:, 1, -self.l:, :] = self.g
+            obs[:, 1, :, -self.l:] = self.g
+
+            obs[:, 2, :self.l, :] = self.b
+            obs[:, 2, :, :self.l] = self.b
+            obs[:, 2, -self.l:, :] = self.b
+            obs[:, 2, :, -self.l:] = self.b
+        return obs

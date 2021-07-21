@@ -12,7 +12,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 from a2c_ppo_acktr import algo, utils
 from a2c_ppo_acktr.arguments import get_args
-from a2c_ppo_acktr.envs import make_vec_envs, make_ProcgenEnvs
+# from a2c_ppo_acktr.envs import make_vec_envs, make_ProcgenEnvs
+from a2c_ppo_acktr.envs import make_ProcgenEnvs
 from procgen import ProcgenEnv
 from a2c_ppo_acktr.model import Policy, MLPAttnBase, MLPHardAttnBase, MLPHardAttnReinforceBase, ImpalaModel
 from a2c_ppo_acktr.storage import RolloutStorage
@@ -79,6 +80,7 @@ def main():
                       restrict_themes=True,
                       use_monochrome_assets=True,
                       rand_seed=args.seed,
+                      mask_size=args.mask_size,
                       normalize_rew= args.normalize_rew,
                       no_normalize = args.no_normalize)
 
@@ -94,6 +96,7 @@ def main():
                                                       restrict_themes=True,
                                                       use_monochrome_assets=True,
                                                       rand_seed=args.seed,
+                                                      mask_size=args.mask_size,
                                                       normalize_rew= args.normalize_rew,
                                                       no_normalize = args.no_normalize)
 
@@ -108,6 +111,7 @@ def main():
                                                      restrict_themes=True,
                                                      use_monochrome_assets=True,
                                                      rand_seed=args.seed,
+                                                     mask_size=args.mask_size,
                                                      normalize_rew=args.normalize_rew,
                                                      no_normalize=args.no_normalize)
     print('done')

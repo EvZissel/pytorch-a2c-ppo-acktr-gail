@@ -2,14 +2,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from opacus import PrivacyEngine
-from opacus.utils.uniform_sampler import UniformWithReplacementSampler
-from grad_tools.pcgrad import PCGrad
-from grad_tools.noisygrad import NoisyGrad
-from grad_tools.testgrad import TestGrad
-from grad_tools.graddrop import GradDrop
-from grad_tools.mediangrad import MedianGrad
-from grad_tools.meanvar_grad import MeanVarGrad
+# from opacus import PrivacyEngine
+# from opacus.utils.uniform_sampler import UniformWithReplacementSampler
+# from grad_tools.pcgrad import PCGrad
+# from grad_tools.noisygrad import NoisyGrad
+# from grad_tools.testgrad import TestGrad
+# from grad_tools.graddrop import GradDrop
+# from grad_tools.mediangrad import MedianGrad
+# from grad_tools.meanvar_grad import MeanVarGrad
 
 
 class PPO():
@@ -55,87 +55,90 @@ class PPO():
         self.max_grad_norm = max_grad_norm
         self.use_clipped_value_loss = use_clipped_value_loss
 
-        self.attention_parameters = []
-        self.non_attention_parameters = []
-        for name, p in actor_critic.named_parameters():
-            if 'attention' in name:
-                self.attention_parameters.append(p)
-            else:
-                self.non_attention_parameters.append(p)
+        # self.attention_parameters = []
+        # self.non_attention_parameters = []
+        # for name, p in actor_critic.named_parameters():
+        #     if 'attention' in name:
+        #         self.attention_parameters.append(p)
+        #     else:
+        #         self.non_attention_parameters.append(p)
 
         # no_special_grad_for_critic means that we apply a standard gradient to the critic parameters and a special
         # gradient (e.g., testgrad) to the actor parameters. To do that, we name the different parameter groups in the
         # optimizer, and modify the special gradient code to take that into account
-        if no_special_grad_for_critic:
-            critic_params = []
-            non_critic_params = []
-            for name, p in actor_critic.named_parameters():
-                if 'critic' in name:
-                    critic_params.append(p)
-                else:
-                    non_critic_params.append(p)
-            self.optimizer = optim.Adam([{'params': critic_params,
-                                          'special_grad': False},
-                                        {'params': non_critic_params,
-                                         'special_grad': True}],
-                                        lr=lr, eps=eps, weight_decay=weight_decay)
-        else:
-            if attention_policy:
-                self.optimizer = optim.Adam(self.attention_parameters, lr=lr, eps=eps, weight_decay=weight_decay)
-            else:
-                self.optimizer = optim.Adam(self.non_attention_parameters, lr=lr, eps=eps, weight_decay=weight_decay)
-        self.attention_policy = attention_policy
-        self.max_task_grad_norm = max_task_grad_norm
-        self.use_pcgrad = use_pcgrad
-        self.use_testgrad = use_testgrad
-        self.use_noisygrad = use_noisygrad
-        self.use_median_grad = use_median_grad
-        self.use_meanvargrad = use_meanvargrad
-        self.use_graddrop = use_graddrop
-        self.use_privacy = use_privacy
-        if use_pcgrad:
-            self.optimizer = PCGrad(self.optimizer)
-        if use_graddrop:
-            self.optimizer = GradDrop(self.optimizer)
-        if use_testgrad:
-            if use_testgrad_median:
-                self.optimizer = TestGrad(self.optimizer,
-                                          use_median=True,
-                                          max_grad_norm=num_mini_batch * max_task_grad_norm,
-                                          noise_ratio=grad_noise_ratio)
-            else:
-                self.optimizer = TestGrad(self.optimizer,
-                                          use_median=False,
-                                          max_grad_norm=num_mini_batch * max_task_grad_norm,
-                                          noise_ratio=grad_noise_ratio,
-                                          quantile=testgrad_quantile,
-                                          alpha=testgrad_alpha,
-                                          beta=testgrad_beta)
-        if use_noisygrad:
-            self.optimizer = NoisyGrad(self.optimizer,
-                                       max_grad_norm=num_mini_batch * max_task_grad_norm,
-                                       noise_ratio=grad_noise_ratio)
-        if use_meanvargrad:
-            self.optimizer = MeanVarGrad(self.optimizer,
-                                         max_grad_norm=num_mini_batch * max_task_grad_norm,
-                                         noise_ratio=grad_noise_ratio,
-                                         beta=meanvar_beta)
-        if use_median_grad:
-            self.optimizer = MedianGrad(self.optimizer,
-                                        noise_ratio=grad_noise_ratio)
-        if use_privacy:
-            privacy_engine = PrivacyEngine(
-                actor_critic,
-                sample_rate=0.01,
-                noise_multiplier=grad_noise_ratio,
-                max_grad_norm=max_task_grad_norm,
-            )
-            privacy_engine.attach(self.optimizer)
+        # if no_special_grad_for_critic:
+        #     critic_params = []
+        #     non_critic_params = []
+        #     for name, p in actor_critic.named_parameters():
+        #         if 'critic' in name:
+        #             critic_params.append(p)
+        #         else:
+        #             non_critic_params.append(p)
+        #     self.optimizer = optim.Adam([{'params': critic_params,
+        #                                   'special_grad': False},
+        #                                 {'params': non_critic_params,
+        #                                  'special_grad': True}],
+        #                                 lr=lr, eps=eps, weight_decay=weight_decay)
+        # else:
+        #     if attention_policy:
+        #         self.optimizer = optim.Adam(self.attention_parameters, lr=lr, eps=eps, weight_decay=weight_decay)
+        #     else:
+        #         self.optimizer = optim.Adam(self.non_attention_parameters, lr=lr, eps=eps, weight_decay=weight_decay)
+
+
+        self.optimizer = optim.Adam(self.actor_critic.parameters(), lr=lr, eps=eps, weight_decay=weight_decay)
+        # self.attention_policy = attention_policy
+        # self.max_task_grad_norm = max_task_grad_norm
+        # self.use_pcgrad = use_pcgrad
+        # self.use_testgrad = use_testgrad
+        # self.use_noisygrad = use_noisygrad
+        # self.use_median_grad = use_median_grad
+        # self.use_meanvargrad = use_meanvargrad
+        # self.use_graddrop = use_graddrop
+        # self.use_privacy = use_privacy
+        # if use_pcgrad:
+        #     self.optimizer = PCGrad(self.optimizer)
+        # if use_graddrop:
+        #     self.optimizer = GradDrop(self.optimizer)
+        # if use_testgrad:
+        #     if use_testgrad_median:
+        #         self.optimizer = TestGrad(self.optimizer,
+        #                                   use_median=True,
+        #                                   max_grad_norm=num_mini_batch * max_task_grad_norm,
+        #                                   noise_ratio=grad_noise_ratio)
+        #     else:
+        #         self.optimizer = TestGrad(self.optimizer,
+        #                                   use_median=False,
+        #                                   max_grad_norm=num_mini_batch * max_task_grad_norm,
+        #                                   noise_ratio=grad_noise_ratio,
+        #                                   quantile=testgrad_quantile,
+        #                                   alpha=testgrad_alpha,
+        #                                   beta=testgrad_beta)
+        # if use_noisygrad:
+        #     self.optimizer = NoisyGrad(self.optimizer,
+        #                                max_grad_norm=num_mini_batch * max_task_grad_norm,
+        #                                noise_ratio=grad_noise_ratio)
+        # if use_meanvargrad:
+        #     self.optimizer = MeanVarGrad(self.optimizer,
+        #                                  max_grad_norm=num_mini_batch * max_task_grad_norm,
+        #                                  noise_ratio=grad_noise_ratio,
+        #                                  beta=meanvar_beta)
+        # if use_median_grad:
+        #     self.optimizer = MedianGrad(self.optimizer,
+        #                                 noise_ratio=grad_noise_ratio)
+        # if use_privacy:
+        #     privacy_engine = PrivacyEngine(
+        #         actor_critic,
+        #         sample_rate=0.01,
+        #         noise_multiplier=grad_noise_ratio,
+        #         max_grad_norm=max_task_grad_norm,
+        #     )
+        #     privacy_engine.attach(self.optimizer)
 
     def update(self, rollouts, attention_update=False):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+            advantages.std() + 1e-8)
 
         value_loss_epoch = 0
         action_loss_epoch = 0
@@ -167,6 +170,7 @@ class PPO():
                         obs_batch, recurrent_hidden_states_batch, masks_batch, attn_masks_batch,
                         actions_batch, attention_act=attention_update)
 
+                    # dist_entropy = dist_entropy / self.num_mini_batch
                     # if attention_update=True, we assume that the log_probs are the attention log_probs.
                     # This is a hack for now, and it is taken care of in model.py and in dual_rl.py
                     ratio = torch.exp(action_log_probs -
@@ -174,6 +178,7 @@ class PPO():
                     surr1 = ratio * adv_targ
                     surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
                                         1.0 + self.clip_param) * adv_targ
+                    # action_loss = (-torch.min(surr1, surr2).mean())/ self.num_mini_batch
                     action_loss = -torch.min(surr1, surr2).mean()
 
                     if self.use_clipped_value_loss:
@@ -182,45 +187,50 @@ class PPO():
                         value_losses = (values - return_batch).pow(2)
                         value_losses_clipped = (
                             value_pred_clipped - return_batch).pow(2)
+                        # value_loss = (0.5 * torch.max(value_losses,
+                        #                              value_losses_clipped).mean())/ self.num_mini_batch
                         value_loss = 0.5 * torch.max(value_losses,
                                                      value_losses_clipped).mean()
                     else:
+                        # value_loss = (0.5 * (return_batch - values).pow(2).mean())/ self.num_mini_batch
                         value_loss = 0.5 * (return_batch - values).pow(2).mean()
                     task_losses.append(value_loss * self.value_loss_coef + action_loss -
                                        dist_entropy * self.entropy_coef)
                 total_loss = torch.stack(task_losses).mean()
-                self.optimizer.zero_grad()
+
                 # (value_loss * self.value_loss_coef + action_loss -
                 #  dist_entropy * self.entropy_coef).backward()
-                if self.use_pcgrad:
-                    self.optimizer.pc_backward(task_losses)
-                elif self.use_testgrad:
-                    self.optimizer.pc_backward(task_losses)
-                elif self.use_noisygrad:
-                    self.optimizer.noisy_backward(task_losses)
-                elif self.use_median_grad:
-                    self.optimizer.median_backward(task_losses)
-                elif self.use_meanvargrad:
-                    self.optimizer.pc_backward(task_losses)
-                elif self.use_graddrop:
-                    self.optimizer.pc_backward(task_losses)
-                else:
-                    total_loss.backward()
-                nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
-                                         self.max_grad_norm)
-                if self.attention_policy:
-                    nn.utils.clip_grad_norm_(self.attention_parameters,
-                                             self.max_grad_norm)
-                else:
-                    nn.utils.clip_grad_norm_(self.non_attention_parameters,
-                                             self.max_grad_norm)
+                # if self.use_pcgrad:
+                #     self.optimizer.pc_backward(task_losses)
+                # elif self.use_testgrad:
+                #     self.optimizer.pc_backward(task_losses)
+                # elif self.use_noisygrad:
+                #     self.optimizer.noisy_backward(task_losses)
+                # elif self.use_median_grad:
+                #     self.optimizer.median_backward(task_losses)
+                # elif self.use_meanvargrad:
+                #     self.optimizer.pc_backward(task_losses)
+                # elif self.use_graddrop:
+                #     self.optimizer.pc_backward(task_losses)
+                # else:
+                total_loss.backward()
+
+                # if self.attention_policy:
+                #     nn.utils.clip_grad_norm_(self.attention_parameters,
+                #                              self.max_grad_norm)
+                # else:
+                #     nn.utils.clip_grad_norm_(self.non_attention_parameters,
+                #                              self.max_grad_norm)
                 # self.optimizer.step()
 
                 value_loss_epoch += value_loss.item()
                 action_loss_epoch += action_loss.item()
                 dist_entropy_epoch += dist_entropy.item()
 
+            nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
+                                     self.max_grad_norm)
             self.optimizer.step()
+            self.optimizer.zero_grad()
 
         num_updates = self.ppo_epoch * self.num_mini_batch
 

@@ -213,8 +213,10 @@ class ResidualBlock(nn.Module):
     def __init__(self,
                  in_channels):
         super(ResidualBlock, self).__init__()
-        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
-                               constant_(x, 0), nn.init.calculate_gain('relu'))
+        # init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+        #                        constant_(x, 0), nn.init.calculate_gain('relu'))
+        init_ = lambda m: init(m, nn.init.xavier_uniform_, lambda x: nn.init.
+                               constant_(x, 0))
 
 
         self.conv1 = init_(nn.Conv2d(in_channels=in_channels, out_channels=in_channels, kernel_size=3, stride=1, padding=1))
@@ -232,8 +234,8 @@ class ResidualBlock(nn.Module):
 class ImpalaBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(ImpalaBlock, self).__init__()
-        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
-                               constant_(x, 0), nn.init.calculate_gain('relu'))
+        init_ = lambda m: init(m, nn.init.xavier_uniform_, lambda x: nn.init.
+                               constant_(x, 0))
 
         self.conv = init_(nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1))
         self.res1 = ResidualBlock(out_channels)
@@ -251,17 +253,25 @@ class ImpalaModel(NNBase):
     def __init__(self, num_inputs, recurrent=False, hidden_size=256):
         super(ImpalaModel, self).__init__(recurrent, hidden_size, hidden_size)
 
-        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
-                               constant_(x, 0), nn.init.calculate_gain('relu'))
+        init_ = lambda m: init(m, nn.init.xavier_uniform_, lambda x: nn.init.
+                               constant_(x, 0))
+
+        init_2 = lambda m: init(
+            m,
+            nn.init.orthogonal_,
+            lambda x: nn.init.constant_(x, 0),
+            gain=1)
 
         self.main = nn.Sequential(
             ImpalaBlock(in_channels=num_inputs, out_channels=16),
             ImpalaBlock(in_channels=16, out_channels=32),
             ImpalaBlock(in_channels=32, out_channels=32), nn.ReLU(), Flatten(),
-            nn.Linear(in_features=32 * 8 * 8, out_features=256),nn.ReLU())
+            init_(nn.Linear(in_features=32 * 8 * 8, out_features=256)),nn.ReLU())
 
+        # torch.manual_seed(0)
+        # torch.cuda.manual_seed_all(0)
 
-        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+        self.critic_linear = init_2(nn.Linear(hidden_size, 1))
 
         self.train()
 
