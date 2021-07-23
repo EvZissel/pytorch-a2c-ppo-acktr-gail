@@ -1,5 +1,7 @@
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
+from collections import deque
+import numpy as np
 
 
 def _flatten_helper(T, N, _tensor):
@@ -30,6 +32,7 @@ class RolloutStorage(object):
         # or time limit end state
         self.bad_masks = torch.ones(num_steps + 1, num_processes, 1)
         self.attn_masks = torch.ones(num_steps + 1, num_processes, *obs_shape)
+        self.info_batch = deque(maxlen=num_steps)
 
         self.num_steps = num_steps
         self.step = 0
@@ -49,7 +52,7 @@ class RolloutStorage(object):
         self.bad_masks = self.bad_masks.to(device)
 
     def insert(self, obs, recurrent_hidden_states, actions, action_log_probs,
-               value_preds, rewards, masks, bad_masks, attn_masks, seeds):
+               value_preds, rewards, masks, bad_masks, attn_masks, seeds, info):
         self.obs[self.step + 1].copy_(obs)
         self.recurrent_hidden_states[self.step +
                                      1].copy_(recurrent_hidden_states)
@@ -61,6 +64,7 @@ class RolloutStorage(object):
         self.masks[self.step + 1].copy_(masks)
         self.bad_masks[self.step + 1].copy_(bad_masks)
         self.attn_masks[self.step + 1].copy_(attn_masks)
+        self.info_batch.append(info)
 
         self.step = (self.step + 1) % self.num_steps
 
@@ -320,3 +324,22 @@ class RolloutStorage(object):
 
             yield obs_batch, recurrent_hidden_states_batch, actions_batch, \
                 value_preds_batch, return_batch, masks_batch, attn_masks_batch, old_action_log_probs_batch, adv_targ
+
+    def fetch_log_data(self):
+        if 'env_reward' in self.info_batch[0][0]:
+            rew_batch = []
+            for step in range(self.num_steps):
+                infos = self.info_batch[step]
+                rew_batch.append([info['env_reward'] for info in infos])
+            rew_batch = np.array(rew_batch)
+        else:
+            rew_batch = np.squeeze(self.rewards.numpy())
+        if 'env_done' in self.info_batch[0][0]:
+            done_batch = []
+            for step in range(self.num_steps):
+                infos = self.info_batch[step]
+                done_batch.append([info['env_done'] for info in infos])
+            done_batch = np.array(done_batch)
+        else:
+            done_batch = np.squeeze(1 - self.masks.numpy())
+        return rew_batch, done_batch

@@ -134,8 +134,7 @@ def make_ProcgenEnvs(num_envs,
                     use_monochrome_assets,
                     rand_seed,
                     mask_size=0,
-                    normalize_rew=False,
-                    no_normalize=False):
+                    normalize_rew=False):
 
     envs = ProcgenEnv(num_envs=num_envs,
                       env_name=env_name,

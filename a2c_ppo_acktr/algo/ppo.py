@@ -170,7 +170,7 @@ class PPO():
                         obs_batch, recurrent_hidden_states_batch, masks_batch, attn_masks_batch,
                         actions_batch, attention_act=attention_update)
 
-                    # dist_entropy = dist_entropy / self.num_mini_batch
+                    dist_entropy = dist_entropy / self.num_mini_batch
                     # if attention_update=True, we assume that the log_probs are the attention log_probs.
                     # This is a hack for now, and it is taken care of in model.py and in dual_rl.py
                     ratio = torch.exp(action_log_probs -
@@ -178,8 +178,8 @@ class PPO():
                     surr1 = ratio * adv_targ
                     surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
                                         1.0 + self.clip_param) * adv_targ
-                    # action_loss = (-torch.min(surr1, surr2).mean())/ self.num_mini_batch
-                    action_loss = -torch.min(surr1, surr2).mean()
+                    action_loss = (-torch.min(surr1, surr2).mean())/ self.num_mini_batch
+                    # action_loss = -torch.min(surr1, surr2).mean()
 
                     if self.use_clipped_value_loss:
                         value_pred_clipped = value_preds_batch + \
@@ -187,13 +187,13 @@ class PPO():
                         value_losses = (values - return_batch).pow(2)
                         value_losses_clipped = (
                             value_pred_clipped - return_batch).pow(2)
-                        # value_loss = (0.5 * torch.max(value_losses,
-                        #                              value_losses_clipped).mean())/ self.num_mini_batch
-                        value_loss = 0.5 * torch.max(value_losses,
-                                                     value_losses_clipped).mean()
+                        value_loss = (0.5 * torch.max(value_losses,
+                                                     value_losses_clipped).mean())/ self.num_mini_batch
+                        # value_loss = 0.5 * torch.max(value_losses,
+                        #                              value_losses_clipped).mean()
                     else:
-                        # value_loss = (0.5 * (return_batch - values).pow(2).mean())/ self.num_mini_batch
-                        value_loss = 0.5 * (return_batch - values).pow(2).mean()
+                        value_loss = (0.5 * (return_batch - values).pow(2).mean())/ self.num_mini_batch
+                        # value_loss = 0.5 * (return_batch - values).pow(2).mean()
                     task_losses.append(value_loss * self.value_loss_coef + action_loss -
                                        dist_entropy * self.entropy_coef)
                 total_loss = torch.stack(task_losses).mean()
