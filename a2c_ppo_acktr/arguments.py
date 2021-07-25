@@ -288,6 +288,11 @@ def get_args():
         default=False,
         help='use hard attention in val agent')
     parser.add_argument(
+        '--att_size',
+        type=int,
+        default=8,
+        help='attention size')
+    parser.add_argument(
         '--no_normalize',
         action='store_true',
         default=False,

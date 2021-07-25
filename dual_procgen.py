@@ -39,7 +39,7 @@ def main():
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
-    logdir = args.env_name + '_seed_' + str(args.seed) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    logdir = "HA_" + args.env_name + '_seed_' + str(args.seed) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
     if args.normalize_rew:
         logdir = logdir + '_normalize_rew'
     logdir = os.path.join(os.path.expanduser(args.log_dir), logdir)
@@ -156,7 +156,7 @@ def main():
         envs.action_space,
         base=ImpalaHardAttnReinforce,
         base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent,
-                     'att_size': [8,8],
+                     'att_size': [args.att_size, args.att_size],
                      'obs_size': envs.observation_space.shape})
     actor_critic.to(device)
 
