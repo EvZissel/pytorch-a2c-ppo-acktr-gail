@@ -55,39 +55,39 @@ class PPO():
         self.max_grad_norm = max_grad_norm
         self.use_clipped_value_loss = use_clipped_value_loss
 
-        # self.attention_parameters = []
-        # self.non_attention_parameters = []
-        # for name, p in actor_critic.named_parameters():
-        #     if 'attention' in name:
-        #         self.attention_parameters.append(p)
-        #     else:
-        #         self.non_attention_parameters.append(p)
+        self.attention_parameters = []
+        self.non_attention_parameters = []
+        for name, p in actor_critic.named_parameters():
+            if 'attention' in name:
+                self.attention_parameters.append(p)
+            else:
+                self.non_attention_parameters.append(p)
 
         # no_special_grad_for_critic means that we apply a standard gradient to the critic parameters and a special
         # gradient (e.g., testgrad) to the actor parameters. To do that, we name the different parameter groups in the
         # optimizer, and modify the special gradient code to take that into account
-        # if no_special_grad_for_critic:
-        #     critic_params = []
-        #     non_critic_params = []
-        #     for name, p in actor_critic.named_parameters():
-        #         if 'critic' in name:
-        #             critic_params.append(p)
-        #         else:
-        #             non_critic_params.append(p)
-        #     self.optimizer = optim.Adam([{'params': critic_params,
-        #                                   'special_grad': False},
-        #                                 {'params': non_critic_params,
-        #                                  'special_grad': True}],
-        #                                 lr=lr, eps=eps, weight_decay=weight_decay)
-        # else:
-        #     if attention_policy:
-        #         self.optimizer = optim.Adam(self.attention_parameters, lr=lr, eps=eps, weight_decay=weight_decay)
-        #     else:
-        #         self.optimizer = optim.Adam(self.non_attention_parameters, lr=lr, eps=eps, weight_decay=weight_decay)
+        if no_special_grad_for_critic:
+            critic_params = []
+            non_critic_params = []
+            for name, p in actor_critic.named_parameters():
+                if 'critic' in name:
+                    critic_params.append(p)
+                else:
+                    non_critic_params.append(p)
+            self.optimizer = optim.Adam([{'params': critic_params,
+                                          'special_grad': False},
+                                        {'params': non_critic_params,
+                                         'special_grad': True}],
+                                        lr=lr, eps=eps, weight_decay=weight_decay)
+        else:
+            if attention_policy:
+                self.optimizer = optim.Adam(self.attention_parameters, lr=lr, eps=eps, weight_decay=weight_decay)
+            else:
+                self.optimizer = optim.Adam(self.non_attention_parameters, lr=lr, eps=eps, weight_decay=weight_decay)
 
 
-        self.optimizer = optim.Adam(self.actor_critic.parameters(), lr=lr, eps=eps, weight_decay=weight_decay)
-        # self.attention_policy = attention_policy
+        # self.optimizer = optim.Adam(self.actor_critic.parameters(), lr=lr, eps=eps, weight_decay=weight_decay)
+        self.attention_policy = attention_policy
         # self.max_task_grad_norm = max_task_grad_norm
         # self.use_pcgrad = use_pcgrad
         # self.use_testgrad = use_testgrad
@@ -135,7 +135,7 @@ class PPO():
         #     )
         #     privacy_engine.attach(self.optimizer)
 
-    def update(self, rollouts, attention_update=False):
+    def update(self, rollouts, attention_update=False, device="cpu"):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
             advantages.std() + 1e-8)
@@ -168,7 +168,7 @@ class PPO():
                     # Reshape to do in a single forward pass for all steps
                     values, action_log_probs, dist_entropy, _ = self.actor_critic.evaluate_actions(
                         obs_batch, recurrent_hidden_states_batch, masks_batch, attn_masks_batch,
-                        actions_batch, attention_act=attention_update)
+                        actions_batch, attention_act=attention_update,device=device)
 
                     dist_entropy = dist_entropy / self.num_mini_batch
                     # if attention_update=True, we assume that the log_probs are the attention log_probs.
@@ -227,8 +227,15 @@ class PPO():
                 action_loss_epoch += action_loss.item()
                 dist_entropy_epoch += dist_entropy.item()
 
-            nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
-                                     self.max_grad_norm)
+            # nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
+            #                          self.max_grad_norm)
+            if self.attention_policy:
+                nn.utils.clip_grad_norm_(self.attention_parameters,
+                                         self.max_grad_norm)
+            else:
+                nn.utils.clip_grad_norm_(self.non_attention_parameters,
+                                         self.max_grad_norm)
+
             self.optimizer.step()
             self.optimizer.zero_grad()
 

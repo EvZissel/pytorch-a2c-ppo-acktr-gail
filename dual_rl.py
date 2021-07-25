@@ -229,7 +229,7 @@ def main():
                     [[0.0] if 'bad_transition' in info.keys() else [1.0]
                      for info in infos])
                 val_rollouts.insert(obs, recurrent_hidden_states, action,
-                                    action_log_prob, value, reward, masks, bad_masks, attn_masks,seeds)
+                                    action_log_prob, value, reward, masks, bad_masks, attn_masks,seeds,infos)
 
             with torch.no_grad():
                 next_value = actor_critic.get_value(
