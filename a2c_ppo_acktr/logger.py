@@ -103,30 +103,39 @@ class Logger(object):
     def get_episode_statistics(self):
         episode_statistics = {}
         episode_statistics['Rewards/max_episodes']  = {'train': np.max(self.episode_reward_buffer),
-                                                       'train_val': np.max(self.episode_reward_buffer_train),
-                                                       'train_partial': np.max(self.episode_reward_buffer_train_val),
+                                                       'train_eval': np.max(self.episode_reward_buffer_train),
                                                        'test':np.max(self.episode_reward_buffer_test)}
         episode_statistics['Rewards/mean_episodes'] = {'train': np.mean(self.episode_reward_buffer),
-                                                       'train_val': np.mean(self.episode_reward_buffer_train),
-                                                       'train_partial': np.mean(self.episode_reward_buffer_train_val),
+                                                       'train_eval': np.mean(self.episode_reward_buffer_train),
                                                        'test': np.mean(self.episode_reward_buffer_test)}
         episode_statistics['Rewards/min_episodes']  = {'train': np.min(self.episode_reward_buffer),
-                                                       'train_val': np.min(self.episode_reward_buffer_train),
-                                                       'train_partial': np.min(self.episode_reward_buffer_train_val),
+                                                       'train_eval': np.min(self.episode_reward_buffer_train),
                                                        'test': np.min(self.episode_reward_buffer_test)}
 
         episode_statistics['Len/max_episodes']  = {'train': np.max(self.episode_len_buffer),
-                                                   'train_val': np.max(self.episode_len_buffer_train),
-                                                   'train_partial': np.max(self.episode_len_buffer_train_val),
+                                                   'train_eval': np.max(self.episode_len_buffer_train),
                                                    'test': np.max(self.episode_len_buffer_test)}
         episode_statistics['Len/mean_episodes'] = {'train': np.mean(self.episode_len_buffer),
-                                                   'train_val': np.mean(self.episode_len_buffer_train),
-                                                   'train_partial': np.mean(self.episode_len_buffer_train_val),
+                                                   'train_eval': np.mean(self.episode_len_buffer_train),
                                                    'test': np.mean(self.episode_len_buffer_test)}
         episode_statistics['Len/min_episodes']  = {'train': np.min(self.episode_len_buffer),
-                                                   'train_val': np.min(self.episode_len_buffer_train),
-                                                   'train_partial': np.min(self.episode_len_buffer_train_val),
+                                                   'train_eval': np.min(self.episode_len_buffer_train),
                                                    'test': np.min(self.episode_len_buffer_test)}
+        if len(self.episode_reward_buffer_val) > 0:
+            episode_statistics['Rewards/max_episodes']['validation'] =  np.max(self.episode_reward_buffer_val)
+            episode_statistics['Rewards/mean_episodes']['validation'] = np.mean(self.episode_reward_buffer_val)
+            episode_statistics['Rewards/min_episodes']['validation'] = np.min(self.episode_reward_buffer_val)
+            episode_statistics['Len/max_episodes']['validation'] = np.max(self.episode_len_buffer_val)
+            episode_statistics['Len/mean_episodes']['validation'] = np.mean(self.episode_len_buffer_val)
+            episode_statistics['Len/min_episodes']['validation'] = np.min(self.episode_len_buffer_val)
+
+            episode_statistics['Rewards/max_episodes']['train_partial'] =  np.max(self.episode_reward_buffer_train_val)
+            episode_statistics['Rewards/mean_episodes']['train_partial'] = np.mean(self.episode_reward_buffer_train_val)
+            episode_statistics['Rewards/min_episodes']['train_partial'] = np.min(self.episode_reward_buffer_train_val)
+            episode_statistics['Len/max_episodes']['train_partial'] = np.max(self.episode_len_buffer_train_val)
+            episode_statistics['Len/mean_episodes']['train_partial'] = np.mean(self.episode_len_buffer_train_val)
+            episode_statistics['Len/min_episodes']['train_partial'] = np.min(self.episode_len_buffer_train_val)
+
         return episode_statistics
 
     def get_train_val_statistics(self):
@@ -145,18 +154,19 @@ class Logger(object):
 
         train_statistics['Len_min_episodes'] = np.min(self.episode_len_buffer)
 
-        train_statistics['Rewards_max_episodes_val'] = np.max(self.episode_reward_buffer_val)
+        if len(self.episode_reward_buffer_val)>0:
+            train_statistics['Rewards_max_episodes_val'] = np.max(self.episode_reward_buffer_val)
 
-        train_statistics['Rewards_mean_episodes_val'] = np.mean(self.episode_reward_buffer_val)
+            train_statistics['Rewards_mean_episodes_val'] = np.mean(self.episode_reward_buffer_val)
 
-        train_statistics['Rewards_median_episodes_val'] = np.median(self.episode_reward_buffer_val)
+            train_statistics['Rewards_median_episodes_val'] = np.median(self.episode_reward_buffer_val)
 
-        train_statistics['Rewards_min_episodes_val'] = np.min(self.episode_reward_buffer_val)
+            train_statistics['Rewards_min_episodes_val'] = np.min(self.episode_reward_buffer_val)
 
-        train_statistics['Len_max_episodes_val'] = np.max(self.episode_len_buffer_val)
+            train_statistics['Len_max_episodes_val'] = np.max(self.episode_len_buffer_val)
 
-        train_statistics['Len_mean_episodes_val'] = np.mean(self.episode_len_buffer_val)
+            train_statistics['Len_mean_episodes_val'] = np.mean(self.episode_len_buffer_val)
 
-        train_statistics['Len_min_episodes_val'] = np.min(self.episode_len_buffer_val)
+            train_statistics['Len_min_episodes_val'] = np.min(self.episode_len_buffer_val)
 
         return train_statistics

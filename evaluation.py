@@ -55,7 +55,7 @@ def evaluate(actor_critic, obs_rms, eval_envs_dic, env_name, seed, num_processes
     return eval_episode_rewards
 
 def evaluate_procgen(actor_critic, eval_envs_dic, env_name, num_processes,
-             device, steps, logger):
+             device, steps, attention_features):
 
     eval_envs = eval_envs_dic[env_name]
     rew_batch = []
@@ -69,7 +69,10 @@ def evaluate_procgen(actor_critic, eval_envs_dic, env_name, num_processes,
     eval_recurrent_hidden_states = torch.zeros(
         num_processes, actor_critic.recurrent_hidden_state_size, device=device)
     eval_masks = torch.ones(num_processes, 1, device=device)
-    eval_attn_masks = torch.ones(num_processes,  *(eval_envs.observation_space.shape), device=device)
+    if attention_features or actor_critic.attention_size == 1:
+        eval_attn_masks = torch.ones(num_processes, actor_critic.attention_size, device=device)
+    else:
+        eval_attn_masks = torch.ones(num_processes,  *actor_critic.attention_size, device=device)
 
     # fig = plt.figure(figsize=(20, 20))
     # columns = 5

@@ -15,7 +15,7 @@ from a2c_ppo_acktr.arguments import get_args
 # from a2c_ppo_acktr.envs import make_vec_envs, make_ProcgenEnvs
 from a2c_ppo_acktr.envs import make_ProcgenEnvs
 from procgen import ProcgenEnv
-from a2c_ppo_acktr.model import Policy, ImpalaHardAttnReinforce
+from a2c_ppo_acktr.model import Policy, ImpalaHardAttnReinforce, ImpalaHardAttnReinforceFeatures
 from a2c_ppo_acktr.storage import RolloutStorage
 from evaluation import evaluate_procgen
 from a2c_ppo_acktr.utils import save_obj, load_obj
@@ -23,6 +23,7 @@ from a2c_ppo_acktr.procgen_wrappers import *
 from a2c_ppo_acktr.logger import Logger
 import pandas as pd
 import matplotlib.pyplot as plt
+import torchvision
 
 EVAL_ENVS = ['train_eval', 'test_eval', 'partial_train_eval']
 
@@ -151,14 +152,23 @@ def main():
 
     print('done')
 
-    actor_critic = Policy(
-        envs.observation_space.shape,
-        envs.action_space,
-        base=ImpalaHardAttnReinforce,
-        base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent,
-                     'att_size': [args.att_size, args.att_size],
-                     'obs_size': envs.observation_space.shape})
-    actor_critic.to(device)
+    if args.attention_features:
+        actor_critic = Policy(
+            envs.observation_space.shape,
+            envs.action_space,
+            base=ImpalaHardAttnReinforceFeatures,
+            base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent,
+                         'attention_size' : args.att_size})
+        actor_critic.to(device)
+    else:
+        actor_critic = Policy(
+            envs.observation_space.shape,
+            envs.action_space,
+            base=ImpalaHardAttnReinforce,
+            base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent,
+                         'att_size': [args.att_size, args.att_size],
+                         'obs_size': envs.observation_space.shape})
+        actor_critic.to(device)
 
     if args.algo != 'ppo':
         raise print("only PPO is supported")
@@ -205,12 +215,12 @@ def main():
     # rollout storage for agent
     rollouts = RolloutStorage(args.num_steps, args.num_processes,
                               envs.observation_space.shape, envs.action_space,
-                              actor_critic.recurrent_hidden_state_size, device)
+                              actor_critic.recurrent_hidden_state_size, args.att_size, args.attention_features, device)
 
     # rollout storage for validation agent
     val_rollouts = RolloutStorage(args.num_steps, args.num_processes,
                                   val_envs.observation_space.shape, val_envs.action_space,
-                                  actor_critic.recurrent_hidden_state_size, device)
+                                  actor_critic.recurrent_hidden_state_size, args.att_size, args.attention_features, device)
 
     logger = Logger(args.num_processes)
 
@@ -229,6 +239,7 @@ def main():
 
     # save_copy = True
     save_image_every = num_updates
+    save_att_image_every = 100
     # episode_len_buffer = []
     # for _ in range(args.num_processes):
     #     episode_len_buffer.append(0)
@@ -242,8 +253,27 @@ def main():
             for i in range(1, columns * rows + 1):
                 fig.add_subplot(rows, columns, i)
                 plt.imshow(rollouts.obs[0][i].transpose(0, 2))
-            summary_writer.add_images('samples_step_{}'.format(j), rollouts.obs[0][0:25])
+
+            summary_writer.add_images('step_{}/mazes'.format(j), rollouts.obs[0][0:25],global_step=j)
             plt.show()
+
+        # plot attention
+        if j % save_att_image_every == 0:
+            if not args.attention_features:
+                fig = plt.figure(figsize=(20, 20))
+                columns = 5
+                rows = 5
+                for i in range(1, columns * rows + 1):
+                    fig.add_subplot(rows, columns, i)
+                    plt.imshow(rollouts.attn_masks[0][i], cmap='gray')
+
+                summary_writer.add_images('step_{}/atten'.format(j), rollouts.attn_masks[0][0:25].unsqueeze(1).repeat(1, envs.observation_space.shape[0], 1, 1),global_step=j)
+                plt.show()
+
+
+                plt.imshow(actor_critic.base.input_attention.data.cpu(), cmap='gray')
+                summary_writer.add_image('step_{}/atten_prob'.format(j), actor_critic.base.input_attention.data.cpu(),global_step=j, dataformats='HW')
+                plt.show()
 
         # policy rollouts
         actor_critic.eval()
@@ -254,7 +284,7 @@ def main():
             with torch.no_grad():
                 value, action, action_log_prob, recurrent_hidden_states, attn_masks = actor_critic.act(
                     rollouts.obs[step].to(device), rollouts.recurrent_hidden_states[step].to(device),
-                    rollouts.masks[step].to(device), rollouts.attn_masks[step].to(device),device)
+                    rollouts.masks[step].to(device), rollouts.attn_masks[step].to(device))
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(action.squeeze().cpu().numpy())
@@ -282,13 +312,13 @@ def main():
         with torch.no_grad():
             next_value = actor_critic.get_value(
                 rollouts.obs[-1].to(device), rollouts.recurrent_hidden_states[-1].to(device),
-                rollouts.masks[-1].to(device), rollouts.attn_masks[-1].to(device), device).detach()
+                rollouts.masks[-1].to(device), rollouts.attn_masks[-1].to(device)).detach()
 
         actor_critic.train()
         rollouts.compute_returns(next_value, args.use_gae, args.gamma,
                                  args.gae_lambda, args.use_proper_time_limits)
 
-        value_loss, action_loss, dist_entropy = agent.update(rollouts,device=device)
+        value_loss, action_loss, dist_entropy = agent.update(rollouts)
 
         rollouts.after_update()
 
@@ -304,7 +334,7 @@ def main():
                     value, action, action_log_prob, recurrent_hidden_states, attn_masks = actor_critic.act(
                         val_rollouts.obs[step].to(device), val_rollouts.recurrent_hidden_states[step].to(device),
                         val_rollouts.masks[step].to(device), val_rollouts.attn_masks[step].to(device), deterministic=True,
-                        attention_act=True, device=device)
+                        attention_act=True)
 
                 # Observe reward and next obs
                 obs, reward, done, infos = val_envs.step(action.squeeze().cpu().numpy())
@@ -324,12 +354,12 @@ def main():
             with torch.no_grad():
                 next_value = actor_critic.get_value(
                     val_rollouts.obs[-1].to(device), val_rollouts.recurrent_hidden_states[-1].to(device),
-                    val_rollouts.masks[-1].to(device), val_rollouts.attn_masks[-1].to(device),device=device).detach()
+                    val_rollouts.masks[-1].to(device), val_rollouts.attn_masks[-1].to(device)).detach()
 
             actor_critic.train()
             val_rollouts.compute_returns(next_value, args.use_gae, args.gamma,
                                          args.gae_lambda, args.use_proper_time_limits)
-            val_value_loss, val_action_loss, val_dist_entropy = val_agent.update(val_rollouts, attention_update=True,device=device)
+            val_value_loss, val_action_loss, val_dist_entropy = val_agent.update(val_rollouts, attention_update=True)
             val_rollouts.after_update()
 
             rew_batch, done_batch = val_rollouts.fetch_log_data()
@@ -340,10 +370,14 @@ def main():
             torch.save({'state_dict': actor_critic.state_dict(), 'optimizer_state_dict': agent.optimizer.state_dict(),
                         'step': j}, os.path.join(logdir, args.env_name + "-epoch-{}.pt".format(j)))
 
+        # save and overwrite last epoch
+        torch.save({'state_dict': actor_critic.state_dict(), 'optimizer_state_dict': agent.optimizer.state_dict(),
+                    'step': j}, os.path.join(logdir, args.env_name + "-epoch-latest.pt"))
+
         # print some stats
         if j % args.log_interval == 0:
-            total_num_steps = (j + 1) * args.num_processes * args.num_steps
             end = time.time()
+            total_num_steps = (j + 1) * args.num_processes * args.num_steps
 
             train_statistics = logger.get_train_val_statistics()
             print(
@@ -369,8 +403,7 @@ def main():
                                                                                                eval_envs_dic,
                                                                                                eval_disp_name,
                                                                                                args.num_processes,
-                                                                                               device, args.num_steps,
-                                                                                               logger)
+                                                                                               device, args.num_steps, args.attention_features)
 
                 # log_dict[eval_disp_name].append([(j+1) * args.num_processes * args.num_steps, eval_dic_rew[eval_disp_name]])
                 # printout += eval_disp_name + ' ' + str(np.mean(eval_dic_rew[eval_disp_name])) + ' '
@@ -381,6 +414,9 @@ def main():
             episode_statistics = logger.get_episode_statistics()
             print(printout)
             print(episode_statistics)
+            print("mask prob: {}".format(torch.sigmoid(actor_critic.base.input_attention.data)))
+            print("mask train: {}".format(rollouts.attn_masks[step]))
+            print("mask val: {}".format(val_rollouts.attn_masks[step]))
 
             # summary_writer.add_scalars('eval_mean_rew', {f'{eval_disp_name}': np.mean(eval_dic_rew[eval_disp_name])},
             #                               (j+1) * args.num_processes * args.num_steps)

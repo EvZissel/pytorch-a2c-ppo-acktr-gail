@@ -298,6 +298,11 @@ def get_args():
         default=False,
         help='no normalize inputs')
     parser.add_argument(
+        '--attention_features',
+        action='store_true',
+        default=False,
+        help='attention on the feature space')
+    parser.add_argument(
         '--normalize_rew',
         action='store_true',
         default=False,
@@ -307,6 +312,11 @@ def get_args():
         type=int,
         default=0,
         help='constant mask size')
+    parser.add_argument(
+        '--mask_all',
+        action='store_true',
+        default=False,
+        help='mask all frame')
     args = parser.parse_args()
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()

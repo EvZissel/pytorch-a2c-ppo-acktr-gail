@@ -134,7 +134,8 @@ def make_ProcgenEnvs(num_envs,
                     use_monochrome_assets,
                     rand_seed,
                     mask_size=0,
-                    normalize_rew=False):
+                    normalize_rew=False,
+                    mask_all=False):
 
     envs = ProcgenEnv(num_envs=num_envs,
                       env_name=env_name,
@@ -152,7 +153,9 @@ def make_ProcgenEnvs(num_envs,
         envs = VecNormalize(envs, ob=False)  # normalizing returns, but not the img frames.
     envs = TransposeFrame(envs)
     envs = MaskFloatFrame(envs,l=mask_size)
-    envs= ScaledFloatFrame(envs)
+    if mask_all:
+        envs = MaskAllFrame(envs)
+    envs = ScaledFloatFrame(envs)
 
     return envs
 

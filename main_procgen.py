@@ -88,7 +88,8 @@ def main():
                       use_monochrome_assets=True,
                       rand_seed=args.seed,
                       mask_size=args.mask_size,
-                      normalize_rew= args.normalize_rew)
+                      normalize_rew=args.normalize_rew,
+                      mask_all=args.mask_all)
 
     # Test envs
     eval_envs_dic = {}
@@ -103,7 +104,8 @@ def main():
                                                       use_monochrome_assets=True,
                                                       rand_seed=args.seed,
                                                       mask_size=args.mask_size,
-                                                      normalize_rew= args.normalize_rew)
+                                                      normalize_rew= args.normalize_rew,
+                                                      mask_all=args.mask_all)
 
     test_start_level = args.start_level + args.num_level + 1
     eval_envs_dic['test_eval'] = make_ProcgenEnvs(num_envs=args.num_processes,
@@ -117,7 +119,8 @@ def main():
                                                      use_monochrome_assets=True,
                                                      rand_seed=args.seed,
                                                      mask_size=args.mask_size,
-                                                     normalize_rew=args.normalize_rew)
+                                                     normalize_rew=args.normalize_rew,
+                                                     mask_all=args.mask_all)
     print('done')
 
     actor_critic = Policy(
@@ -159,7 +162,7 @@ def main():
     # rollout storage for agent
     rollouts = RolloutStorage(args.num_steps, args.num_processes,
                               envs.observation_space.shape, envs.action_space,
-                              actor_critic.recurrent_hidden_state_size, device)
+                              actor_critic.recurrent_hidden_state_size, args.mask_size, device)
     logger = Logger(args.num_processes)
 
     obs = envs.reset()
@@ -172,7 +175,7 @@ def main():
         args.num_env_steps) // args.num_steps // args.num_processes
 
     # save_copy = True
-    save_image_every = num_updates
+    save_image_every = num_updates/3
     # episode_len_buffer = []
     # for _ in range(args.num_processes):
     #     episode_len_buffer.append(0)
@@ -186,7 +189,7 @@ def main():
             for i in range(1, columns * rows + 1):
                 fig.add_subplot(rows, columns, i)
                 plt.imshow(rollouts.obs[0][i].transpose(0,2))
-            summary_writer.add_images('samples_step_{}'.format(j), rollouts.obs[0][0:25])
+            summary_writer.add_images('samples_step_{}'.format(j), rollouts.obs[0][0:25], global_step=(j) * args.num_processes * args.num_steps)
             plt.show()
 
         # policy rollouts
@@ -249,7 +252,7 @@ def main():
             total_num_steps = (j + 1) * args.num_processes * args.num_steps
             end = time.time()
 
-            train_statistics = logger.get_train_statistics()
+            train_statistics = logger.get_train_val_statistics()
             print(
                 "Updates {}, num timesteps {}, FPS {}, num training episodes {} \n Last 128 training episodes: mean/median reward {:.1f}/{:.1f}, "
                 "min/max reward {:.1f}/{:.1f}, dist_entropy {} , value_loss {}, action_loss {}, unique seeds {}\n"
@@ -258,7 +261,6 @@ def main():
                         logger.num_episodes, train_statistics['Rewards_mean_episodes'],
                         train_statistics['Rewards_median_episodes'], train_statistics['Rewards_min_episodes'], train_statistics['Rewards_max_episodes'], dist_entropy, value_loss,
                         action_loss, np.unique(rollouts.seeds.squeeze().numpy()).size))
-
         # evaluate agent on evaluation tasks
         if (args.eval_interval is not None and j % args.eval_interval == 0):
             actor_critic.eval()
@@ -267,14 +269,14 @@ def main():
             eval_dic_done = {}
             for eval_disp_name in EVAL_ENVS:
                 eval_dic_rew[eval_disp_name], eval_dic_done[eval_disp_name] = evaluate_procgen(actor_critic, eval_envs_dic, eval_disp_name,
-                                                  args.num_processes, device, args.num_steps,logger)
+                                                  args.num_processes, device, args.num_steps)
 
 
                 # log_dict[eval_disp_name].append([(j+1) * args.num_processes * args.num_steps, eval_dic_rew[eval_disp_name]])
                 # printout += eval_disp_name + ' ' + str(np.mean(eval_dic_rew[eval_disp_name])) + ' '
                 # print(printout)
 
-            logger.feed_eval(eval_dic_rew['train_eval'], eval_dic_done['train_eval'],eval_dic_rew['test_eval'], eval_dic_done['test_eval'])
+            logger.feed_eval(eval_dic_rew['train_eval'], eval_dic_done['train_eval'],eval_dic_rew['test_eval'], eval_dic_done['test_eval'],eval_dic_rew['test_eval'], eval_dic_done['test_eval'])
             episode_statistics = logger.get_episode_statistics()
             print(printout)
             print(episode_statistics)

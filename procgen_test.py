@@ -2,8 +2,9 @@
 
 
 from a2c_ppo_acktr.procgen_wrappers import *
-from a2c_ppo_acktr.envs import make_vec_envs, make_ProcgenEnvs
+# from a2c_ppo_acktr.envs import make_vec_envs, make_ProcgenEnvs
 import matplotlib.pyplot as plt
+from procgen import ProcgenEnv
 
 from a2c_ppo_acktr.distributions import Bernoulli, Categorical, DiagGaussian, FixedCategorical
 
@@ -19,19 +20,28 @@ normalize_rew=False
 no_normalize=False
 n_steps = 10
 
-envs = make_ProcgenEnvs(num_envs=num_processes,
-                        env_name=env_name,
-                        start_level=start_level,
-                        num_levels=num_level,
-                        distribution_mode=distribution_mode,
-                        use_generated_assets=True,
-                        use_backgrounds=False,
-                        restrict_themes=True,
-                        use_monochrome_assets=True,
-                        rand_seed=seed,
-                        normalize_rew= normalize_rew,
-                        no_normalize = no_normalize)
+# envs = make_ProcgenEnvs(num_envs=num_processes,
+#                         env_name=env_name,
+#                         start_level=start_level,
+#                         num_levels=num_level,
+#                         distribution_mode=distribution_mode,
+#                         use_generated_assets=True,
+#                         use_backgrounds=False,
+#                         restrict_themes=True,
+#                         use_monochrome_assets=True,
+#                         rand_seed=seed,
+#                         normalize_rew= normalize_rew,
+#                         no_normalize = no_normalize)
 
+envs = ProcgenEnv(num_envs=num_processes,
+                  env_name=env_name,
+                  start_level=start_level,
+                  num_levels=num_level,
+                  distribution_mode=distribution_mode,
+                  use_generated_assets=True,
+                  use_backgrounds=False,
+                  restrict_themes=True,
+                  use_monochrome_assets=True)
 obs = envs.reset()
 
 # fig = plt.figure(figsize=(20, 20))
