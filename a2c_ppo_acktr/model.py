@@ -63,8 +63,8 @@ class Policy(nn.Module):
     # masks - beginning of episode indicators
     # attn_masks - values of the hard attention
     # attention_act - take an 'action' of the attention network (for training with REINFORCE)
-    def act(self, inputs, rnn_hxs, masks, attn_masks=None, deterministic=False, attention_act=False):
-        value, actor_features, rnn_hxs, attn_log_probs, attn_masks = self.base(inputs, rnn_hxs, masks, attn_masks)
+    def act(self, inputs, rnn_hxs, masks, attn_masks=None, attn_masks1=None, attn_masks2=None, attn_masks3=None, deterministic=False, attention_act=False):
+        value, actor_features, rnn_hxs, attn_log_probs, attn_masks, attn_masks1, attn_masks2, attn_masks3 = self.base(inputs, rnn_hxs, masks, attn_masks, attn_masks1, attn_masks2, attn_masks3)
 
         dist = self.dist(actor_features)
 
@@ -79,13 +79,13 @@ class Policy(nn.Module):
         else:
             action_log_probs = dist.log_probs(action)
         dist_entropy = dist.entropy().mean()
-        return value, action, action_log_probs, rnn_hxs, attn_masks
+        return value, action, action_log_probs, rnn_hxs, attn_masks, attn_masks1, attn_masks2, attn_masks3
 
-    def get_value(self, inputs, rnn_hxs, masks, attn_masks):
-        value, _, _, _, _ = self.base(inputs, rnn_hxs, masks, attn_masks)
+    def get_value(self, inputs, rnn_hxs, masks, attn_masks, attn_masks1, attn_masks2, attn_masks3):
+        value, _, _, _, _, _, _, _ = self.base(inputs, rnn_hxs, masks, attn_masks, attn_masks1, attn_masks2, attn_masks3)
         return value
 
-    def evaluate_actions(self, inputs, rnn_hxs, masks, attn_masks, action, attention_act=False):
+    def evaluate_actions(self, inputs, rnn_hxs, masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, action, attention_act=False):
         # evaluate log probs of actions
         # value, actor_features, rnn_hxs, attn_log_probs, _ = self.base(inputs, rnn_hxs, masks, attn_masks,
         #                                                               reuse_masks=True)
@@ -94,12 +94,12 @@ class Policy(nn.Module):
         # dist_entropy = dist.entropy().mean()
         if attention_act:
             # evaluate log probs of attention masks
-            action_log_probs = self.base.attn_log_probs(attn_masks)
+            action_log_probs = self.base.attn_log_probs(attn_masks, attn_masks1, attn_masks2, attn_masks3)
             value = torch.tensor(0)
             dist_entropy = torch.tensor(0)
 
         else:
-            value, actor_features, rnn_hxs, attn_log_probs, _ = self.base(inputs, rnn_hxs, masks, attn_masks,
+            value, actor_features, rnn_hxs, attn_log_probs, _, _, _, _ = self.base(inputs, rnn_hxs, masks, attn_masks, attn_masks1, attn_masks2, attn_masks3,
                                                                           reuse_masks=True)
             dist = self.dist(actor_features)
             action_log_probs = dist.log_probs(action)
@@ -383,6 +383,118 @@ class ImpalaHardAttnReinforce(NNBase):
     #     return self.att_size
 
 
+class ImpalaHardAttnReinforceAllFeatures(NNBase):
+    def __init__(self, num_inputs, recurrent=False, hidden_size=256, attention_size=32):
+        super(ImpalaHardAttnReinforceAllFeatures, self).__init__(recurrent, hidden_size, hidden_size, attention=True, attention_size=attention_size)
+
+        init_ = lambda m: init(m, nn.init.xavier_uniform_, lambda x: nn.init.
+                               constant_(x, 0))
+
+        init_2 = lambda m: init(
+            m,
+            nn.init.orthogonal_,
+            lambda x: nn.init.constant_(x, 0),
+            gain=1)
+
+        self.exp_size = int(hidden_size / attention_size)
+
+        self.linear_attention = nn.Parameter(torch.ones(attention_size), requires_grad=True)
+        self.ones = nn.Parameter(torch.ones(self.exp_size), requires_grad=False)
+
+        self.block1_attention = nn.Parameter(torch.ones(16), requires_grad=True)
+        self.block2_attention = nn.Parameter(torch.ones(32), requires_grad=True)
+        self.block3_attention = nn.Parameter(torch.ones(32), requires_grad=True)
+
+        # self.main = nn.Sequential(
+        #     ImpalaBlock(in_channels=num_inputs, out_channels=16),
+        #     ImpalaBlock(in_channels=16, out_channels=32),
+        #     ImpalaBlock(in_channels=32, out_channels=32), nn.ReLU(), Flatten(),
+        #     init_(nn.Linear(in_features=32 * 8 * 8, out_features=256)), nn.ReLU())
+        self.block1 = ImpalaBlock(in_channels=num_inputs, out_channels=16)
+        self.block2 = ImpalaBlock(in_channels=16, out_channels=32)
+        self.block3 = ImpalaBlock(in_channels=32, out_channels=32)
+        self.linear = init_(nn.Linear(in_features=32 * 8 * 8, out_features=256))
+
+        self.critic_linear = init_2(nn.Linear(hidden_size, 1))
+
+        self.train()
+
+    def forward(self, inputs, rnn_hxs, masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, reuse_masks=False):
+        x = inputs
+        probs = torch.sigmoid(self.linear_attention)
+        probs = torch.distributions.bernoulli.Bernoulli(probs=probs)
+        new_attn = probs.sample([inputs.shape[0]])
+        new_attn_masks = attn_masks if reuse_masks else new_attn
+        attn_masks = new_attn_masks * (1 - masks) + attn_masks * masks
+        attn_log_probs = torch.flatten(probs.log_prob(attn_masks), start_dim=1).sum(dim=1).reshape([inputs.shape[0], 1])
+        m = torch.kron(attn_masks, self.ones)
+
+        probs1 = torch.sigmoid(self.block1_attention)
+        probs1 = torch.distributions.bernoulli.Bernoulli(probs=probs1)
+        new_attn1 = probs1.sample([inputs.shape[0]])
+        new_attn_masks1 = attn_masks1 if reuse_masks else new_attn1
+        attn_masks1 = new_attn_masks1 * (1 - masks) + attn_masks1 * masks
+        attn_log_probs1 = torch.flatten(probs1.log_prob(attn_masks1), start_dim=1).sum(dim=1).reshape([inputs.shape[0], 1])
+        m1 = attn_masks1.unsqueeze(2).unsqueeze(3).repeat(1, 1, 32, 32)
+
+        probs2 = torch.sigmoid(self.block2_attention)
+        probs2 = torch.distributions.bernoulli.Bernoulli(probs=probs2)
+        new_attn2 = probs2.sample([inputs.shape[0]])
+        new_attn_masks2 = attn_masks2 if reuse_masks else new_attn2
+        attn_masks2 = new_attn_masks2 * (1 - masks) + attn_masks2 * masks
+        attn_log_probs2 = torch.flatten(probs2.log_prob(attn_masks2), start_dim=1).sum(dim=1).reshape([inputs.shape[0], 1])
+        m2 = attn_masks2.unsqueeze(2).unsqueeze(3).repeat(1, 1, 16, 16)
+
+        probs3 = torch.sigmoid(self.block3_attention)
+        probs3 = torch.distributions.bernoulli.Bernoulli(probs=probs3)
+        new_attn3 = probs3.sample([inputs.shape[0]])
+        new_attn_masks3 = attn_masks3 if reuse_masks else new_attn3
+        attn_masks3 = new_attn_masks3 * (1 - masks) + attn_masks3 * masks
+        attn_log_probs3 = torch.flatten(probs3.log_prob(attn_masks3), start_dim=1).sum(dim=1).reshape([inputs.shape[0], 1])
+        m3 = attn_masks3.unsqueeze(2).unsqueeze(3).repeat(1, 1, 8, 8)
+
+        # x = self.main(x)
+        x = self.block1(x)
+        x = m1 * x
+        x = self.block2(x)
+        x = m2 * x
+        x = self.block3(x)
+        x = m3 * x
+        x = nn.ReLU()(x)
+        x = Flatten()(x)
+        x = self.linear(x)
+        x = nn.ReLU()(x)
+        if self.is_recurrent:
+            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+
+        x = m * x
+
+        return self.critic_linear(x), x, rnn_hxs, attn_log_probs+attn_log_probs1+attn_log_probs2+attn_log_probs3, attn_masks, attn_masks1,  attn_masks2, attn_masks3
+
+    def attn_log_probs(self, attn_masks, attn_masks1,  attn_masks2, attn_masks3):
+        probs = torch.sigmoid(self.linear_attention)
+        probs = torch.distributions.bernoulli.Bernoulli(probs=probs)
+        attn_log_probs = torch.flatten(probs.log_prob(attn_masks), start_dim=1).sum(dim=1).reshape(
+            [attn_masks.shape[0], 1])
+
+        probs1 = torch.sigmoid(self.block1_attention)
+        probs1 = torch.distributions.bernoulli.Bernoulli(probs=probs1)
+        attn_log_probs1 = torch.flatten(probs1.log_prob(attn_masks1), start_dim=1).sum(dim=1).reshape(
+            [attn_masks1.shape[0], 1])
+
+        probs2 = torch.sigmoid(self.block2_attention)
+        probs2 = torch.distributions.bernoulli.Bernoulli(probs=probs2)
+        attn_log_probs2 = torch.flatten(probs2.log_prob(attn_masks2), start_dim=1).sum(dim=1).reshape(
+            [attn_masks2.shape[0], 1])
+
+        probs3 = torch.sigmoid(self.block3_attention)
+        probs3 = torch.distributions.bernoulli.Bernoulli(probs=probs3)
+        attn_log_probs3 = torch.flatten(probs3.log_prob(attn_masks3), start_dim=1).sum(dim=1).reshape(
+            [attn_masks3.shape[0], 1])
+
+        return attn_log_probs+attn_log_probs1+attn_log_probs2+attn_log_probs3
+
+
 class ImpalaHardAttnReinforceFeatures(NNBase):
     def __init__(self, num_inputs, recurrent=False, hidden_size=256, attention_size=32):
         super(ImpalaHardAttnReinforceFeatures, self).__init__(recurrent, hidden_size, hidden_size, attention=True, attention_size=attention_size)
@@ -417,8 +529,6 @@ class ImpalaHardAttnReinforceFeatures(NNBase):
         probs = torch.distributions.bernoulli.Bernoulli(probs=probs)
         new_attn = probs.sample([inputs.shape[0]])
         new_attn_masks = attn_masks if reuse_masks else new_attn
-        # if sum(masks) < 100:
-        #     print("debug")
         attn_masks = new_attn_masks * (1 - masks) + attn_masks * masks
         attn_log_probs = torch.flatten(probs.log_prob(attn_masks), start_dim=1).sum(dim=1).reshape([inputs.shape[0], 1])
         m = torch.kron(attn_masks, self.ones)
@@ -438,9 +548,6 @@ class ImpalaHardAttnReinforceFeatures(NNBase):
             [attn_masks.shape[0], 1])
 
         return attn_log_probs
-
-    # def attention_size(self):
-    #     return self.att_size
 
 
 class MLPBase(NNBase):

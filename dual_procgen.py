@@ -15,7 +15,7 @@ from a2c_ppo_acktr.arguments import get_args
 # from a2c_ppo_acktr.envs import make_vec_envs, make_ProcgenEnvs
 from a2c_ppo_acktr.envs import make_ProcgenEnvs
 from procgen import ProcgenEnv
-from a2c_ppo_acktr.model import Policy, ImpalaHardAttnReinforce, ImpalaHardAttnReinforceFeatures
+from a2c_ppo_acktr.model import Policy, ImpalaHardAttnReinforce, ImpalaHardAttnReinforceFeatures, ImpalaHardAttnReinforceAllFeatures
 from a2c_ppo_acktr.storage import RolloutStorage
 from evaluation import evaluate_procgen
 from a2c_ppo_acktr.utils import save_obj, load_obj
@@ -156,7 +156,7 @@ def main():
         actor_critic = Policy(
             envs.observation_space.shape,
             envs.action_space,
-            base=ImpalaHardAttnReinforceFeatures,
+            base=ImpalaHardAttnReinforceAllFeatures,
             base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent,
                          'attention_size' : args.att_size})
         actor_critic.to(device)
@@ -282,9 +282,9 @@ def main():
         for step in range(args.num_steps):
             # Sample actions
             with torch.no_grad():
-                value, action, action_log_prob, recurrent_hidden_states, attn_masks = actor_critic.act(
+                value, action, action_log_prob, recurrent_hidden_states, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic.act(
                     rollouts.obs[step].to(device), rollouts.recurrent_hidden_states[step].to(device),
-                    rollouts.masks[step].to(device), rollouts.attn_masks[step].to(device))
+                    rollouts.masks[step].to(device), rollouts.attn_masks[step].to(device), rollouts.attn_masks1[step].to(device), rollouts.attn_masks2[step].to(device), rollouts.attn_masks3[step].to(device))
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(action.squeeze().cpu().numpy())
@@ -306,13 +306,13 @@ def main():
                 [[0.0] if 'bad_transition' in info.keys() else [1.0]
                  for info in infos])
             rollouts.insert(torch.from_numpy(obs), recurrent_hidden_states, action,
-                            action_log_prob, value, torch.from_numpy(reward).unsqueeze(1), masks, bad_masks, attn_masks,
+                            action_log_prob, value, torch.from_numpy(reward).unsqueeze(1), masks, bad_masks, attn_masks,attn_masks1, attn_masks2, attn_masks3,
                             seeds, infos)
 
         with torch.no_grad():
             next_value = actor_critic.get_value(
                 rollouts.obs[-1].to(device), rollouts.recurrent_hidden_states[-1].to(device),
-                rollouts.masks[-1].to(device), rollouts.attn_masks[-1].to(device)).detach()
+                rollouts.masks[-1].to(device), rollouts.attn_masks[-1].to(device), rollouts.attn_masks1[-1].to(device), rollouts.attn_masks2[-1].to(device), rollouts.attn_masks3[-1].to(device)).detach()
 
         actor_critic.train()
         rollouts.compute_returns(next_value, args.use_gae, args.gamma,
@@ -331,9 +331,10 @@ def main():
             for step in range(args.num_steps):
                 # Sample actions
                 with torch.no_grad():
-                    value, action, action_log_prob, recurrent_hidden_states, attn_masks = actor_critic.act(
+                    value, action, action_log_prob, recurrent_hidden_states, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic.act(
                         val_rollouts.obs[step].to(device), val_rollouts.recurrent_hidden_states[step].to(device),
-                        val_rollouts.masks[step].to(device), val_rollouts.attn_masks[step].to(device), deterministic=True,
+                        val_rollouts.masks[step].to(device), val_rollouts.attn_masks[step].to(device), val_rollouts.attn_masks1[step].to(device),
+                        val_rollouts.attn_masks2[step].to(device), val_rollouts.attn_masks3[step].to(device), deterministic=True,
                         attention_act=True)
 
                 # Observe reward and next obs
@@ -349,12 +350,13 @@ def main():
                     [[0.0] if 'bad_transition' in info.keys() else [1.0]
                      for info in infos])
                 val_rollouts.insert(torch.from_numpy(obs), recurrent_hidden_states, action,
-                                    action_log_prob, value, torch.from_numpy(reward).unsqueeze(1), masks, bad_masks, attn_masks,seeds, infos)
+                                    action_log_prob, value, torch.from_numpy(reward).unsqueeze(1), masks, bad_masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, infos)
 
             with torch.no_grad():
                 next_value = actor_critic.get_value(
                     val_rollouts.obs[-1].to(device), val_rollouts.recurrent_hidden_states[-1].to(device),
-                    val_rollouts.masks[-1].to(device), val_rollouts.attn_masks[-1].to(device)).detach()
+                    val_rollouts.masks[-1].to(device), val_rollouts.attn_masks[-1].to(device), val_rollouts.attn_masks1[-1].to(device),
+                    val_rollouts.attn_masks2[-1].to(device), val_rollouts.attn_masks3[-1].to(device)).detach()
 
             actor_critic.train()
             val_rollouts.compute_returns(next_value, args.use_gae, args.gamma,
@@ -382,7 +384,7 @@ def main():
             train_statistics = logger.get_train_val_statistics()
             print(
                 "Updates {}, num timesteps {}, FPS {}, num training episodes {} \n Last 128 training episodes: mean/median reward {:.1f}/{:.1f}, mean/median reward val {:.1f}/{:.1f}, "
-                "min/max reward {:.1f}/{:.1f}, min/max reward val {:.1f}/{:.1f}, dist_entropy {} , value_loss {}, action_loss {}, unique seeds {}\n"
+                "min/max reward {:.1f}/{:.1f}, min/max reward val {:.1f}/{:.1f}, dist_entropy {} , value_loss {}, action_loss {}, action_loss_validation {}, unique seeds {}\n"
                     .format(j, total_num_steps,
                             int(total_num_steps / (end - start)),
                             logger.num_episodes, train_statistics['Rewards_mean_episodes'],
@@ -390,7 +392,7 @@ def main():
                             train_statistics['Rewards_median_episodes_val'], train_statistics['Rewards_min_episodes'],
                             train_statistics['Rewards_max_episodes'],  train_statistics['Rewards_min_episodes_val'],
                             train_statistics['Rewards_max_episodes_val'], dist_entropy, value_loss,
-                            action_loss, np.unique(rollouts.seeds.squeeze().numpy()).size))
+                            action_loss, val_action_loss, np.unique(rollouts.seeds.squeeze().numpy()).size))
 
         # evaluate agent on evaluation tasks
         if (args.eval_interval is not None and j % args.eval_interval == 0):
@@ -414,7 +416,10 @@ def main():
             episode_statistics = logger.get_episode_statistics()
             print(printout)
             print(episode_statistics)
-            print("mask prob: {}".format(torch.sigmoid(actor_critic.base.input_attention.data)))
+            print("mask prob1: {}".format(torch.sigmoid(actor_critic.base.block1_attention.data)))
+            print("mask prob2: {}".format(torch.sigmoid(actor_critic.base.block2_attention.data)))
+            print("mask prob3: {}".format(torch.sigmoid(actor_critic.base.block3_attention.data)))
+            print("mask prob linear: {}".format(torch.sigmoid(actor_critic.base.linear_attention.data)))
             print("mask train: {}".format(rollouts.attn_masks[step]))
             print("mask val: {}".format(val_rollouts.attn_masks[step]))
 
@@ -451,6 +456,7 @@ def main():
                     summary_writer.add_scalar(key, value, (j + 1) * args.num_processes * args.num_steps)
 
             summary = {'Loss/pi': action_loss,
+                       'Loss/ pi_val': val_action_loss,
                        'Loss/v': value_loss,
                        'Loss/entropy': dist_entropy}
             for key, value in summary.items():

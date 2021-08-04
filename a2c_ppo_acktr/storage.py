@@ -32,7 +32,10 @@ class RolloutStorage(object):
         # or time limit end state
         self.bad_masks = torch.ones(num_steps + 1, num_processes, 1)
         if attention_features:
-            self.attn_masks = torch.ones(num_steps + 1, num_processes, att_size)
+            self.attn_masks  = torch.ones(num_steps + 1, num_processes, att_size)
+            self.attn_masks1 = torch.ones(num_steps + 1, num_processes, 16)
+            self.attn_masks2 = torch.ones(num_steps + 1, num_processes, 32)
+            self.attn_masks3 = torch.ones(num_steps + 1, num_processes, 32)
         else:
             self.attn_masks = torch.ones(num_steps + 1, num_processes, *(att_size,att_size))
         self.info_batch = deque(maxlen=num_steps)
@@ -55,7 +58,7 @@ class RolloutStorage(object):
         self.bad_masks = self.bad_masks.to(device)
 
     def insert(self, obs, recurrent_hidden_states, actions, action_log_probs,
-               value_preds, rewards, masks, bad_masks, attn_masks, seeds, info):
+               value_preds, rewards, masks, bad_masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, info):
         self.obs[self.step + 1].copy_(obs)
         self.recurrent_hidden_states[self.step +
                                      1].copy_(recurrent_hidden_states)
@@ -67,6 +70,9 @@ class RolloutStorage(object):
         self.masks[self.step + 1].copy_(masks)
         self.bad_masks[self.step + 1].copy_(bad_masks)
         self.attn_masks[self.step + 1].copy_(attn_masks)
+        self.attn_masks1[self.step + 1].copy_(attn_masks1)
+        self.attn_masks2[self.step + 1].copy_(attn_masks2)
+        self.attn_masks3[self.step + 1].copy_(attn_masks3)
         self.info_batch.append(info)
 
         self.step = (self.step + 1) % self.num_steps
@@ -77,6 +83,9 @@ class RolloutStorage(object):
         self.masks[0].copy_(self.masks[-1])
         self.bad_masks[0].copy_(self.bad_masks[-1])
         self.attn_masks[0].copy_(self.attn_masks[-1])
+        self.attn_masks1[0].copy_(self.attn_masks1[-1])
+        self.attn_masks2[0].copy_(self.attn_masks2[-1])
+        self.attn_masks3[0].copy_(self.attn_masks3[-1])
 
     def compute_returns(self,
                         next_value,
@@ -279,6 +288,9 @@ class RolloutStorage(object):
             return_batch = []
             masks_batch = []
             attn_masks_batch = []
+            attn_masks1_batch = []
+            attn_masks2_batch = []
+            attn_masks3_batch = []
             old_action_log_probs_batch = []
             adv_targ = []
 
@@ -294,6 +306,9 @@ class RolloutStorage(object):
                 # note the indexing on attention masks - this is the correct indexing such that masks are aligned with
                 # their log probs for the REINFORCE update
                 attn_masks_batch.append(self.attn_masks[1:, ind])
+                attn_masks1_batch.append(self.attn_masks1[1:, ind])
+                attn_masks2_batch.append(self.attn_masks2[1:, ind])
+                attn_masks3_batch.append(self.attn_masks3[1:, ind])
                 old_action_log_probs_batch.append(
                     self.action_log_probs[:, ind])
                 adv_targ.append(advantages[:, ind])
@@ -306,6 +321,9 @@ class RolloutStorage(object):
             return_batch = torch.stack(return_batch, 1)
             masks_batch = torch.stack(masks_batch, 1)
             attn_masks_batch = torch.stack(attn_masks_batch, 1)
+            attn_masks1_batch = torch.stack(attn_masks1_batch, 1)
+            attn_masks2_batch = torch.stack(attn_masks2_batch, 1)
+            attn_masks3_batch = torch.stack(attn_masks3_batch, 1)
             old_action_log_probs_batch = torch.stack(
                 old_action_log_probs_batch, 1)
             adv_targ = torch.stack(adv_targ, 1)
@@ -321,12 +339,15 @@ class RolloutStorage(object):
             return_batch = _flatten_helper(T, N, return_batch).to(self.device)
             masks_batch = _flatten_helper(T, N, masks_batch).to(self.device)
             attn_masks_batch = _flatten_helper(T, N, attn_masks_batch).to(self.device)
+            attn_masks1_batch = _flatten_helper(T, N, attn_masks1_batch).to(self.device)
+            attn_masks2_batch = _flatten_helper(T, N, attn_masks2_batch).to(self.device)
+            attn_masks3_batch = _flatten_helper(T, N, attn_masks3_batch).to(self.device)
             old_action_log_probs_batch = _flatten_helper(T, N, \
                     old_action_log_probs_batch).to(self.device)
             adv_targ = _flatten_helper(T, N, adv_targ).to(self.device)
 
             yield obs_batch, recurrent_hidden_states_batch, actions_batch, \
-                value_preds_batch, return_batch, masks_batch, attn_masks_batch, old_action_log_probs_batch, adv_targ
+                value_preds_batch, return_batch, masks_batch, attn_masks_batch, attn_masks1_batch, attn_masks2_batch, attn_masks3_batch, old_action_log_probs_batch, adv_targ
 
     def fetch_log_data(self):
         if 'env_reward' in self.info_batch[0][0]:

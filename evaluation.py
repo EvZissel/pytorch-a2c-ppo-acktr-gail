@@ -71,6 +71,9 @@ def evaluate_procgen(actor_critic, eval_envs_dic, env_name, num_processes,
     eval_masks = torch.ones(num_processes, 1, device=device)
     if attention_features or actor_critic.attention_size == 1:
         eval_attn_masks = torch.ones(num_processes, actor_critic.attention_size, device=device)
+        eval_attn_masks1 = torch.ones(num_processes, 16, device=device)
+        eval_attn_masks2 = torch.ones(num_processes, 32, device=device)
+        eval_attn_masks3 = torch.ones(num_processes, 32, device=device)
     else:
         eval_attn_masks = torch.ones(num_processes,  *actor_critic.attention_size, device=device)
 
@@ -84,11 +87,14 @@ def evaluate_procgen(actor_critic, eval_envs_dic, env_name, num_processes,
 
     for t in range(steps):
         with torch.no_grad():
-            _, action, _, eval_recurrent_hidden_states, eval_attn_masks = actor_critic.act(
+            _, action, _, eval_recurrent_hidden_states, eval_attn_masks, eval_attn_masks1, eval_attn_masks2, eval_attn_masks3 = actor_critic.act(
                 torch.from_numpy(obs).float().to(device),
                 eval_recurrent_hidden_states,
                 eval_masks,
                 attn_masks=eval_attn_masks,
+                attn_masks1=eval_attn_masks1,
+                attn_masks2=eval_attn_masks2,
+                attn_masks3=eval_attn_masks3,
                 deterministic=True)
 
             # Observe reward and next obs
