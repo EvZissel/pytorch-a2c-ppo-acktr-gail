@@ -303,6 +303,16 @@ def get_args():
         default=False,
         help='attention on the feature space')
     parser.add_argument(
+        '--deterministic_attention',
+        action='store_true',
+        default=False,
+        help='deterministic attention for policy update')
+    parser.add_argument(
+        '--det_eval_attention',
+        action='store_true',
+        default=False,
+        help='deterministic attention for evaluation')
+    parser.add_argument(
         '--normalize_rew',
         action='store_true',
         default=False,

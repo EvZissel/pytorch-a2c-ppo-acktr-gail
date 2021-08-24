@@ -135,7 +135,8 @@ def make_ProcgenEnvs(num_envs,
                     rand_seed,
                     mask_size=0,
                     normalize_rew=False,
-                    mask_all=False):
+                    mask_all=False,
+                    device='cpu'):
 
     envs = ProcgenEnv(num_envs=num_envs,
                       env_name=env_name,
@@ -152,7 +153,10 @@ def make_ProcgenEnvs(num_envs,
     if normalize_rew:
         envs = VecNormalize(envs, ob=False)  # normalizing returns, but not the img frames.
     envs = TransposeFrame(envs)
-    envs = MaskFloatFrame(envs,l=mask_size)
+    # envs = MaskFloatFrame(envs,l=mask_size)
+    envs = VecPyTorch(envs, device)
+    if mask_size > 0:
+        envs = MaskFrame(envs,l=mask_size, device=device)
     if mask_all:
         envs = MaskAllFrame(envs)
     envs = ScaledFloatFrame(envs)
@@ -222,24 +226,24 @@ class VecPyTorch(VecEnvWrapper):
         obs = torch.from_numpy(obs).float().to(self.device)
         return obs
 
-    def set_task_id(self, task_id, indices):
-        self.venv.env_method(method_name="set_task_id", indices=indices, task_id=task_id)
-        # self.venv.env_method(method_name="reset", indices=indices)
+    # def set_task_id(self, task_id, indices):
+    #     self.venv.env_method(method_name="set_task_id", indices=indices, task_id=task_id)
+    #     # self.venv.env_method(method_name="reset", indices=indices)
+    #
+    # def get_task_id(self, indices):
+    #     return self.venv.get_attr(attr_name="task_id", indices=indices)
 
-    def get_task_id(self, indices):
-        return self.venv.get_attr(attr_name="task_id", indices=indices)
-
-    def step_async(self, actions):
-        if isinstance(actions, torch.LongTensor):
-            # Squeeze the dimension for discrete actions
-            actions = actions.squeeze(1)
-        actions = actions.cpu().numpy()
-        self.venv.step_async(actions)
+    # def step_async(self, actions):
+    #     if isinstance(actions, torch.LongTensor):
+    #         # Squeeze the dimension for discrete actions
+    #         actions = actions.squeeze(1)
+    #     actions = actions.cpu().numpy()
+    #     self.venv.step_async(actions)
 
     def step_wait(self):
         obs, reward, done, info = self.venv.step_wait()
         obs = torch.from_numpy(obs).float().to(self.device)
-        reward = torch.from_numpy(reward).unsqueeze(dim=1).float()
+        # reward = torch.from_numpy(reward).unsqueeze(dim=1).float()
         return obs, reward, done, info
 
 

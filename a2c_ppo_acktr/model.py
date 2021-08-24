@@ -63,8 +63,9 @@ class Policy(nn.Module):
     # masks - beginning of episode indicators
     # attn_masks - values of the hard attention
     # attention_act - take an 'action' of the attention network (for training with REINFORCE)
-    def act(self, inputs, rnn_hxs, masks, attn_masks=None, attn_masks1=None, attn_masks2=None, attn_masks3=None, deterministic=False, attention_act=False):
-        value, actor_features, rnn_hxs, attn_log_probs, attn_masks, attn_masks1, attn_masks2, attn_masks3 = self.base(inputs, rnn_hxs, masks, attn_masks, attn_masks1, attn_masks2, attn_masks3)
+    def act(self, inputs, rnn_hxs, masks, attn_masks=None, attn_masks1=None, attn_masks2=None, attn_masks3=None, deterministic=False, attention_act=False, reuse_masks=False):
+        value, actor_features, rnn_hxs, attn_log_probs, attn_masks, attn_masks1, attn_masks2, attn_masks3 = self.base(inputs, rnn_hxs, masks, attn_masks, attn_masks1, attn_masks2,
+                                                                                                                      attn_masks3, reuse_masks=reuse_masks)
 
         dist = self.dist(actor_features)
 
@@ -262,6 +263,44 @@ class ResidualBlock(nn.Module):
         return out + x
 
 
+class ImpalaBlockAttention(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(ImpalaBlockAttention, self).__init__()
+        init_ = lambda m: init(m, nn.init.xavier_uniform_, lambda x: nn.init.
+                               constant_(x, 0))
+
+        self.attention = nn.Parameter(torch.ones(out_channels), requires_grad=True)
+
+        self.conv = init_(nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1))
+        self.res1 = ResidualBlock(out_channels)
+        self.res2 = ResidualBlock(out_channels)
+
+
+    def forward(self, x, masks, attn_masks=None, reuse_masks=False):
+        probs = torch.sigmoid(self.attention)
+        probs = torch.distributions.bernoulli.Bernoulli(probs=probs)
+        new_attn = probs.sample([x.shape[0]])
+        new_attn_masks = attn_masks if reuse_masks else new_attn
+        attn_masks = new_attn_masks * (1 - masks) + attn_masks * masks
+        attn_log_probs = torch.flatten(probs.log_prob(attn_masks), start_dim=1).sum(dim=1).reshape([x.shape[0], 1])
+        m = attn_masks.unsqueeze(2).unsqueeze(3).repeat(1, 1, x.shape[2], x.shape[3])
+
+        x = self.conv(x)
+        x = m * x
+        x = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)(x)
+        x = self.res1(x)
+        x = self.res2(x)
+
+        return x, attn_masks, attn_log_probs
+
+    def attn_log_probs(self, attn_masks):
+        probs = torch.sigmoid(self.attention)
+        probs = torch.distributions.bernoulli.Bernoulli(probs=probs)
+        attn_log_probs = torch.flatten(probs.log_prob(attn_masks), start_dim=1).sum(dim=1).reshape(
+            [attn_masks.shape[0], 1])
+
+        return attn_log_probs
+
 
 class ImpalaBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -269,7 +308,8 @@ class ImpalaBlock(nn.Module):
         init_ = lambda m: init(m, nn.init.xavier_uniform_, lambda x: nn.init.
                                constant_(x, 0))
 
-        self.conv = init_(nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1))
+        self.conv = init_(
+            nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1))
         self.res1 = ResidualBlock(out_channels)
         self.res2 = ResidualBlock(out_channels)
 
@@ -278,6 +318,7 @@ class ImpalaBlock(nn.Module):
         x = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)(x)
         x = self.res1(x)
         x = self.res2(x)
+
         return x
 
 
@@ -304,13 +345,13 @@ class ImpalaModel(NNBase):
 
         self.train()
 
-    def forward(self, inputs, rnn_hxs, masks, attn_masks, reuse_masks=False):
+    def forward(self, inputs, rnn_hxs, masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, reuse_masks=False):
         x = inputs
         x = self.main(x)
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
 
-        return self.critic_linear(x), x, rnn_hxs, None, attn_masks
+        return self.critic_linear(x), x, rnn_hxs, None, attn_masks, attn_masks1, attn_masks2, attn_masks3
 
 
 class ImpalaHardAttnReinforce(NNBase):
@@ -379,9 +420,6 @@ class ImpalaHardAttnReinforce(NNBase):
 
         return attn_log_probs
 
-    # def attention_size(self):
-    #     return self.att_size
-
 
 class ImpalaHardAttnReinforceAllFeatures(NNBase):
     def __init__(self, num_inputs, recurrent=False, hidden_size=256, attention_size=32):
@@ -401,18 +439,19 @@ class ImpalaHardAttnReinforceAllFeatures(NNBase):
         self.linear_attention = nn.Parameter(torch.ones(attention_size), requires_grad=True)
         self.ones = nn.Parameter(torch.ones(self.exp_size), requires_grad=False)
 
-        self.block1_attention = nn.Parameter(torch.ones(16), requires_grad=True)
-        self.block2_attention = nn.Parameter(torch.ones(32), requires_grad=True)
-        self.block3_attention = nn.Parameter(torch.ones(32), requires_grad=True)
+        # self.block1_attention = nn.Parameter(torch.ones(16), requires_grad=True)
+        # self.block2_attention = nn.Parameter(torch.ones(32), requires_grad=True)
+        # self.block3_attention = nn.Parameter(torch.ones(32), requires_grad=True)
 
         # self.main = nn.Sequential(
         #     ImpalaBlock(in_channels=num_inputs, out_channels=16),
         #     ImpalaBlock(in_channels=16, out_channels=32),
         #     ImpalaBlock(in_channels=32, out_channels=32), nn.ReLU(), Flatten(),
         #     init_(nn.Linear(in_features=32 * 8 * 8, out_features=256)), nn.ReLU())
-        self.block1 = ImpalaBlock(in_channels=num_inputs, out_channels=16)
-        self.block2 = ImpalaBlock(in_channels=16, out_channels=32)
-        self.block3 = ImpalaBlock(in_channels=32, out_channels=32)
+
+        self.block1 = ImpalaBlockAttention(in_channels=num_inputs, out_channels=16)
+        self.block2 = ImpalaBlockAttention(in_channels=16, out_channels=32)
+        self.block3 = ImpalaBlockAttention(in_channels=32, out_channels=32)
         self.linear = init_(nn.Linear(in_features=32 * 8 * 8, out_features=256))
 
         self.critic_linear = init_2(nn.Linear(hidden_size, 1))
@@ -429,37 +468,35 @@ class ImpalaHardAttnReinforceAllFeatures(NNBase):
         attn_log_probs = torch.flatten(probs.log_prob(attn_masks), start_dim=1).sum(dim=1).reshape([inputs.shape[0], 1])
         m = torch.kron(attn_masks, self.ones)
 
-        probs1 = torch.sigmoid(self.block1_attention)
-        probs1 = torch.distributions.bernoulli.Bernoulli(probs=probs1)
-        new_attn1 = probs1.sample([inputs.shape[0]])
-        new_attn_masks1 = attn_masks1 if reuse_masks else new_attn1
-        attn_masks1 = new_attn_masks1 * (1 - masks) + attn_masks1 * masks
-        attn_log_probs1 = torch.flatten(probs1.log_prob(attn_masks1), start_dim=1).sum(dim=1).reshape([inputs.shape[0], 1])
-        m1 = attn_masks1.unsqueeze(2).unsqueeze(3).repeat(1, 1, 32, 32)
-
-        probs2 = torch.sigmoid(self.block2_attention)
-        probs2 = torch.distributions.bernoulli.Bernoulli(probs=probs2)
-        new_attn2 = probs2.sample([inputs.shape[0]])
-        new_attn_masks2 = attn_masks2 if reuse_masks else new_attn2
-        attn_masks2 = new_attn_masks2 * (1 - masks) + attn_masks2 * masks
-        attn_log_probs2 = torch.flatten(probs2.log_prob(attn_masks2), start_dim=1).sum(dim=1).reshape([inputs.shape[0], 1])
-        m2 = attn_masks2.unsqueeze(2).unsqueeze(3).repeat(1, 1, 16, 16)
-
-        probs3 = torch.sigmoid(self.block3_attention)
-        probs3 = torch.distributions.bernoulli.Bernoulli(probs=probs3)
-        new_attn3 = probs3.sample([inputs.shape[0]])
-        new_attn_masks3 = attn_masks3 if reuse_masks else new_attn3
-        attn_masks3 = new_attn_masks3 * (1 - masks) + attn_masks3 * masks
-        attn_log_probs3 = torch.flatten(probs3.log_prob(attn_masks3), start_dim=1).sum(dim=1).reshape([inputs.shape[0], 1])
-        m3 = attn_masks3.unsqueeze(2).unsqueeze(3).repeat(1, 1, 8, 8)
+        # probs1 = torch.sigmoid(self.block1_attention)
+        # probs1 = torch.distributions.bernoulli.Bernoulli(probs=probs1)
+        # new_attn1 = probs1.sample([inputs.shape[0]])
+        # new_attn_masks1 = attn_masks1 if reuse_masks else new_attn1
+        # attn_masks1 = new_attn_masks1 * (1 - masks) + attn_masks1 * masks
+        # attn_log_probs1 = torch.flatten(probs1.log_prob(attn_masks1), start_dim=1).sum(dim=1).reshape([inputs.shape[0], 1])
+        # m1 = attn_masks1.unsqueeze(2).unsqueeze(3).repeat(1, 1, 32, 32)
+        #
+        # probs2 = torch.sigmoid(self.block2_attention)
+        # probs2 = torch.distributions.bernoulli.Bernoulli(probs=probs2)
+        # new_attn2 = probs2.sample([inputs.shape[0]])
+        # new_attn_masks2 = attn_masks2 if reuse_masks else new_attn2
+        # attn_masks2 = new_attn_masks2 * (1 - masks) + attn_masks2 * masks
+        # attn_log_probs2 = torch.flatten(probs2.log_prob(attn_masks2), start_dim=1).sum(dim=1).reshape([inputs.shape[0], 1])
+        # m2 = attn_masks2.unsqueeze(2).unsqueeze(3).repeat(1, 1, 16, 16)
+        #
+        # probs3 = torch.sigmoid(self.block3_attention)
+        # probs3 = torch.distributions.bernoulli.Bernoulli(probs=probs3)
+        # new_attn3 = probs3.sample([inputs.shape[0]])
+        # new_attn_masks3 = attn_masks3 if reuse_masks else new_attn3
+        # attn_masks3 = new_attn_masks3 * (1 - masks) + attn_masks3 * masks
+        # attn_log_probs3 = torch.flatten(probs3.log_prob(attn_masks3), start_dim=1).sum(dim=1).reshape([inputs.shape[0], 1])
+        # m3 = attn_masks3.unsqueeze(2).unsqueeze(3).repeat(1, 1, 8, 8)
 
         # x = self.main(x)
-        x = self.block1(x)
-        x = m1 * x
-        x = self.block2(x)
-        x = m2 * x
-        x = self.block3(x)
-        x = m3 * x
+
+        x, attn_masks1, attn_log_probs1 = self.block1(x, masks, attn_masks1, reuse_masks=reuse_masks)
+        x, attn_masks2, attn_log_probs2 = self.block2(x, masks, attn_masks2, reuse_masks=reuse_masks)
+        x, attn_masks3, attn_log_probs3 = self.block3(x, masks, attn_masks3, reuse_masks=reuse_masks)
         x = nn.ReLU()(x)
         x = Flatten()(x)
         x = self.linear(x)
@@ -477,20 +514,24 @@ class ImpalaHardAttnReinforceAllFeatures(NNBase):
         attn_log_probs = torch.flatten(probs.log_prob(attn_masks), start_dim=1).sum(dim=1).reshape(
             [attn_masks.shape[0], 1])
 
-        probs1 = torch.sigmoid(self.block1_attention)
-        probs1 = torch.distributions.bernoulli.Bernoulli(probs=probs1)
-        attn_log_probs1 = torch.flatten(probs1.log_prob(attn_masks1), start_dim=1).sum(dim=1).reshape(
-            [attn_masks1.shape[0], 1])
+        # probs1 = torch.sigmoid(self.block1_attention)
+        # probs1 = torch.distributions.bernoulli.Bernoulli(probs=probs1)
+        # attn_log_probs1 = torch.flatten(probs1.log_prob(attn_masks1), start_dim=1).sum(dim=1).reshape(
+        #     [attn_masks1.shape[0], 1])
+        #
+        # probs2 = torch.sigmoid(self.block2_attention)
+        # probs2 = torch.distributions.bernoulli.Bernoulli(probs=probs2)
+        # attn_log_probs2 = torch.flatten(probs2.log_prob(attn_masks2), start_dim=1).sum(dim=1).reshape(
+        #     [attn_masks2.shape[0], 1])
+        #
+        # probs3 = torch.sigmoid(self.block3_attention)
+        # probs3 = torch.distributions.bernoulli.Bernoulli(probs=probs3)
+        # attn_log_probs3 = torch.flatten(probs3.log_prob(attn_masks3), start_dim=1).sum(dim=1).reshape(
+        #     [attn_masks3.shape[0], 1])
 
-        probs2 = torch.sigmoid(self.block2_attention)
-        probs2 = torch.distributions.bernoulli.Bernoulli(probs=probs2)
-        attn_log_probs2 = torch.flatten(probs2.log_prob(attn_masks2), start_dim=1).sum(dim=1).reshape(
-            [attn_masks2.shape[0], 1])
-
-        probs3 = torch.sigmoid(self.block3_attention)
-        probs3 = torch.distributions.bernoulli.Bernoulli(probs=probs3)
-        attn_log_probs3 = torch.flatten(probs3.log_prob(attn_masks3), start_dim=1).sum(dim=1).reshape(
-            [attn_masks3.shape[0], 1])
+        attn_log_probs1 = self.block1.attn_log_probs(attn_masks1)
+        attn_log_probs2 = self.block2.attn_log_probs(attn_masks2)
+        attn_log_probs3 = self.block3.attn_log_probs(attn_masks3)
 
         return attn_log_probs+attn_log_probs1+attn_log_probs2+attn_log_probs3
 

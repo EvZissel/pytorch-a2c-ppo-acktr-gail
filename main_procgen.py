@@ -37,9 +37,11 @@ def main():
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
-    logdir = args.env_name + '_seed_' + str(args.seed) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    logdir = args.env_name + '_seed_' + str(args.seed) + '_num_env_' + str(args.num_level) + '_entro_' + str(args.entropy_coef) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
     if args.normalize_rew:
         logdir = logdir + '_normalize_rew'
+    if args.mask_all:
+        logdir = logdir + '_mask_all'
     logdir = os.path.join(os.path.expanduser(args.log_dir), logdir)
     utils.cleanup_log_dir(logdir)
 
@@ -89,7 +91,8 @@ def main():
                       rand_seed=args.seed,
                       mask_size=args.mask_size,
                       normalize_rew=args.normalize_rew,
-                      mask_all=args.mask_all)
+                      mask_all=args.mask_all,
+                      device=device)
 
     # Test envs
     eval_envs_dic = {}
@@ -105,7 +108,8 @@ def main():
                                                       rand_seed=args.seed,
                                                       mask_size=args.mask_size,
                                                       normalize_rew= args.normalize_rew,
-                                                      mask_all=args.mask_all)
+                                                      mask_all=args.mask_all,
+                                                      device=device)
 
     test_start_level = args.start_level + args.num_level + 1
     eval_envs_dic['test_eval'] = make_ProcgenEnvs(num_envs=args.num_processes,
@@ -120,7 +124,8 @@ def main():
                                                      rand_seed=args.seed,
                                                      mask_size=args.mask_size,
                                                      normalize_rew=args.normalize_rew,
-                                                     mask_all=args.mask_all)
+                                                     mask_all=args.mask_all,
+                                                     device=device)
     print('done')
 
     actor_critic = Policy(
@@ -162,11 +167,12 @@ def main():
     # rollout storage for agent
     rollouts = RolloutStorage(args.num_steps, args.num_processes,
                               envs.observation_space.shape, envs.action_space,
-                              actor_critic.recurrent_hidden_state_size, args.mask_size, device)
+                              actor_critic.recurrent_hidden_state_size, args.mask_size, device=device)
     logger = Logger(args.num_processes)
 
     obs = envs.reset()
-    rollouts.obs[0].copy_(torch.FloatTensor(obs))
+    # rollouts.obs[0].copy_(torch.FloatTensor(obs))
+    rollouts.obs[0].copy_(obs)
     # rollouts.to(device)
 
     seeds = torch.zeros(args.num_processes, 1)
@@ -175,7 +181,7 @@ def main():
         args.num_env_steps) // args.num_steps // args.num_processes
 
     # save_copy = True
-    save_image_every = num_updates/3
+    save_image_every = int(num_updates/10)
     # episode_len_buffer = []
     # for _ in range(args.num_processes):
     #     episode_len_buffer.append(0)
@@ -199,9 +205,10 @@ def main():
         for step in range(args.num_steps):
             # Sample actions
             with torch.no_grad():
-                value, action, action_log_prob, recurrent_hidden_states, attn_masks = actor_critic.act(
+                value, action, action_log_prob, recurrent_hidden_states, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic.act(
                     rollouts.obs[step].to(device), rollouts.recurrent_hidden_states[step].to(device),
-                    rollouts.masks[step].to(device), rollouts.attn_masks[step].to(device))
+                    rollouts.masks[step].to(device), rollouts.attn_masks[step].to(device), rollouts.attn_masks1[step].to(device), rollouts.attn_masks2[step].to(device),
+                    rollouts.attn_masks3[step].to(device))
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(action.squeeze().cpu().numpy())
@@ -223,13 +230,14 @@ def main():
             bad_masks = torch.FloatTensor(
                 [[0.0] if 'bad_transition' in info.keys() else [1.0]
                  for info in infos])
-            rollouts.insert(torch.from_numpy(obs), recurrent_hidden_states, action,
-                            action_log_prob, value, torch.from_numpy(reward).unsqueeze(1), masks, bad_masks, attn_masks, seeds, infos)
+            rollouts.insert(obs, recurrent_hidden_states, action,
+                            action_log_prob, value, torch.from_numpy(reward).unsqueeze(1), masks, bad_masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, infos)
 
         with torch.no_grad():
             next_value = actor_critic.get_value(
                 rollouts.obs[-1].to(device), rollouts.recurrent_hidden_states[-1].to(device),
-                rollouts.masks[-1].to(device), rollouts.attn_masks[-1].to(device)).detach()
+                rollouts.masks[-1].to(device), rollouts.attn_masks[-1].to(device), rollouts.attn_masks1[-1].to(device),
+                    rollouts.attn_masks2[-1].to(device), rollouts.attn_masks3[-1].to(device)).detach()
 
         actor_critic.train()
         rollouts.compute_returns(next_value, args.use_gae, args.gamma,

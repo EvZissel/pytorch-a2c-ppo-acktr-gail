@@ -7,7 +7,9 @@ from gym import spaces
 import time
 from collections import deque
 import torch
-
+from scipy import signal
+import torch.nn as nn
+import torch.nn.functional as F
 
 """
 Copy-pasted from OpenAI to obviate dependency on Baselines. Required for vectorized environments.
@@ -453,4 +455,67 @@ class MaskAllFrame(VecEnvWrapper):
 
         indexes = np.stack([(obs[:, 1, :, :] == 255), (obs[:, 1, :, :] == 255), (obs[:, 1, :, :] == 255)], axis=1)
         obs = obs * indexes + brown * (1 - indexes)
+        return obs
+
+
+class MaskFrame(VecEnvWrapper):
+    def __init__(self, env, l, device):
+        super().__init__(venv=env)
+        self.l = l
+        self.device = device
+        obs_shape = self.observation_space.shape
+
+        brown = np.stack([191 * np.ones((64, 64)), 127 *  np.ones((64, 64)), 63 *  np.ones((64, 64))], axis=0)
+        # self.brown = np.expand_dims(brown, axis=0)
+        self.brown = torch.from_numpy(np.expand_dims(brown, axis=0)).float().to(self.device)
+        self.conv = nn.Conv2d(1,1, 2*l+1, stride=1, padding =l, bias=False)
+        self.conv.weight = nn.Parameter(torch.ones(1, 1, 2*l+1,2*l+1), requires_grad=False)
+        self.conv.to(self.device)
+
+
+    def step_wait(self):
+        obs, reward, done, info = self.venv.step_wait()
+
+        # brown = np.repeat(self.brown, obs.shape[0], axis=0)
+
+        # ind = 1*(obs[:, 1, :, :] == 255)
+        # kernel = np.ones([2*self.l+1, 2*self.l+1])
+        # for imag in range(obs.shape[0]):
+        #     ind[imag,:] = signal.convolve2d(ind[imag,:] , kernel, boundary='symm', mode='same')
+        #
+        # ind = (ind > 0)
+        # indexes = np.stack([ind, ind, ind], axis=1)
+        # obs = obs * indexes + brown * (1 - indexes)
+
+        ind = 1.0*(obs[:, 1, :, :] == 255)
+        ind = self.conv(ind.unsqueeze(dim=1))
+
+        ind = (ind > 0.1)
+        indexes = torch.cat((ind, ind, ind), dim=1)
+        obs = obs * indexes + self.brown * torch.logical_not(indexes)
+
+
+        return obs, reward, done, info
+
+    def reset(self):
+        obs = self.venv.reset()
+
+        # brown = np.repeat(self.brown, obs.shape[0], axis=0)
+        #
+        # ind = 1*(obs[:, 1, :, :] == 255)
+        # kernel = np.ones([2*self.l+1, 2*self.l+1])
+        # for imag in range(obs.shape[0]):
+        #     ind[imag,:] = signal.convolve2d(ind[imag,:] , kernel, boundary='symm', mode='same')
+        #
+        # ind = (ind > 0)
+        # indexes = np.stack([ind, ind, ind], axis=1)
+        # obs = obs * indexes + brown * (1 - indexes)
+
+        ind = 1.0*(obs[:, 1, :, :] == 255)
+        ind = self.conv(ind.unsqueeze(dim=1))
+
+        ind = (ind > 0.1)
+        indexes = torch.cat((ind, ind, ind), dim=1)
+        obs = obs * indexes + self.brown * torch.logical_not(indexes)
+
         return obs

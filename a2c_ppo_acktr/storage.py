@@ -10,7 +10,7 @@ def _flatten_helper(T, N, _tensor):
 
 class RolloutStorage(object):
     def __init__(self, num_steps, num_processes, obs_shape, action_space,
-                 recurrent_hidden_state_size, att_size, attention_features, device="cpu"):
+                 recurrent_hidden_state_size, att_size=0, attention_features=False, device="cpu"):
         self.obs = torch.zeros(num_steps + 1, num_processes, *obs_shape)
         self.recurrent_hidden_states = torch.zeros(
             num_steps + 1, num_processes, recurrent_hidden_state_size)
@@ -38,6 +38,9 @@ class RolloutStorage(object):
             self.attn_masks3 = torch.ones(num_steps + 1, num_processes, 32)
         else:
             self.attn_masks = torch.ones(num_steps + 1, num_processes, *(att_size,att_size))
+            self.attn_masks1 = torch.ones(num_steps + 1, num_processes, 16)
+            self.attn_masks2 = torch.ones(num_steps + 1, num_processes, 32)
+            self.attn_masks3 = torch.ones(num_steps + 1, num_processes, 32)
         self.info_batch = deque(maxlen=num_steps)
 
         self.num_steps = num_steps
@@ -69,6 +72,7 @@ class RolloutStorage(object):
         self.seeds[self.step].copy_(seeds)
         self.masks[self.step + 1].copy_(masks)
         self.bad_masks[self.step + 1].copy_(bad_masks)
+        # if attn_masks:
         self.attn_masks[self.step + 1].copy_(attn_masks)
         self.attn_masks1[self.step + 1].copy_(attn_masks1)
         self.attn_masks2[self.step + 1].copy_(attn_masks2)

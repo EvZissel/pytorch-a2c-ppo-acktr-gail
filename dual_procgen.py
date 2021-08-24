@@ -279,12 +279,21 @@ def main():
         actor_critic.eval()
         # episode_rewards = []
         # episode_len = []
+        reuse_masks = False
+        if args.deterministic_attention:
+            reuse_masks = True
+            rollouts.attn_masks[0] = (torch.sigmoid(actor_critic.base.linear_attention) > 0.5).float()
+            rollouts.attn_masks1[0] = (torch.sigmoid(actor_critic.base.block1.attention) > 0.5).float()
+            rollouts.attn_masks2[0] = (torch.sigmoid(actor_critic.base.block2.attention) > 0.5).float()
+            rollouts.attn_masks3[0] = (torch.sigmoid(actor_critic.base.block3.attention) > 0.5).float()
+
         for step in range(args.num_steps):
             # Sample actions
             with torch.no_grad():
                 value, action, action_log_prob, recurrent_hidden_states, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic.act(
                     rollouts.obs[step].to(device), rollouts.recurrent_hidden_states[step].to(device),
-                    rollouts.masks[step].to(device), rollouts.attn_masks[step].to(device), rollouts.attn_masks1[step].to(device), rollouts.attn_masks2[step].to(device), rollouts.attn_masks3[step].to(device))
+                    rollouts.masks[step].to(device), rollouts.attn_masks[step].to(device), rollouts.attn_masks1[step].to(device), rollouts.attn_masks2[step].to(device),
+                    rollouts.attn_masks3[step].to(device), reuse_masks=reuse_masks)
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(action.squeeze().cpu().numpy())
@@ -306,7 +315,7 @@ def main():
                 [[0.0] if 'bad_transition' in info.keys() else [1.0]
                  for info in infos])
             rollouts.insert(torch.from_numpy(obs), recurrent_hidden_states, action,
-                            action_log_prob, value, torch.from_numpy(reward).unsqueeze(1), masks, bad_masks, attn_masks,attn_masks1, attn_masks2, attn_masks3,
+                            action_log_prob, value, torch.from_numpy(reward).unsqueeze(1), masks, bad_masks, attn_masks, attn_masks1, attn_masks2, attn_masks3,
                             seeds, infos)
 
         with torch.no_grad():
@@ -405,7 +414,7 @@ def main():
                                                                                                eval_envs_dic,
                                                                                                eval_disp_name,
                                                                                                args.num_processes,
-                                                                                               device, args.num_steps, args.attention_features)
+                                                                                               device, args.num_steps, args.attention_features, det_masks=args.det_eval_attention)
 
                 # log_dict[eval_disp_name].append([(j+1) * args.num_processes * args.num_steps, eval_dic_rew[eval_disp_name]])
                 # printout += eval_disp_name + ' ' + str(np.mean(eval_dic_rew[eval_disp_name])) + ' '
@@ -416,12 +425,18 @@ def main():
             episode_statistics = logger.get_episode_statistics()
             print(printout)
             print(episode_statistics)
-            print("mask prob1: {}".format(torch.sigmoid(actor_critic.base.block1_attention.data)))
-            print("mask prob2: {}".format(torch.sigmoid(actor_critic.base.block2_attention.data)))
-            print("mask prob3: {}".format(torch.sigmoid(actor_critic.base.block3_attention.data)))
+            print("mask prob1: {}".format(torch.sigmoid(actor_critic.base.block1.attention.data)))
+            print("mask prob2: {}".format(torch.sigmoid(actor_critic.base.block2.attention.data)))
+            print("mask prob3: {}".format(torch.sigmoid(actor_critic.base.block3.attention.data)))
             print("mask prob linear: {}".format(torch.sigmoid(actor_critic.base.linear_attention.data)))
             print("mask train: {}".format(rollouts.attn_masks[step]))
             print("mask val: {}".format(val_rollouts.attn_masks[step]))
+            print("mask train1: {}".format(rollouts.attn_masks1[step]))
+            print("mask val1: {}".format(val_rollouts.attn_masks1[step]))
+            print("mask train2: {}".format(rollouts.attn_masks2[step]))
+            print("mask val2: {}".format(val_rollouts.attn_masks2[step]))
+            print("mask train3: {}".format(rollouts.attn_masks3[step]))
+            print("mask val3: {}".format(val_rollouts.attn_masks3[step]))
 
             # summary_writer.add_scalars('eval_mean_rew', {f'{eval_disp_name}': np.mean(eval_dic_rew[eval_disp_name])},
             #                               (j+1) * args.num_processes * args.num_steps)
