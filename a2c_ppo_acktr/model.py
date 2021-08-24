@@ -53,8 +53,13 @@ class Policy(nn.Module):
     def forward(self, inputs, rnn_hxs, masks):
         raise NotImplementedError
 
-    def act(self, inputs, rnn_hxs, masks, deterministic=False):
-        value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
+    # rnn_hxs - hidden states
+    # masks - beginning of episode indicators
+    # attn_masks - values of the hard attention
+    # attention_act - take an 'action' of the attention network (for training with REINFORCE)
+    def act(self, inputs, rnn_hxs, masks, attn_masks=None, deterministic=False, attention_act=False):
+        value, actor_features, rnn_hxs, attn_log_probs, attn_masks = self.base(inputs, rnn_hxs, masks, attn_masks)
+
         dist = self.dist(actor_features)
 
         if deterministic:
@@ -62,21 +67,28 @@ class Policy(nn.Module):
         else:
             action = dist.sample()
 
-        action_log_probs = dist.log_probs(action)
+        # we return the log probs of either the chosen action, or chosen attention mask
+        if attention_act:
+            action_log_probs = attn_log_probs
+        else:
+            action_log_probs = dist.log_probs(action)
         dist_entropy = dist.entropy().mean()
+        return value, action, action_log_probs, rnn_hxs, attn_masks
 
-        return value, action, action_log_probs, rnn_hxs
-
-    def get_value(self, inputs, rnn_hxs, masks):
-        value, _, _ = self.base(inputs, rnn_hxs, masks)
+    def get_value(self, inputs, rnn_hxs, masks, attn_masks):
+        value, _, _, _, _ = self.base(inputs, rnn_hxs, masks, attn_masks)
         return value
 
-    def evaluate_actions(self, inputs, rnn_hxs, masks, action):
-        value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
+    def evaluate_actions(self, inputs, rnn_hxs, masks, attn_masks, action, attention_act=False):
+        # evaluate log probs of actions
+        value, actor_features, rnn_hxs, attn_log_probs, _ = self.base(inputs, rnn_hxs, masks, attn_masks,
+                                                                      reuse_masks=True)
         dist = self.dist(actor_features)
-
         action_log_probs = dist.log_probs(action)
         dist_entropy = dist.entropy().mean()
+        if attention_act:
+            # evaluate log probs of attention masks
+            action_log_probs = self.base.attn_log_probs(attn_masks)
 
         return value, action_log_probs, dist_entropy, rnn_hxs
 
@@ -205,7 +217,7 @@ class MLPBase(NNBase):
             num_inputs = hidden_size
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
-                               constant_(x, 0), nn.init.calculate_gain('tanh'))
+                               constant_(x, 0), np.sqrt(2))
 
         self.actor = nn.Sequential(
             init_(nn.Linear(num_inputs, hidden_size)), nn.Tanh(),
@@ -219,7 +231,7 @@ class MLPBase(NNBase):
 
         self.train()
 
-    def forward(self, inputs, rnn_hxs, masks):
+    def forward(self, inputs, rnn_hxs, masks, attn_masks = None, reuse_masks=False):
         x = inputs
 
         if self.is_recurrent:
@@ -228,7 +240,7 @@ class MLPBase(NNBase):
         hidden_critic = self.critic(x)
         hidden_actor = self.actor(x)
 
-        return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs
+        return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs, None,  attn_masks
 
 
 class MLPAttnBase(NNBase):
@@ -298,7 +310,9 @@ class MLPHardAttnBase(NNBase):
 
     def forward(self, inputs, rnn_hxs, masks):
         x = inputs
-        m_soft = RelaxedBernoulli(1.0, logits=self.input_attention).sample()
+        probs = F.softmax(self.input_attention, dim=0)
+        probs = probs / torch.max(probs)
+        m_soft = RelaxedBernoulli(1.0, probs=probs).sample()
         m_hard = 0.5 * (torch.sign(m_soft - 0.5) + 1)
         mask = m_hard - m_soft.detach() + m_soft
         x = mask * x
@@ -310,3 +324,55 @@ class MLPHardAttnBase(NNBase):
         hidden_actor = self.actor(x)
 
         return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs
+
+
+class MLPHardAttnReinforceBase(NNBase):
+    def __init__(self, num_inputs, recurrent=False, hidden_size=64):
+        super(MLPHardAttnReinforceBase, self).__init__(recurrent, num_inputs, hidden_size)
+
+        num_obs_input = num_inputs
+
+        if recurrent:
+            num_inputs = hidden_size
+
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                               constant_(x, 0), np.sqrt(2))
+
+        self.input_attention = nn.Parameter(torch.ones(num_obs_input), requires_grad=True)
+
+        self.actor = nn.Sequential(
+            init_(nn.Linear(num_inputs, hidden_size)), nn.Tanh(),
+            init_(nn.Linear(hidden_size, hidden_size)), nn.Tanh())
+
+        self.critic = nn.Sequential(
+            init_(nn.Linear(num_inputs, hidden_size)), nn.Tanh(),
+            init_(nn.Linear(hidden_size, hidden_size)), nn.Tanh())
+
+        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+
+        self.train()
+
+    # forward of the NN with attention. The trick is that we sometimes need the attention to be randomly drawn (first
+    # step of the task), and sometimes we want to give it as input (remaining steps of task). We use masks for this,
+    # which indicate the beginning of a new episode.
+    def forward(self, inputs, rnn_hxs, masks, attn_masks, reuse_masks=False):
+        x = inputs
+        probs = torch.sigmoid(self.input_attention.repeat([inputs.shape[0], 1]))
+        probs = torch.distributions.bernoulli.Bernoulli(probs=probs)
+        new_attn_masks = attn_masks if reuse_masks else probs.sample()
+        attn_masks = new_attn_masks * (1 - masks) + attn_masks * masks  # masks=1 in first step of episode
+        attn_log_probs = probs.log_prob(attn_masks).sum(dim=1).reshape([inputs.shape[0], 1])
+        x = attn_masks * x
+
+        if self.is_recurrent:
+            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+
+        hidden_critic = self.critic(x)
+        hidden_actor = self.actor(x)
+        return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs, attn_log_probs, attn_masks
+
+    def attn_log_probs(self, attn_masks):
+        probs = torch.sigmoid(self.input_attention.repeat([attn_masks.shape[0], 1]))
+        probs = torch.distributions.bernoulli.Bernoulli(probs=probs)
+        attn_log_probs = probs.log_prob(attn_masks).sum(dim=1).reshape([attn_masks.shape[0], 1])
+        return attn_log_probs

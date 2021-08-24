@@ -133,6 +133,11 @@ def get_args():
         default=1,
         help='number of PPO steps to train val agent for each agent update')
     parser.add_argument(
+        '--val_reinforce_update',
+        action='store_true',
+        default=False,
+        help='compute validation attention using reinforce')
+    parser.add_argument(
         '--log-dir',
         default='/tmp/gym/',
         help='directory to save agent logs (default: /tmp/gym)')
@@ -145,6 +150,12 @@ def get_args():
         action='store_true',
         default=False,
         help='disables CUDA training')
+    parser.add_argument(
+        '--gpu_device',
+        type=int,
+        default = int(0),
+        required=False,
+        help = 'visible device in CUDA')
     parser.add_argument(
         '--use-proper-time-limits',
         action='store_true',
@@ -270,6 +281,16 @@ def get_args():
         action='store_true',
         default=False,
         help='use hard attention in val agent')
+    parser.add_argument(
+        '--no_normalize',
+        action='store_true',
+        default=False,
+        help='no normalize inputs')
+    parser.add_argument(
+        '--rotate',
+        action='store_true',
+        default=False,
+        help='rotate observations')
     args = parser.parse_args()
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()

@@ -90,6 +90,8 @@ def make_vec_envs(env_name,
                   num_frame_stack=None,
                   multi_task=False,
                   multi_task_index=0,
+                  normalize=True,
+                  rotate=False,
                   **kwargs):
     envs = [
         make_env(env_name, seed, i, log_dir, allow_early_resets, **kwargs)
@@ -100,14 +102,16 @@ def make_vec_envs(env_name,
     # else:
     #     envs = DummyVecEnv(envs)
     envs = DummyVecEnv(envs)
-
-    if len(envs.observation_space.shape) == 1:
-        if gamma is None:
-            envs = VecNormalize(envs, norm_reward=False)
-        else:
-            envs = VecNormalize(envs, gamma=gamma)
+    if normalize:
+        if len(envs.observation_space.shape) == 1:
+            if gamma is None:
+                envs = VecNormalize(envs, norm_reward=False)
+            else:
+                envs = VecNormalize(envs, gamma=gamma)
 
     envs = VecPyTorch(envs, device)
+    if rotate:
+        envs = VecRotate(envs, device)
 
     if multi_task:
         for i in range(num_processes):
@@ -169,6 +173,31 @@ class TransposeImage(TransposeObs):
 
     def observation(self, ob):
         return ob.transpose(self.op[0], self.op[1], self.op[2])
+
+
+class VecRotate(VecEnvWrapper):
+    def __init__(self, venv, device):
+        super(VecRotate, self).__init__(venv)
+        obs_shape = self.observation_space.shape
+
+        self.matrix = torch.rand(obs_shape[0],obs_shape[0],device= device)
+        self.bias = torch.rand(obs_shape[0],device= device)
+
+    def reset(self):
+        obs = self.venv.reset()
+        # obs = torch.from_numpy(obs).float().to(self.device)
+        for ind in range(obs.shape[0]):
+            obs[ind] = torch.matmul(self.matrix, obs[ind]) + self.bias
+
+        return obs
+
+    def step_wait(self):
+        obs, reward, done, info = self.venv.step_wait()
+        # obs = torch.from_numpy(obs).float().to(self.device)
+        for ind in range(obs.shape[0]):
+            obs[ind] = torch.matmul(self.matrix, obs[ind]) + self.bias
+
+        return obs, reward, done, info
 
 
 class VecPyTorch(VecEnvWrapper):
