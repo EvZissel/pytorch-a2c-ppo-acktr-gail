@@ -58,6 +58,11 @@ def get_args():
         default=0.01,
         help='entropy term coefficient (default: 0.01)')
     parser.add_argument(
+        '--l2-coef',
+        type=float,
+        default=0.0,
+        help='l2 term coefficient (default: 0.01)')
+    parser.add_argument(
         '--value-loss-coef',
         type=float,
         default=0.5,
@@ -111,6 +116,11 @@ def get_args():
         help='save interval, one save per n updates (default: 100)')
     parser.add_argument(
         '--eval-interval',
+        type=int,
+        default=None,
+        help='eval interval, one eval per n updates (default: None)')
+    parser.add_argument(
+        '--eval-nondet_interval',
         type=int,
         default=None,
         help='eval interval, one eval per n updates (default: None)')

@@ -52,11 +52,13 @@ def make_env(env_id, seed, rank, log_dir, allow_early_resets, **kwargs):
         if str(env.__class__.__name__).find('TimeLimit') >= 0:
             env = TimeLimitMask(env)
 
-        if log_dir is not None:
-            env = Monitor(env,
-                          os.path.join(log_dir, str(rank)),
-                          allow_early_resets=allow_early_resets)
-
+        # if log_dir is not None:
+        #     env = Monitor(env,
+        #                   os.path.join(log_dir, str(rank)),
+        #                   allow_early_resets=allow_early_resets)
+        env = Monitor(env,
+                      None,
+                      allow_early_resets=allow_early_resets)
         if is_atari:
             if len(env.observation_space.shape) == 3:
                 env = EpisodicLifeEnv(env)

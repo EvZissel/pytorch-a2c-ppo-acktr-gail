@@ -86,11 +86,12 @@ class Policy(nn.Module):
         dist = self.dist(actor_features)
         action_log_probs = dist.log_probs(action)
         dist_entropy = dist.entropy().mean()
+        dist_l2 = dist.probs.norm(2,dim=1).mean()
         if attention_act:
             # evaluate log probs of attention masks
             action_log_probs = self.base.attn_log_probs(attn_masks)
 
-        return value, action_log_probs, dist_entropy, rnn_hxs
+        return value, action_log_probs, dist_entropy, dist_l2,  rnn_hxs
 
 
 class NNBase(nn.Module):

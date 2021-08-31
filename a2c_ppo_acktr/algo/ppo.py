@@ -20,6 +20,7 @@ class PPO():
                  num_mini_batch,
                  value_loss_coef,
                  entropy_coef,
+                 l2_coef,
                  lr=None,
                  eps=None,
                  max_grad_norm=None,
@@ -51,6 +52,7 @@ class PPO():
 
         self.value_loss_coef = value_loss_coef
         self.entropy_coef = entropy_coef
+        self.l2_coef = l2_coef
 
         self.max_grad_norm = max_grad_norm
         self.use_clipped_value_loss = use_clipped_value_loss
@@ -140,6 +142,7 @@ class PPO():
         value_loss_epoch = 0
         action_loss_epoch = 0
         dist_entropy_epoch = 0
+        dist_l2_epoch = 0
         for e in range(self.ppo_epoch):
             if self.actor_critic.is_recurrent:
                 # data_generators = [rollouts.recurrent_generator(
@@ -161,7 +164,7 @@ class PPO():
                             adv_targ = sample[task]
 
                     # Reshape to do in a single forward pass for all steps
-                    values, action_log_probs, dist_entropy, _ = self.actor_critic.evaluate_actions(
+                    values, action_log_probs, dist_entropy, dist_l2, _ = self.actor_critic.evaluate_actions(
                         obs_batch, recurrent_hidden_states_batch, masks_batch, attn_masks_batch,
                         actions_batch, attention_act=attention_update)
 
@@ -185,7 +188,7 @@ class PPO():
                     else:
                         value_loss = 0.5 * (return_batch - values).pow(2).mean()
                     task_losses.append(value_loss * self.value_loss_coef + action_loss -
-                                       dist_entropy * self.entropy_coef)
+                                       dist_entropy * self.entropy_coef + dist_l2 * self.l2_coef)
                 total_loss = torch.stack(task_losses).mean()
                 self.optimizer.zero_grad()
                 # (value_loss * self.value_loss_coef + action_loss -
@@ -217,11 +220,13 @@ class PPO():
                 value_loss_epoch += value_loss.item()
                 action_loss_epoch += action_loss.item()
                 dist_entropy_epoch += dist_entropy.item()
+                dist_l2_epoch += dist_l2.item()
 
         num_updates = self.ppo_epoch * self.num_mini_batch
 
         value_loss_epoch /= num_updates
         action_loss_epoch /= num_updates
         dist_entropy_epoch /= num_updates
+        dist_l2_epoch /= num_updates
 
-        return value_loss_epoch, action_loss_epoch, dist_entropy_epoch
+        return value_loss_epoch, action_loss_epoch, dist_entropy_epoch, dist_l2_epoch
