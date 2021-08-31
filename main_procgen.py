@@ -42,6 +42,9 @@ def main():
         logdir = logdir + '_normalize_rew'
     if args.mask_all:
         logdir = logdir + '_mask_all'
+    if args.mask_size > 0:
+        logdir = logdir + '_mask_' + str(args.mask_size)
+
     logdir = os.path.join(os.path.expanduser(args.log_dir), logdir)
     utils.cleanup_log_dir(logdir)
 
@@ -73,6 +76,8 @@ def main():
 
     # Tensorboard logging
     summary_writer = SummaryWriter(log_dir=logdir)
+
+    summary_writer.add_hparams(vars(args), {})
 
     torch.set_num_threads(1)
     device = torch.device("cuda:{}".format(args.gpu_device) if args.cuda else "cpu")

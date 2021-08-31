@@ -25,22 +25,22 @@ plt.show()
 
 # Entropy at 800
 entropy =       [0.001, 0.01, 0.05, 0.1, 0.2, 0.3,  0.4, 0.6, 0.8, 1, 10]
-entropy_train = [9.88,  9.9,  9.8,  9.9, 9.9, 9.92, 9.8, 9.8, 9.7, 9.5, 5]
-entropy_test =  [7.6,   7.5,  8,    8.2, 8.3, 8.4,  8.4, 7.8, 8,   7.5, 3.5]
+entropy_train = [9.88,  9.9,  9.8,  9.9, 9.9, 9.92, 9.8, 9.8, 9.7, 9.7, 5]
+entropy_test =  [7.6,   7.5,  8,    8.2, 8.3, 8.4,  8.4, 7.8, 8,   8, 3.5]
 
-entropy2 =       [0.01, 0.05, 0.1, 0.2,  0.3,  0.4, 0.6, 0.8]
-entropy_train2 = [9.9,  9.9,  10,  9.98, 9.9,  9.8, 9.8, 9.8]
-entropy_test2 =  [8   , 8.4,  8.2, 8.3,  8.2,  8.2, 8, 7.8]
+entropy2 =       [0.01, 0.05, 0.1, 0.2,  0.3,  0.4, 0.6, 0.8, 1]
+entropy_train2 = [9.9,  9.9,  10,  9.98, 9.9,  9.8, 9.8, 9.8, 8]
+entropy_test2 =  [8,    8.4,  8.2, 8.3,  8.2,  8.2, 8,   7.8, 6]
 
-entropy3 =       [0.01,  0.05,  0.1,   0.2,  0.3,  0.4, 0.6, 0.8]
-entropy_train3 = [9.9,   9.994, 9.94,  9.97, 9.84, 9.8, 9.8, 9.8]
-entropy_test3 =  [8,     8.4  , 8.1,   8.2,  8.2,  8.2, 8.1, 8.0]
+entropy3 =       [0.01,  0.05,  0.1,   0.2,  0.3,  0.4, 0.6, 0.8, 1]
+entropy_train3 = [9.9,   9.994, 9.94,  9.97, 9.84, 9.8, 9.8, 9.8, 9]
+entropy_test3 =  [8,     8.4  , 8.1,   8.2,  8.2,  8.2, 8.1, 8.0, 7.5]
 
-plt.plot(entropy[:-2], entropy_train[:-2], 'bo--', label='train seed 0')
-plt.plot(entropy[:-2], entropy_test[:-2], 'go--', label='test seed 0')
-plt.plot(entropy2, entropy_train2, 'yo--', label='train seed 2578')
-plt.plot(entropy2, entropy_test2, 'mo--', label='test seed 2578')
-plt.plot(entropy3, entropy_train3, 'ko--', label='train seed 35431')
+plt.plot(entropy[:-1], entropy_train[:-1], 'bo-', label='train seed 0')
+plt.plot(entropy[:-1], entropy_test[:-1], 'bo--', label='test seed 0')
+plt.plot(entropy2, entropy_train2, 'yo-', label='train seed 2578')
+plt.plot(entropy2, entropy_test2, 'yo--', label='test seed 2578')
+plt.plot(entropy3, entropy_train3, 'ro-', label='train seed 35431')
 plt.plot(entropy3, entropy_test3, 'ro--', label='test seed 35431')
 plt.xlabel('Entropy')
 plt.legend()
