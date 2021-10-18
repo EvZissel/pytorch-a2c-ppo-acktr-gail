@@ -287,10 +287,10 @@ def get_args():
         default=-1e6,
         help='threshold on improvement in validation reward for reverting the gradient update')
     parser.add_argument(
-        '--hard_attn',
+        '--hard_attn_mid',
         action='store_true',
         default=False,
-        help='use hard attention in val agent')
+        help='use hard attention in mid layer')
     parser.add_argument(
         '--no_normalize',
         action='store_true',

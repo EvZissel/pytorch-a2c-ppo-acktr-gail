@@ -13,10 +13,11 @@ from torch.utils.tensorboard import SummaryWriter
 from a2c_ppo_acktr import algo, utils
 from a2c_ppo_acktr.arguments import get_args
 from a2c_ppo_acktr.envs import make_vec_envs
-from a2c_ppo_acktr.model import Policy, MLPAttnBase, MLPHardAttnBase, MLPHardAttnReinforceBase
+from a2c_ppo_acktr.model import Policy, MLPAttnBase, MLPHardAttnBase, MLPHardAttnReinforceBase, MLPHardAttnReinforceBaseMid
 from a2c_ppo_acktr.storage import RolloutStorage
 from evaluation import evaluate
 from a2c_ppo_acktr.utils import save_obj, load_obj
+import pandas as pd
 
 
 EVAL_ENVS = {'train_eval': ['h_bandit-obs-randchoose-v8', 25],
@@ -37,7 +38,13 @@ def main():
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
-    logdir = args.env_name + '_' + args.val_env_name + '_' + str(args.seed) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    logdir = 'dual_' + args.env_name + '_' + args.val_env_name + '_seed_' + str(args.seed) + '_num_arms_' + str(args.num_processes) + '_entro_' + str(args.entropy_coef) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    if args.rotate:
+        logdir = logdir + '_rotate'
+    if args.hard_attn_mid:
+        logdir = os.path.join('dual_runs_mid_small', logdir)
+    else:
+        logdir = os.path.join('dual_runs_RandObsLocation', logdir)
     logdir = os.path.join(os.path.expanduser(args.log_dir), logdir)
     utils.cleanup_log_dir(logdir)
 
@@ -54,57 +61,77 @@ def main():
     for eval_disp_name, eval_env_name in EVAL_ENVS.items():
         log_dict[eval_disp_name] = []
 
+    torch.set_num_threads(1)
+    argslog = pd.DataFrame(columns=['args', 'value'])
+    for key in vars(args):
+        log = [key] + [vars(args)[key]]
+        argslog.loc[len(argslog)] = log
+
+    print("logdir: " + logdir)
+    for key in vars(args):
+        print(key, ':', vars(args)[key])
+
+    with open(logdir + '/args.csv', 'w') as f:
+        argslog.to_csv(f, index=False)
+
     # Tensorboard logging
     summary_writer = SummaryWriter(log_dir=logdir)
-    summary_writer.add_hparams({'task_steps': args.task_steps,
-                                'seed': args.seed,
-                                'recurrent': args.recurrent_policy,
-                                'obs_recurrent': args.obs_recurrent,
-                                'train_env': args.env_name,
-                                'test_env': args.val_env_name,
-                                'cmd': ' '.join(sys.argv[1:])}, {})
-
-    torch.set_num_threads(1)
-    device = torch.device("cuda:0" if args.cuda else "cpu")
+    # summary_writer.add_hparams({'task_steps': args.task_steps,
+    #                             'seed': args.seed,
+    #                             'recurrent': args.recurrent_policy,
+    #                             'obs_recurrent': args.obs_recurrent,
+    #                             'train_env': args.env_name,
+    #                             'test_env': args.val_env_name,
+    #                             'cmd': ' '.join(sys.argv[1:])}, {})
+    summary_writer.add_hparams(vars(args), {})
+    device = torch.device("cuda:{}".format(args.gpu_device) if args.cuda else "cpu")
 
     print('making envs...')
+    eval_envs_dic = {}
+    eval_locations_dic = {}
+    for eval_disp_name, eval_env_name in EVAL_ENVS.items():
+        eval_locations_dic[eval_disp_name] = np.random.randint(0, 6, size=args.num_processes)
+
     # Training envs
-    envs = make_vec_envs(args.env_name, args.seed, args.num_processes,
+    envs = make_vec_envs(args.env_name, args.seed, args.num_processes, eval_locations_dic['train_eval'],
                          args.gamma, args.log_dir, device, False, steps=args.task_steps,
                          free_exploration=args.free_exploration, recurrent=args.recurrent_policy,
-                         obs_recurrent=args.obs_recurrent, multi_task=True, normalize=not args.no_normalize)
+                         obs_recurrent=args.obs_recurrent, multi_task=True, normalize=not args.no_normalize, rotate=args.rotate)
+
     # Validation envs
-    val_envs = make_vec_envs(args.val_env_name, args.seed, args.num_processes,
+    val_envs = make_vec_envs(args.val_env_name, args.seed, args.num_processes, eval_locations_dic['valid_eval'],
                              args.gamma, args.log_dir, device, False, steps=args.task_steps,
                              free_exploration=args.free_exploration, recurrent=args.recurrent_policy,
-                             obs_recurrent=args.obs_recurrent, multi_task=True, normalize=not args.no_normalize)
+                             obs_recurrent=args.obs_recurrent, multi_task=True, normalize=not args.no_normalize, rotate=args.rotate)
     # Test envs
-    eval_envs_dic = {}
     for eval_disp_name, eval_env_name in EVAL_ENVS.items():
-        eval_envs_dic[eval_disp_name] = make_vec_envs(eval_env_name[0], args.seed, args.num_processes,
-                                                      None, logdir, device, True, steps=args.task_steps,
+        eval_envs_dic[eval_disp_name] = make_vec_envs(eval_env_name[0], args.seed, args.num_processes, eval_locations_dic[eval_disp_name],
+                                                      None, None, device, True, steps=args.task_steps,
                                                       recurrent=args.recurrent_policy,
                                                       obs_recurrent=args.obs_recurrent, multi_task=True,
-                                                      free_exploration=args.free_exploration, normalize=not args.no_normalize)
+                                                      free_exploration=args.free_exploration, normalize=not args.no_normalize, rotate=args.rotate)
     print('done')
 
+    base = MLPHardAttnReinforceBase
+    if  args.hard_attn_mid:
+        base = MLPHardAttnReinforceBaseMid
     actor_critic = Policy(
         envs.observation_space.shape,
         envs.action_space,
-        base=MLPHardAttnReinforceBase,
+        base=base,
         base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
     actor_critic.to(device)
 
-    # Load previous model
-    if (args.continue_from_epoch > 0) and args.save_dir != "":
-        save_path = os.path.join(args.save_dir, args.algo)
-        actor_critic_, loaded_obs_rms_ = torch.load(os.path.join(save_path,
-                                                                 args.env_name +
-                                                                 "-epoch-{}.pt".format(args.continue_from_epoch)))
-        actor_critic.load_state_dict(actor_critic_.state_dict())
+    # # Load previous model
+    # if (args.continue_from_epoch > 0) and args.save_dir != "":
+    #     save_path = os.path.join(args.save_dir, args.algo)
+    #     actor_critic_, loaded_obs_rms_ = torch.load(os.path.join(save_path,
+    #                                                              args.env_name +
+    #                                                              "-epoch-{}.pt".format(args.continue_from_epoch)))
+    #     actor_critic.load_state_dict(actor_critic_.state_dict())
 
     if args.algo != 'ppo':
-        raise "only PPO is supported"
+        raise print("only PPO is supported")
 
     # We have two agents that train different parts of the same neural network on different train/validation tasks
     # training agent
@@ -115,6 +142,7 @@ def main():
         args.num_mini_batch,
         args.value_loss_coef,
         args.entropy_coef,
+        args.l2_coef,
         lr=args.lr,
         eps=args.eps,
         num_tasks=args.num_processes,
@@ -128,7 +156,8 @@ def main():
         args.ppo_epoch,
         args.num_mini_batch,
         value_loss_coef=0.0,  # we don't learn the value function with the validation agent
-        entropy_coef=0.0,  # we don't implement entropy for reinforce update
+        entropy_coef=0.0,
+        l2_coef=args.l2_coef,# we don't implement entropy for reinforce update
         lr=args.val_lr,
         eps=args.eps,
         num_tasks=args.num_processes,
@@ -136,14 +165,22 @@ def main():
         max_grad_norm=args.max_grad_norm,
         weight_decay=args.weight_decay)
 
+    # Load previous model
+    if (args.continue_from_epoch > 0) and args.save_dir != "":
+        save_path = args.save_dir
+        actor_critic_weighs = torch.load(os.path.join(save_path, args.env_name + "-epoch-{}.pt".format(args.continue_from_epoch)), map_location=device)
+        actor_critic.load_state_dict(actor_critic_weighs['state_dict'])
+        agent.optimizer.load_state_dict(actor_critic_weighs['optimizer_state_dict'])
+
     # rollout storage for agent
     rollouts = RolloutStorage(args.num_steps, args.num_processes,
                               envs.observation_space.shape, envs.action_space,
-                              actor_critic.recurrent_hidden_state_size)
+                              actor_critic.recurrent_hidden_state_size, mid=args.hard_attn_mid)
+
     # rollout storage for validation agent
     val_rollouts = RolloutStorage(args.num_steps, args.num_processes,
                                   val_envs.observation_space.shape, val_envs.action_space,
-                                  actor_critic.recurrent_hidden_state_size)
+                                  actor_critic.recurrent_hidden_state_size, mid=args.hard_attn_mid)
 
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
@@ -155,6 +192,8 @@ def main():
 
     episode_rewards = deque(maxlen=10)
     val_episode_rewards = deque(maxlen=10)
+    episode_len = deque(maxlen=25)
+    val_episode_len = deque(maxlen=25)
 
     start = time.time()
     num_updates = int(
@@ -178,8 +217,9 @@ def main():
             for info in infos:
                 if 'episode' in info.keys():
                     episode_rewards.append(info['episode']['r'])
-                    for k, v in info['episode'].items():
-                        summary_writer.add_scalar(f'training/{k}', v, j * args.num_processes * args.num_steps + args.num_processes * step)
+                    episode_len.append(info['episode']['l'])
+                    # for k, v in info['episode'].items():
+                    #     summary_writer.add_scalar(f'training/{k}', v, j * args.num_processes * args.num_steps + args.num_processes * step)
 
             # If done then clean the history of observations.
             masks = torch.FloatTensor(
@@ -199,7 +239,7 @@ def main():
         rollouts.compute_returns(next_value, args.use_gae, args.gamma,
                                  args.gae_lambda, args.use_proper_time_limits)
 
-        value_loss, action_loss, dist_entropy = agent.update(rollouts)
+        value_loss, action_loss, dist_entropy, dist_l2 = agent.update(rollouts)
 
         rollouts.after_update()
 
@@ -220,6 +260,7 @@ def main():
                 for info in infos:
                     if 'episode' in info.keys():
                         val_episode_rewards.append(info['episode']['r'])
+                        val_episode_len.append(info['episode']['l'])
 
                 # If done then clean the history of observations.
                 masks = torch.FloatTensor(
@@ -238,16 +279,21 @@ def main():
             actor_critic.train()
             val_rollouts.compute_returns(next_value, args.use_gae, args.gamma,
                                          args.gae_lambda, args.use_proper_time_limits)
-            val_value_loss, val_action_loss, val_dist_entropy = val_agent.update(val_rollouts, attention_update=True)
+            val_value_loss, val_action_loss, val_dist_entropy, val_dist_l2 = val_agent.update(val_rollouts, attention_update=True)
             val_rollouts.after_update()
 
+        # # save for every interval-th episode or for the last epoch
+        # if (j % args.save_interval == 0
+        #         or j == num_updates - 1):
+        #     torch.save([
+        #         actor_critic,
+        #         getattr(utils.get_vec_normalize(envs), 'obs_rms', None)
+        #     ], os.path.join(logdir, args.env_name + "-epoch-{}.pt".format(j)))
+
         # save for every interval-th episode or for the last epoch
-        if (j % args.save_interval == 0
-                or j == num_updates - 1):
-            torch.save([
-                actor_critic,
-                getattr(utils.get_vec_normalize(envs), 'obs_rms', None)
-            ], os.path.join(logdir, args.env_name + "-epoch-{}.pt".format(j)))
+        if (j % args.save_interval == 0 or j == args.continue_from_epoch + num_updates - 1):
+            torch.save({'state_dict': actor_critic.state_dict(), 'optimizer_state_dict': agent.optimizer.state_dict(),
+                        'step': j, 'obs_rms': getattr(utils.get_vec_normalize(envs), 'obs_rms', None)}, os.path.join(logdir, args.env_name + "-epoch-{}.pt".format(j)))
 
         # print some stats
         if j % args.log_interval == 0 and len(episode_rewards) > 1:
@@ -257,6 +303,7 @@ def main():
                 "Updates {}, num timesteps {}, FPS {} \n Last {} training episodes: mean/median reward {:.1f}/{:.1f}, "
                 "min/max reward {:.1f}/{:.1f}; validation episodes: mean/median reward {:.1f}/{:.1f}, "
                 "min/max reward {:.1f}/{:.1f}\n"
+                ", entropy {}, value loss {}, action loss {}, l2 loss {}\n"
                 .format(j, total_num_steps,
                         int(total_num_steps / (end - start)),
                         len(episode_rewards), np.mean(episode_rewards),
@@ -264,7 +311,7 @@ def main():
                         np.max(episode_rewards), np.mean(val_episode_rewards),
                         np.median(val_episode_rewards), np.min(val_episode_rewards),
                         np.max(val_episode_rewards), dist_entropy, value_loss,
-                        action_loss))
+                        action_loss,dist_l2))
             print("mask: {}".format(torch.sigmoid(actor_critic.base.input_attention.data)))
 
         # evaluate agent on evaluation tasks
@@ -275,8 +322,8 @@ def main():
             eval_r = {}
             printout = f'Seed {args.seed} Iter {j} '
             for eval_disp_name, eval_env_name in EVAL_ENVS.items():
-                eval_r[eval_disp_name] = evaluate(actor_critic, obs_rms, eval_envs_dic, eval_disp_name, args.seed,
-                                                  args.num_processes, eval_env_name[1], logdir, device, steps=args.task_steps,
+                eval_r[eval_disp_name] = evaluate(actor_critic, obs_rms, eval_envs_dic, eval_locations_dic, eval_disp_name, args.seed,
+                                                  args.num_processes, eval_env_name[1], logdir, device, mid=args.hard_attn_mid, steps=args.task_steps,
                                                   recurrent=args.recurrent_policy, obs_recurrent=args.obs_recurrent,
                                                   multi_task=True, free_exploration=args.free_exploration)
 
@@ -285,6 +332,22 @@ def main():
                 log_dict[eval_disp_name].append([(j+1) * args.num_processes * args.num_steps, eval_r[eval_disp_name]])
                 printout += eval_disp_name + ' ' + str(np.mean(eval_r[eval_disp_name])) + ' '
             # summary_writer.add_scalars('eval_combined', eval_r, (j+1) * args.num_processes * args.num_steps)
+            summary_writer.add_scalar(f'eval/train episode reward', np.mean(episode_rewards),
+                                      (j + 1) * args.num_processes * args.num_steps)
+            summary_writer.add_scalar(f'losses/action', action_loss, (j + 1) * args.num_processes * args.num_steps)
+            summary_writer.add_scalar(f'losses/value', value_loss, (j + 1) * args.num_processes * args.num_steps)
+            summary_writer.add_scalar(f'losses/entropy', dist_entropy, (j + 1) * args.num_processes * args.num_steps)
+            summary_writer.add_scalar(f'losses/l2', dist_l2, (j + 1) * args.num_processes * args.num_steps)
+            if j % args.eval_nondet_interval == 0:
+                eval_r_nondet = evaluate(actor_critic, obs_rms, eval_envs_dic, eval_locations_dic, 'test_eval', args.seed,
+                                         args.num_processes, eval_env_name[1], logdir, device, mid=args.hard_attn_mid,
+                                         deterministic=False,
+                                         steps=args.task_steps,
+                                         recurrent=args.recurrent_policy, obs_recurrent=args.obs_recurrent,
+                                         multi_task=True, free_exploration=args.free_exploration)
+                summary_writer.add_scalar(f'eval/test non-deterministic ', np.mean(eval_r_nondet),
+                                          (j + 1) * args.num_processes * args.num_steps)
+            # summary_writer.add_hparams({'mask': torch.sigmoid(actor_critic.base.input_attention.data)}, {})
             print(printout)
 
     # training done. Save and clean up

@@ -3,6 +3,7 @@ import os
 import gym
 import numpy as np
 import torch
+import math
 from gym.spaces.box import Box
 from gym.wrappers.clip_action import ClipAction
 from stable_baselines3.common.atari_wrappers import (ClipRewardEnv,
@@ -85,6 +86,7 @@ def make_env(env_id, seed, rank, log_dir, allow_early_resets, **kwargs):
 def make_vec_envs(env_name,
                   seed,
                   num_processes,
+                  locations_array,
                   gamma,
                   log_dir,
                   device,
@@ -112,17 +114,18 @@ def make_vec_envs(env_name,
                 envs = VecNormalize(envs, gamma=gamma)
 
     envs = VecPyTorch(envs, device)
-    if rotate:
-        envs = VecRotate(envs, device)
 
     if multi_task:
         for i in range(num_processes):
-            envs.set_task_id(task_id=multi_task_index+i, indices=i)
+            envs.set_task_id(task_id=multi_task_index+i, task_location = locations_array[i], indices=i)
 
     if num_frame_stack is not None:
         envs = VecPyTorchFrameStack(envs, num_frame_stack, device)
     elif len(envs.observation_space.shape) == 3:
         envs = VecPyTorchFrameStack(envs, 4, device)
+
+    if rotate:
+        envs = VecRotate(envs, device)
 
     return envs
 
@@ -180,16 +183,98 @@ class TransposeImage(TransposeObs):
 class VecRotate(VecEnvWrapper):
     def __init__(self, venv, device):
         super(VecRotate, self).__init__(venv)
-        obs_shape = self.observation_space.shape
+        # obs_shape = self.observation_space.shape
 
-        self.matrix = torch.rand(obs_shape[0],obs_shape[0],device= device)
-        self.bias = torch.rand(obs_shape[0],device= device)
+        # matrix = torch.rand(obs_shape[0], obs_shape[0],device= device)
+        # matrix = torch.mm(matrix, matrix.t())
+        # matrix.add_(torch.eye(obs_shape[0],device= device))
+        self.matrix = torch.tensor([[1., 0., 0., 0.,0.,0.,0.,0.],
+                                    [0., 1., 0., 0.,0.,0.,0.,0.],
+                                    [0., 0., 1., 0.,0.,0.,0.,0.],
+                                    [0., 0., 0., 1.,0.,0.,0.,0.],
+                                    [0., 0., 0., 0.,1.,0.,0.,0.],
+                                    [0., 0., 0., 0., 0.,1.,0.,0.],
+                                    [0., 0., 0., 0., 0.,0.,0.,0.],
+                                    [0., 0., 0., 0., 0.,0.,0.,1.]],device= device)
+        # self.matrix1 = torch.tensor([[1., 0., 0., 0.,0.,0.,0.,0.],
+        #                             [0., 1., 0., 0.,0.,0.,0.,0.],
+        #                             [0., 0., 1/2, 0.,0.,0.,0.,-math.sqrt(3)/2],
+        #                             [0., 0., 0., 1.,0.,0.,0.,0.],
+        #                             [0., 0., 0., 0.,math.sqrt(3)/2,0.,-1/2,0.],
+        #                             [0., 0., 0., 0., 0.,1.,0.,0.],
+        #                             [0., 0., 0., 0.,1/2,0., math.sqrt(3)/2,0.],
+        #                             [0., 0., math.sqrt(3)/2, 0.,0.,0.,0.,1/2]],device= device)
+        # self.matrix2 = torch.tensor([[0., 0.,  0., 0.,0.,0.,0.,0.],
+        #                              [0., 1/2, 0., 0.,0.,0.,-math.sqrt(3)/2,0.],
+        #                              [0., 0., 1., 0.,0.,0.,0.,0.],
+        #                              [0., 0., 0., math.sqrt(3)/2,0.,0.,0.,-1/2],
+        #                              [0., 0., 0., 0.,1.,0.,0.,0.],
+        #                              [0., 0., 0., 0.,0.,0.,0.,0.],
+        #                              [0., math.sqrt(3)/2, 0., 0.,0.,0.,1/2,0.],
+        #                              [0., 0., 0., 1/2,0.,0.,0.,math.sqrt(3)/2]],device= device)
+        self.matrix1 = torch.tensor([[0.984907753, 0., 0., 0.,0.,0.,0.,-0.1736481777],
+                                    [0., 1., 0., 0.,0.,0.,0.,0.],
+                                    [0., 0., 1., 0.,0.,0.,0.,0.],
+                                    [0., 0., 0., 1.,0.,0.,0.,0.],
+                                    [0., 0., 0., 0.,1.,0.,0.,0.],
+                                    [0., 0., 0., 0., 0.,1.,0.,0.],
+                                    [0., 0., 0., 0.,0.,0., 1.,0.],
+                                    [0.1736481777, 0., 0., 0.,0.,0.,0.,0.984807753]],device= device)
+        self.matrix2 = torch.tensor([[1., 0., 0., 0.,0.,0.,0.,0.],
+                                    [0., (math.sqrt(6)+math.sqrt(2))/4, 0., 0.,0.,0.,0.,(-math.sqrt(6)+math.sqrt(2))/4],
+                                    [0., 0., 1., 0.,0.,0.,0.,0.],
+                                    [0., 0., 0., 1.,0.,0.,0.,0.],
+                                    [0., 0., 0., 0.,1.,0.,0.,0.],
+                                    [0., 0., 0., 0., 0.,1.,0.,0.],
+                                    [0., 0., 0., 0.,0.,0., 1.,0.],
+                                    [0., (math.sqrt(6)-math.sqrt(2))/4, 0., 0.,0.,0.,0.,(math.sqrt(6)+math.sqrt(2))/4]],device= device)
+        self.matrix3 = torch.tensor([[1., 0., 0., 0.,0.,0.,0.,0.],
+                                    [0., 1., 0., 0.,0.,0.,0.,0.],
+                                    [0., 0.,math.sqrt(3)/2 , 0.,0.,0.,0.,-1/2],
+                                    [0., 0., 0., 1.,0.,0.,0.,0.],
+                                    [0., 0., 0., 0.,1.,0.,0.,0.],
+                                    [0., 0., 0., 0., 0.,1.,0.,0.],
+                                    [0., 0., 0., 0.,0.,0., 1.,0.],
+                                    [0., 0., 1/2, 0.,0.,0.,0.,math.sqrt(3)/2]],device= device)
+        self.matrix4 = torch.tensor([[1., 0., 0., 0.,0.,0.,0.,0.],
+                                    [0., 1., 0., 0.,0.,0.,0.,0.],
+                                    [0., 0., 1., 0.,0.,0.,0.,0.],
+                                    [0., 0., 0., math.sqrt(2)/2,0.,0.,0.,-math.sqrt(3)/2],
+                                    [0., 0., 0., 0.,1.,0.,0.,0.],
+                                    [0., 0., 0., 0., 0.,1.,0.,0.],
+                                    [0., 0., 0., 0.,0.,0., 1.,0.],
+                                    [0., 0., 0., math.sqrt(3)/2,0.,0.,0.,math.sqrt(3)/2]],device= device)
+        self.matrix5 = torch.tensor([[1., 0., 0., 0.,0.,0.,0.,0.],
+                                    [0., 1., 0., 0.,0.,0.,0.,0.],
+                                    [0., 0., 1., 0.,0.,0.,0.,0.],
+                                    [0., 0., 0., 1.,0.,0.,0.,0.],
+                                    [0., 0., 0., 0.,1/2,0.,0.,-math.sqrt(3)/2],
+                                    [0., 0., 0., 0., 0.,1.,0.,0.],
+                                    [0., 0., 0., 0.,0.,0., 1.,0.],
+                                    [0., 0., 0., 0.,math.sqrt(3)/2,0.,0.,1/2]],device= device)
+        self.matrix6 = torch.tensor([[1., 0., 0., 0.,0.,0.,0.,0.],
+                                    [0., 1., 0., 0.,0.,0.,0.,0.],
+                                    [0., 0., 1., 0.,0.,0.,0.,0.],
+                                    [0., 0., 0., 1.,0.,0.,0.,0.],
+                                    [0., 0., 0., 0.,1.,0.,0.,0.],
+                                    [0., 0., 0., 0., 0.,(math.sqrt(6)-math.sqrt(2))/4,0.,(-math.sqrt(6)-math.sqrt(2))/4],
+                                    [0., 0., 0., 0.,0.,0., 1.,0.],
+                                    [0., 0., 0., 0.,0.,(math.sqrt(6)+math.sqrt(2))/4,0.,(math.sqrt(6)-math.sqrt(2))/4]],device= device)
+        # self.bias = torch.tensor([math.sqrt(3)/2, 3/4, 1/3, -1/2,4.,459.5,635/8,2.4],device= device)
+        # print("something")
 
     def reset(self):
         obs = self.venv.reset()
         # obs = torch.from_numpy(obs).float().to(self.device)
         for ind in range(obs.shape[0]):
-            obs[ind] = torch.matmul(self.matrix, obs[ind]) + self.bias
+            # obs[ind] = torch.matmul(self.matrix, obs[ind]) + self.bias
+            obs[ind] = torch.matmul(self.matrix, obs[ind])
+            obs[ind] = torch.matmul(self.matrix1, obs[ind])
+            obs[ind] = torch.matmul(self.matrix2, obs[ind])
+            obs[ind] = torch.matmul(self.matrix3, obs[ind])
+            obs[ind] = torch.matmul(self.matrix4, obs[ind])
+            obs[ind] = torch.matmul(self.matrix5, obs[ind])
+            obs[ind] = torch.matmul(self.matrix6, obs[ind])
 
         return obs
 
@@ -197,9 +282,19 @@ class VecRotate(VecEnvWrapper):
         obs, reward, done, info = self.venv.step_wait()
         # obs = torch.from_numpy(obs).float().to(self.device)
         for ind in range(obs.shape[0]):
-            obs[ind] = torch.matmul(self.matrix, obs[ind]) + self.bias
+            # obs[ind] = torch.matmul(self.matrix, obs[ind]) + self.bias
+            obs[ind] = torch.matmul(self.matrix, obs[ind])
+            obs[ind] = torch.matmul(self.matrix1, obs[ind])
+            obs[ind] = torch.matmul(self.matrix2, obs[ind])
+            obs[ind] = torch.matmul(self.matrix3, obs[ind])
+            obs[ind] = torch.matmul(self.matrix4, obs[ind])
+            obs[ind] = torch.matmul(self.matrix5, obs[ind])
+            obs[ind] = torch.matmul(self.matrix6, obs[ind])
 
         return obs, reward, done, info
+
+    def step_async(self, actions):
+        return  self.venv.step_async(actions)
 
 
 class VecPyTorch(VecEnvWrapper):
@@ -214,8 +309,8 @@ class VecPyTorch(VecEnvWrapper):
         obs = torch.from_numpy(obs).float().to(self.device)
         return obs
 
-    def set_task_id(self, task_id, indices):
-        self.venv.env_method(method_name="set_task_id", indices=indices, task_id=task_id)
+    def set_task_id(self, task_id, task_location , indices):
+        self.venv.env_method(method_name="set_task_id", indices=indices, task_id=task_id, task_location=task_location)
         # self.venv.env_method(method_name="reset", indices=indices)
 
     def get_task_id(self, indices):

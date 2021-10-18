@@ -8,7 +8,7 @@ def _flatten_helper(T, N, _tensor):
 
 class RolloutStorage(object):
     def __init__(self, num_steps, num_processes, obs_shape, action_space,
-                 recurrent_hidden_state_size):
+                 recurrent_hidden_state_size, mid=False):
         self.obs = torch.zeros(num_steps + 1, num_processes, *obs_shape)
         self.recurrent_hidden_states = torch.zeros(
             num_steps + 1, num_processes, recurrent_hidden_state_size)
@@ -29,6 +29,8 @@ class RolloutStorage(object):
         # or time limit end state
         self.bad_masks = torch.ones(num_steps + 1, num_processes, 1)
         self.attn_masks = torch.ones(num_steps + 1, num_processes, *obs_shape)
+        if mid:
+            self.attn_masks = torch.ones(num_steps + 1, num_processes, recurrent_hidden_state_size)
 
         self.num_steps = num_steps
         self.step = 0

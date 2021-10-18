@@ -47,18 +47,11 @@ def main():
 
     logdir = args.env_name + '_' + args.algo + '_seed_' + str(args.seed) + '_num_arms_' + str(args.num_processes) + '_entro_' + str(args.entropy_coef) \
              + '_l2_' + str(args.l2_coef) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
-    # if args.use_privacy:
-    #     logdir = logdir + '_privacy'
-    # elif args.use_noisygrad:
-    #     logdir = logdir + '_noisygrad'
-    # elif args.use_pcgrad:
-    #     logdir = logdir + '_pcgrad'
-    # elif args.use_testgrad:
-    #     logdir = logdir + '_testgrad'
-    # elif args.use_median_grad:
-    #     logdir = logdir + '_mediangrad'
+    if args.rotate:
+        logdir = logdir + '_rotate'
 
-    logdir = os.path.join('runs', logdir)
+
+    logdir = os.path.join('runs_RandObsLocation', logdir)
     logdir = os.path.join(os.path.expanduser(args.log_dir), logdir)
     utils.cleanup_log_dir(logdir)
 
@@ -123,16 +116,20 @@ def main():
     print('making envs...')
     # monitor_dir_train = os.path.join(logdir, 'monitor_train')
     # utils.cleanup_log_dir(monitor_dir_train)
-    envs = make_vec_envs(args.env_name, args.seed, args.num_processes,
+    eval_envs_dic = {}
+    eval_locations_dic = {}
+    for eval_disp_name, eval_env_name in EVAL_ENVS.items():
+        eval_locations_dic[eval_disp_name] = np.random.randint(0, 6, size=args.num_processes)
+
+    envs = make_vec_envs(args.env_name, args.seed, args.num_processes, eval_locations_dic['train_eval'],
                          args.gamma, None, device, False, steps=args.task_steps,
                          free_exploration=args.free_exploration, recurrent=args.recurrent_policy,
                          obs_recurrent=args.obs_recurrent, multi_task=True, normalize=not args.no_normalize, rotate=args.rotate)
 
-    eval_envs_dic = {}
     # monitor_dir_test = os.path.join(logdir, 'monitor_test')
     # utils.cleanup_log_dir(monitor_dir_test)
     for eval_disp_name, eval_env_name in EVAL_ENVS.items():
-        eval_envs_dic[eval_disp_name] = make_vec_envs(eval_env_name[0], args.seed, args.num_processes,
+        eval_envs_dic[eval_disp_name] = make_vec_envs(eval_env_name[0], args.seed, args.num_processes, eval_locations_dic[eval_disp_name],
                                                       None, None, device, True, steps=args.task_steps,
                                                       recurrent=args.recurrent_policy,
                                                       obs_recurrent=args.obs_recurrent, multi_task=True,
@@ -223,7 +220,7 @@ def main():
             actor_critic.train()
 
 
-            # Obser reward and next obs
+            # Observe reward and next obs
             obs, reward, done, infos = envs.step(action.cpu())
 
             for info in infos:
@@ -298,7 +295,7 @@ def main():
             eval_r = {}
             printout = f'Seed {args.seed} Iter {j} '
             for eval_disp_name, eval_env_name in EVAL_ENVS.items():
-                eval_r[eval_disp_name] = evaluate(actor_critic, obs_rms, eval_envs_dic, eval_disp_name, args.seed,
+                eval_r[eval_disp_name] = evaluate(actor_critic, obs_rms, eval_envs_dic, eval_locations_dic, eval_disp_name, args.seed,
                                                   args.num_processes, eval_env_name[1], logdir, device, steps=args.task_steps,
                                                   recurrent=args.recurrent_policy, obs_recurrent=args.obs_recurrent,
                                                   multi_task=True, free_exploration=args.free_exploration)
@@ -322,7 +319,7 @@ def main():
             summary_writer.add_scalar(f'losses/entropy', dist_entropy, (j + 1) * args.num_processes * args.num_steps)
             summary_writer.add_scalar(f'losses/l2', dist_l2, (j + 1) * args.num_processes * args.num_steps)
             if j % args.eval_nondet_interval == 0:
-                eval_r_nondet = evaluate(actor_critic, obs_rms, eval_envs_dic, 'test_eval', args.seed,
+                eval_r_nondet = evaluate(actor_critic, obs_rms, eval_envs_dic, eval_locations_dic, 'test_eval', args.seed,
                                          args.num_processes, eval_env_name[1], logdir, device,
                                          deterministic=False,
                                          steps=args.task_steps,

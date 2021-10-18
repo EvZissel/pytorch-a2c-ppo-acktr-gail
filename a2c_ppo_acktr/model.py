@@ -360,9 +360,10 @@ class MLPHardAttnReinforceBase(NNBase):
         x = inputs
         probs = torch.sigmoid(self.input_attention.repeat([inputs.shape[0], 1]))
         probs = torch.distributions.bernoulli.Bernoulli(probs=probs)
-        new_attn_masks = attn_masks if reuse_masks else probs.sample()
+        sampled_mask = probs.sample() / (1 - probs.probs)
+        new_attn_masks = attn_masks if reuse_masks else sampled_mask
         attn_masks = new_attn_masks * (1 - masks) + attn_masks * masks  # masks=1 in first step of episode
-        attn_log_probs = probs.log_prob(attn_masks).sum(dim=1).reshape([inputs.shape[0], 1])
+        attn_log_probs = probs.log_prob((attn_masks>0).float()).sum(dim=1).reshape([inputs.shape[0], 1])
         x = attn_masks * x
 
         if self.is_recurrent:
@@ -375,5 +376,64 @@ class MLPHardAttnReinforceBase(NNBase):
     def attn_log_probs(self, attn_masks):
         probs = torch.sigmoid(self.input_attention.repeat([attn_masks.shape[0], 1]))
         probs = torch.distributions.bernoulli.Bernoulli(probs=probs)
-        attn_log_probs = probs.log_prob(attn_masks).sum(dim=1).reshape([attn_masks.shape[0], 1])
+        attn_log_probs = probs.log_prob((attn_masks>0).float()).sum(dim=1).reshape([attn_masks.shape[0], 1])
+        return attn_log_probs
+
+
+class MLPHardAttnReinforceBaseMid(NNBase):
+    def __init__(self, num_inputs, recurrent=False, hidden_size=64):
+        super(MLPHardAttnReinforceBaseMid, self).__init__(recurrent, hidden_size, hidden_size)
+
+        # num_obs_input = num_inputs
+
+        # if recurrent:
+        #     num_inputs = hidden_size
+
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                               constant_(x, 0), np.sqrt(2))
+
+        self.input_attention = nn.Parameter(torch.ones(hidden_size), requires_grad=True)
+
+        self.actor1 = nn.Sequential(
+            init_(nn.Linear(num_inputs, hidden_size)), nn.Tanh())
+            # init_(nn.Linear(hidden_size, hidden_size)), nn.Tanh())
+
+        self.actor2 = nn.Sequential(
+            init_(nn.Linear(hidden_size, hidden_size)), nn.Tanh())
+            # init_(nn.Linear(hidden_size, hidden_size)), nn.Tanh())
+
+        self.critic = nn.Sequential(
+            init_(nn.Linear(hidden_size, hidden_size)), nn.Tanh(),
+            init_(nn.Linear(hidden_size, hidden_size)), nn.Tanh())
+
+        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+
+        self.train()
+
+    # forward of the NN with attention. The trick is that we sometimes need the attention to be randomly drawn (first
+    # step of the task), and sometimes we want to give it as input (remaining steps of task). We use masks for this,
+    # which indicate the beginning of a new episode.
+    def forward(self, inputs, rnn_hxs, masks, attn_masks, reuse_masks=False):
+        x = inputs
+        hidden_actor1 = self.actor1(x)
+
+        probs = torch.sigmoid(self.input_attention.repeat([hidden_actor1.shape[0], 1]))
+        probs = torch.distributions.bernoulli.Bernoulli(probs=probs)
+        sampled_mask = probs.sample()/(1-probs.probs)
+        new_attn_masks = attn_masks if reuse_masks else sampled_mask
+        attn_masks = new_attn_masks * (1 - masks) + attn_masks * masks  # masks=1 in first step of episode
+        attn_log_probs = probs.log_prob((attn_masks>0).float()).sum(dim=1).reshape([inputs.shape[0], 1])
+        hidden_actor1 = attn_masks * hidden_actor1
+
+        if self.is_recurrent:
+            x, rnn_hxs = self._forward_gru(hidden_actor1, rnn_hxs, masks)
+
+        hidden_critic = self.critic(x)
+        hidden_actor = self.actor2(x)
+        return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs, attn_log_probs, attn_masks
+
+    def attn_log_probs(self, attn_masks):
+        probs = torch.sigmoid(self.input_attention.repeat([attn_masks.shape[0], 1]))
+        probs = torch.distributions.bernoulli.Bernoulli(probs=probs)
+        attn_log_probs = probs.log_prob((attn_masks>0).float()).sum(dim=1).reshape([attn_masks.shape[0], 1])
         return attn_log_probs
