@@ -51,7 +51,7 @@ def main():
         logdir = logdir + '_rotate'
 
 
-    logdir = os.path.join('runs_RandObsLocation', logdir)
+    logdir = os.path.join('runs', logdir)
     logdir = os.path.join(os.path.expanduser(args.log_dir), logdir)
     utils.cleanup_log_dir(logdir)
 
@@ -221,6 +221,7 @@ def main():
 
 
             # Observe reward and next obs
+
             obs, reward, done, infos = envs.step(action.cpu())
 
             for info in infos:
