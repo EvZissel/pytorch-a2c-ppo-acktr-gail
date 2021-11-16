@@ -33,7 +33,6 @@ class Deep_feature(nn.Module):
         return self.features(torch.zeros(1, *self.input_shape)).view(1, -1).size(1)
 
 
-
 class CnnDQN(nn.Module):
     def __init__(self, input_shape, num_actions):
         super(CnnDQN, self).__init__()

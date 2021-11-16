@@ -38,6 +38,9 @@ if USE_CUDA:
     print("Using GPU: GPU requested and available.")
     dtype = torch.cuda.FloatTensor
     dtypelong = torch.cuda.LongTensor
+
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
 else:
     print("NOT Using GPU: GPU not requested or not available.")
     dtype = torch.FloatTensor
@@ -60,14 +63,15 @@ class Agent:
         return torch.tensor(np.random.randint(self.env.action_space.n, size=q_value.size()[0])).type(dtypelong).unsqueeze(-1), rnn_hxs
 
 
-def compute_td_loss(agent, num_mini_batch, replay_buffer, optimizer, gamma):
+def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optimizer, gamma, loss_var_coeff):
     num_processes = replay_buffer.rewards.size(1)
     num_steps = replay_buffer.rewards.size(0)
     num_steps_per_batch = int(num_steps/num_mini_batch)
 
     all_losses =[]
     start_ind_array = [i for i in range(0, num_steps, num_steps_per_batch)]
-    random.shuffle(start_ind_array)
+    # random.shuffle(start_ind_array)
+    start_ind_array = random.choices(start_ind_array, k=mini_batch_size)
 
     for start_ind in start_ind_array:
         data_sampler = replay_buffer.sampler(num_processes, start_ind, num_steps_per_batch)
@@ -95,14 +99,16 @@ def compute_td_loss(agent, num_mini_batch, replay_buffer, optimizer, gamma):
 
 
         losses = torch.stack(losses, 1)
-        loss = losses.mean()
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        loss = losses.mean(0)
         all_losses.append(loss)
 
-    all_losses = torch.stack(all_losses).mean()/num_mini_batch
-    return all_losses
+    all_losses = torch.stack(all_losses).mean(0)
+    total_loss = all_losses.mean() + loss_var_coeff * all_losses.var()
+    optimizer.zero_grad()
+    total_loss.backward()
+    optimizer.step()
+
+    return total_loss, all_losses.mean(), all_losses.var()
 
 def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, num_tasks, **kwargs):
 
@@ -162,15 +168,21 @@ def main_dqn(params):
     EVAL_ENVS = {'train_eval': [params.env, params.num_processes],
                  'test_eval': ['h_bandit-obs-randchoose-v1', 100]}
 
+    random.seed(params.seed)
+    torch.manual_seed(params.seed)
+    torch.cuda.manual_seed_all(params.seed)
+    np.random.seed(params.seed)
+
+
     device = "cpu"
     if USE_CUDA:
         device = "cuda"
 
-    logdir = params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes)+ '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    logdir = 'offline_' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes)+ '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
     if params.rotate:
         logdir = logdir + '_rotate'
 
-    logdir = os.path.join('dqn_runs', logdir)
+    logdir = os.path.join('dqn_runs_offline', logdir)
     logdir = os.path.join(os.path.expanduser(params.log_dir), logdir)
     utils.cleanup_log_dir(logdir)
     summary_writer = SummaryWriter(log_dir=logdir)
@@ -233,66 +245,55 @@ def main_dqn(params):
     episode_len = deque(maxlen=25)
 
     losses = []
-    # episode_reward = 0
+
+    # Collect data
+    # recurrent_hidden_states = torch.zeros(params.num_processes, agent.q_network.recurrent_hidden_state_size).type(dtypelong)
+    for step in range(params.num_steps):
+
+        # actions, recurrent_hidden_states = agent.act(replay_buffer.obs[step], recurrent_hidden_states, epsilon, replay_buffer.masks[step])
+        actions = torch.tensor(np.random.randint(agent.num_actions, size=params.num_processes)).type(dtypelong).unsqueeze(-1)
+
+        next_obs, reward, done, infos = envs.step(actions.cpu())
+
+
+        for info in infos:
+            if 'episode' in info.keys():
+                episode_rewards.append(info['episode']['r'])
+                episode_len.append(info['episode']['l'])
+
+        masks = torch.FloatTensor(
+            [[0.0] if done_ else [1.0] for done_ in done])
+
+        replay_buffer.insert(next_obs, actions, reward, masks)
+
+    # Training
     num_updates = int(
-        params.max_ts // params.num_steps // params.num_processes)
-
-    for ts in range(params.continue_from_epoch, params.continue_from_epoch+num_updates):
-        recurrent_hidden_states = torch.zeros(params.num_processes, agent.q_network.recurrent_hidden_state_size).type(dtypelong)
-        for step in range(params.num_steps):
-            epsilon = get_epsilon(
-                params.epsilon_start, params.epsilon_end, params.epsilon_decay, ts * params.num_processes * params.num_steps
-            )
-
-            actions, recurrent_hidden_states = agent.act(replay_buffer.obs[step], recurrent_hidden_states, epsilon, replay_buffer.masks[step])
-
-            next_obs, reward, done, infos = envs.step(actions.cpu())
+        params.max_ts  // params.num_processes // params.task_steps // params.mini_batch_size)
+    for ts in range(num_updates):
+        # Update the q-network & the target network
+        loss, mean_loss, var_loss = compute_td_loss(
+            agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff
+        )
+        losses.append(loss.data)
 
 
-            for info in infos:
-                if 'episode' in info.keys():
-                    episode_rewards.append(info['episode']['r'])
-                    episode_len.append(info['episode']['l'])
+        if ts % params.target_network_update_f == 0:
+            hard_update(agent.q_network, agent.target_q_network)
 
-
-            masks = torch.FloatTensor(
-                [[0.0] if done_ else [1.0] for done_ in done])
-
-            replay_buffer.insert(next_obs, actions, reward, masks)
-
-        # episode_reward += reward
-
-        # if done:
-            # obs = envs.reset()
-            # all_rewards.append(episode_reward)
-            # episode_reward = 0
-
-        if ts > params.start_train_ts:
-            # Update the q-network & the target network
-            loss = compute_td_loss(
-                agent, params.num_mini_batch, replay_buffer, optimizer, params.gamma
-            )
-            losses.append(loss.data)
-            replay_buffer.after_update()
-
-
-            if ts % params.target_network_update_f == 0:
-                hard_update(agent.q_network, agent.target_q_network)
-
-            if (ts % params.save_interval == 0 or ts == params.continue_from_epoch + num_updates - 1):
-                torch.save(
-                    {'state_dict': q_network.state_dict(), 'optimizer_state_dict': optimizer.state_dict(),
-                     'step': ts, 'obs_rms': getattr(utils.get_vec_normalize(envs), 'obs_rms', None)},
-                    os.path.join(logdir, params.env + "-epoch-{}.pt".format(ts)))
+        if (ts % params.save_interval == 0 or ts == params.continue_from_epoch + num_updates- 1):
+            torch.save(
+                {'state_dict': q_network.state_dict(), 'optimizer_state_dict': optimizer.state_dict(),
+                    'step': ts, 'obs_rms': getattr(utils.get_vec_normalize(envs), 'obs_rms', None)},
+                os.path.join(logdir, params.env + "-epoch-{}.pt".format(ts)))
 
         if ts % params.log_every == 0:
-            total_num_steps = (ts+1) * params.num_processes * params.num_steps
-            out_str = "Iter {}, Timestep {}, Epsilon {}".format(ts, total_num_steps, epsilon)
+            total_num_steps = (ts+1)*params.num_processes*params.task_steps*params.mini_batch_size
+            out_str = "Iter {}, Timestep {}".format(ts, total_num_steps)
             if len(episode_rewards) > 1:
-                out_str += ", Last {} training episodes: mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}".format(len(episode_rewards), np.mean(episode_rewards),
-                        np.median(episode_rewards), np.min(episode_rewards), np.max(episode_rewards))
-                summary_writer.add_scalar(f'eval/train episode reward', np.mean(episode_rewards), (ts + 1) * params.num_processes * params.num_steps)
-                summary_writer.add_scalar(f'eval/train episode len', np.mean(episode_len), (ts + 1) * params.num_processes * params.num_steps)
+                # out_str += ", Last {} training episodes: mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}".format(len(episode_rewards), np.mean(episode_rewards),
+                #         np.median(episode_rewards), np.min(episode_rewards), np.max(episode_rewards))
+                # summary_writer.add_scalar(f'eval/train episode reward', np.mean(episode_rewards), ts)
+                # summary_writer.add_scalar(f'eval/train episode len', np.mean(episode_len), ts)
 
                 eval_r = {}
                 for eval_disp_name, eval_env_name in EVAL_ENVS.items():
@@ -303,11 +304,12 @@ def main_dqn(params):
                                                       recurrent=params.recurrent_policy, obs_recurrent=params.obs_recurrent,
                                                       multi_task=True, free_exploration=params.free_exploration)
 
-                    summary_writer.add_scalar(f'eval/{eval_disp_name}', np.mean(eval_r[eval_disp_name]), (ts + 1) * params.num_processes * params.num_steps)
+                    summary_writer.add_scalar(f'eval/{eval_disp_name}', np.mean(eval_r[eval_disp_name]), total_num_steps)
             if len(losses) > 0:
                 out_str += ", TD Loss: {}".format(losses[-1])
-                summary_writer.add_scalar(f'losses/TD_loss', losses[-1], (ts + 1) * params.num_processes * params.num_steps)
-                summary_writer.add_scalar(f'losses/epsilon', epsilon, (ts + 1) * params.num_processes * params.num_steps)
+                summary_writer.add_scalar(f'losses/TD_loss', losses[-1], total_num_steps)
+                summary_writer.add_scalar(f'losses/mean_loss', mean_loss, total_num_steps)
+                summary_writer.add_scalar(f'losses/var_loss', var_loss, total_num_steps)
             print(out_str)
 
 
@@ -316,7 +318,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default=None)
     parser.add_argument("--num-processes", type=int, default=25, help='how many envs to use (default: 25)')
-    parser.add_argument('--num-steps', type=int, default=5, help='number of forward steps in (default: 5)')
+    parser.add_argument("--num-steps", type=int, default=5, help='number of forward steps in (default: 5)')
     parser.add_argument("--seed", type=int, default=1, help='random seed (default: 1)')
     parser.add_argument("--task_steps", type=int, default=20, help='number of steps in each task')
     parser.add_argument("--free_exploration", type=int, default=0, help='number of steps in each task without reward')
@@ -326,19 +328,18 @@ if __name__ == "__main__":
     parser.add_argument("--rotate", action='store_true', default=False, help='rotate observations')
     parser.add_argument("--continue_from_epoch", type=int, default=0, help='load previous training (from model save dir) and continue')
     parser.add_argument("--log-dir", default='/tmp/gym/', help='directory to save agent logs (default: /tmp/gym)')
-    parser.add_argument('--num-mini-batch', type=int, default=32, help='number of mini-batches fro small GPU(default: 32)')
+    parser.add_argument("--save-dir", default='./trained_models/', help='directory to save agent logs (default: ./trained_models/)')
+    parser.add_argument("--num-mini-batch", type=int, default=32, help='number of mini-batches (default: 32)')
+    parser.add_argument("--mini-batch-size", type=int, default=32, help='size of mini-batches (default: 32)')
     # parser.add_argument("--CnnDQN", action="store_true")
     parser.add_argument("--learning_rate", type=float, default=0.00001)
     # parser.add_argument("--target_update_rate", type=float, default=0.1)
     # parser.add_argument("--replay_size", type=int, default=100000)
-    parser.add_argument('--save-interval',type=int,default=1000, help='save interval, one save per n updates (default: 1000)')
-    parser.add_argument("--start_train_ts", type=int, default=-1)
-    parser.add_argument("--epsilon_start", type=float, default=1.0)
-    parser.add_argument("--epsilon_end", type=float, default=0.01)
-    parser.add_argument("--epsilon_decay", type=int, default=30000)
+    parser.add_argument("--save-interval",type=int,default=1000, help='save interval, one save per n updates (default: 1000)')
     parser.add_argument("--max_ts", type=int, default=1400000)
     # parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--log_every", type=int, default=1)
     parser.add_argument("--target_network_update_f", type=int, default=10000)
+    parser.add_argument("--loss_var_coeff", type=float, default=0.0)
     main_dqn(parser.parse_args())

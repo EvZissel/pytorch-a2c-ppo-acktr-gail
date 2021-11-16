@@ -338,14 +338,15 @@ class ReplayBufferBandit(object):
         self.obs[0].copy_(self.obs[-1])
         self.masks[0].copy_(self.masks[-1])
 
-    def sampler(self, num_mini_batch):
+    def sampler(self, num_env_per_batch, start_ind, num_steps_per_mini_batch):
         num_processes = self.rewards.size(1)
-        assert num_processes >= num_mini_batch, (
+        assert num_processes >= num_env_per_batch, (
             "dqn requires the number of processes ({}) "
             "to be greater than or equal to the number of "
-            "dqn mini batches ({}).".format(num_processes, num_mini_batch))
-        num_envs_per_mini_batch = num_processes // num_mini_batch
+            "dqn mini batches ({}).".format(num_processes, num_env_per_batch))
+        num_envs_per_mini_batch = num_processes // num_env_per_batch
         perm = torch.randperm(num_processes)
+        end_ind = start_ind + num_steps_per_mini_batch
 
         for ind in perm:
             obs_batch = []
@@ -353,12 +354,12 @@ class ReplayBufferBandit(object):
             rewards_batch = []
             masks_batch = []
 
-            obs_batch.append(self.obs[:, ind])
-            actions_batch.append(self.actions[:, ind])
-            rewards_batch.append(self.rewards[:, ind])
-            masks_batch.append(self.masks[:, ind])
+            obs_batch.append(self.obs[start_ind:end_ind + 1, ind])
+            actions_batch.append(self.actions[start_ind:end_ind, ind])
+            rewards_batch.append(self.rewards[start_ind:end_ind, ind])
+            masks_batch.append(self.masks[start_ind:end_ind + 1, ind])
 
-            T, N = self.num_steps, num_envs_per_mini_batch
+            T, N = num_steps_per_mini_batch , num_envs_per_mini_batch
             # These are all tensors of size (T, N, -1)
             obs_batch = torch.stack(obs_batch, 1)
             actions_batch = torch.stack(actions_batch, 1)
