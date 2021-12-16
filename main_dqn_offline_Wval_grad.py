@@ -64,7 +64,7 @@ class Agent:
         return torch.tensor(np.random.randint(self.env.action_space.n, size=q_value.size()[0])).type(dtypelong).unsqueeze(-1), rnn_hxs
 
 
-def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optimizer, gamma, loss_var_coeff):
+def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optimizer, gamma, loss_var_coeff, make_update=True):
     num_processes = replay_buffer.rewards.size(1)
     num_steps = replay_buffer.rewards.size(0)
     num_steps_per_batch = int(num_steps/num_mini_batch)
@@ -116,10 +116,11 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
 
     # return total_loss, all_losses.mean(), all_losses.var()
     optimizer.zero_grad()
-    grads, shapes, F_norms_all, F_norms_gru, F_norms_dqn = optimizer.plot_backward(all_losses)
-    optimizer.step()
+    mean_grad, grads, shapes, F_norms_all, F_norms_gru, F_norms_dqn = optimizer.plot_backward(all_losses)
+    if make_update:
+        optimizer.step()
 
-    return total_loss, grads, shapes, F_norms_all, F_norms_gru, F_norms_dqn
+    return total_loss, mean_grad, grads, shapes, F_norms_all, F_norms_gru, F_norms_dqn
 
 
 def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, num_tasks, **kwargs):
@@ -178,6 +179,7 @@ def hard_update(q_network, target_q_network):
 
 def main_dqn(params):
     EVAL_ENVS = {'train_eval': [params.env, params.num_processes],
+                 'valid_eval': [params.val_env, params.num_processes],
                  'test_eval': ['h_bandit-obs-randchoose-v1', 100]}
 
     random.seed(params.seed)
@@ -190,7 +192,7 @@ def main_dqn(params):
     if USE_CUDA:
         device = "cuda"
 
-    logdir = 'offline' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes)+ '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    logdir = 'offline_' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes)+ '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
     if params.rotate:
         logdir = logdir + '_rotate'
     if params.zero_ind:
@@ -227,6 +229,12 @@ def main_dqn(params):
                          params.gamma, None, device, False, steps=params.task_steps,
                          free_exploration=params.free_exploration, recurrent=params.recurrent_policy,
                          obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate)
+
+    val_envs = make_vec_envs(params.val_env, params.seed, params.num_processes, eval_locations_dic['valid_eval'],
+                         params.gamma, None, device, False, steps=params.task_steps,
+                         free_exploration=params.free_exploration, recurrent=params.recurrent_policy,
+                         obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate)
+
     for eval_disp_name, eval_env_name in EVAL_ENVS.items():
         eval_envs_dic[eval_disp_name] = make_vec_envs(eval_env_name[0], params.seed, params.num_processes, eval_locations_dic[eval_disp_name],
                                                       None, None, device, True, steps=params.task_steps,
@@ -241,9 +249,11 @@ def main_dqn(params):
     target_q_network = target_q_network.to(device)
 
     agent = Agent(envs, q_network, target_q_network)
-    optimizer = optim.Adam(q_network.parameters(), lr=params.learning_rate)
+    optimizer = optim.Adam(q_network.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
     optimizer = GradPlotDqn(optimizer)
     replay_buffer = ReplayBufferBandit(params.num_steps, params.num_processes, envs.observation_space.shape, envs.action_space)
+    grad_replay_buffer = ReplayBufferBandit(params.num_steps, params.num_processes, envs.observation_space.shape, envs.action_space)
+    val_replay_buffer = ReplayBufferBandit(params.num_steps, params.num_processes, envs.observation_space.shape, envs.action_space)
 
     # Load previous model
     if (params.continue_from_epoch > 0) and params.save_dir != "":
@@ -258,12 +268,20 @@ def main_dqn(params):
     replay_buffer.obs[0].copy_(obs)
     replay_buffer.to(device)
 
+    val_obs = val_envs.reset()
+    val_replay_buffer.obs[0].copy_(val_obs)
+    val_replay_buffer.to(device)
+
     episode_rewards = deque(maxlen=25)
     episode_len = deque(maxlen=25)
+    val_episode_rewards = deque(maxlen=25)
+    val_episode_len = deque(maxlen=25)
 
     losses = []
+    grad_losses = []
+    val_losses = []
 
-    # Collect data
+    # Collect train data
     # recurrent_hidden_states = torch.zeros(params.num_processes, agent.q_network.recurrent_hidden_state_size).type(dtypelong)
     for step in range(params.num_steps):
 
@@ -283,16 +301,99 @@ def main_dqn(params):
 
         replay_buffer.insert(next_obs, actions, reward, masks)
 
+    # Collect train data for gradient calculation
+    grad_replay_buffer.obs[0].copy_(next_obs)
+    grad_replay_buffer.to(device)
+
+    for step in range(params.num_steps):
+
+        # actions, recurrent_hidden_states = agent.act(replay_buffer.obs[step], recurrent_hidden_states, epsilon, replay_buffer.masks[step])
+        actions = torch.tensor(np.random.randint(agent.num_actions, size=params.num_processes)).type(dtypelong).unsqueeze(-1)
+
+        next_obs, reward, done, infos = envs.step(actions.cpu())
+
+
+        for info in infos:
+            if 'episode' in info.keys():
+                episode_rewards.append(info['episode']['r'])
+                episode_len.append(info['episode']['l'])
+
+        masks = torch.FloatTensor(
+            [[0.0] if done_ else [1.0] for done_ in done])
+
+        grad_replay_buffer.insert(next_obs, actions, reward, masks)
+
+    # Collect validation data
+    for step in range(params.num_steps):
+
+        val_actions = torch.tensor(np.random.randint(agent.num_actions, size=params.num_processes)).type(dtypelong).unsqueeze(-1)
+
+        val_next_obs, val_reward, val_done, val_infos = val_envs.step(val_actions.cpu())
+
+
+        for info in val_infos:
+            if 'episode' in info.keys():
+                val_episode_rewards.append(info['episode']['r'])
+                val_episode_len.append(info['episode']['l'])
+
+        val_masks = torch.FloatTensor(
+            [[0.0] if val_done_ else [1.0] for val_done_ in val_done])
+
+        val_replay_buffer.insert(val_next_obs, val_actions, val_reward, val_masks)
+
     # Training
     num_updates = int(
         params.max_ts  // params.num_processes // params.task_steps // params.mini_batch_size)
+
+    # grad_sum = 0
+    # grad_sum_val = 0
+    #
+    # m = 0
+    # m_val = 0
+    # v = 0
+    # v_val = 0
+    # betas = optimizer.state_dict()['param_groups'][0]['betas']
+
+    grad_sumQ = deque(maxlen=params.max_grad_sum)
+    grad_grad_sumQ = deque(maxlen=params.max_grad_sum)
+    grad_sumQ_val = deque(maxlen=params.max_grad_sum)
+
     for ts in range(num_updates):
         # Update the q-network & the target network
-        loss, grads, shapes, F_norms_all, F_norms_gru, F_norms_dqn = compute_td_loss(
+        loss, mean_grad, grads, shapes, F_norms_all, F_norms_gru, F_norms_dqn = compute_td_loss(
             agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff
         )
         losses.append(loss.data)
 
+        grad_loss, grad_mean_grad, grad_grads, grad_shapes, grad_F_norms_all, grad_F_norms_gru, grad_F_norms_dqn = compute_td_loss(
+            agent, params.num_mini_batch, params.mini_batch_size, grad_replay_buffer, optimizer, params.gamma, params.loss_var_coeff, make_update=False
+        )
+        grad_losses.append(grad_loss.data)
+
+        # compute validation gradient
+        val_loss, val_mean_grad, val_grads, val_shapes, val_F_norms_all, val_F_norms_gru, val_F_norms_dqn = compute_td_loss(
+            agent, params.num_mini_batch, params.mini_batch_size, val_replay_buffer, optimizer, params.gamma, params.loss_var_coeff, make_update=False
+        )
+        val_losses.append(val_loss.data)
+
+        # if ts == 0:
+        #     grad_sum = grads
+        #     grad_sum_val = val_grads
+        # else:
+        #     for i in range(len(grad_sum)):
+        #         grad_sum[i] += grads[i]
+        #         grad_sum_val[i] += val_grads[i]
+        #
+        # m = betas[0]*m + (1 - betas[0]) * mean_grad
+        # m_val = betas[0]*m_val +  (1 - betas[0]) * val_mean_grad
+        # v = betas[1]*v + (1 - betas[1]) * (mean_grad ** 2)
+        # v_val = betas[1]*v_val + (1 - betas[1]) * (val_mean_grad ** 2)
+
+        grad_sumQ.append(mean_grad)
+        grad_grad_sumQ.append(grad_mean_grad)
+        grad_sumQ_val.append(val_mean_grad)
+
+        total_num_steps = (ts + 1) * params.num_processes * params.task_steps * params.mini_batch_size
 
         if ts % params.target_network_update_f == 0:
             hard_update(agent.q_network, agent.target_q_network)
@@ -303,13 +404,25 @@ def main_dqn(params):
                     'step': ts, 'obs_rms': getattr(utils.get_vec_normalize(envs), 'obs_rms', None)},
                 os.path.join(logdir, params.env + "-epoch-{}.pt".format(ts)))
 
+        mean_flat_grad = sum(grad_sumQ)
+        mean_flat_grad_grad = sum(grad_grad_sumQ)
+        mean_flat_grad_val = sum(grad_sumQ_val)
+
         if (ts % params.save_grad == 0 or ts == params.continue_from_epoch + num_updates - 1):
-            if ts==0:
-                torch.save({'shapes': shapes}, os.path.join(logdir_grad, params.env + "-epoch-{}-shapes.pt".format(ts)))
-            torch.save({'env {}'.format(i): grads[i] for i in  range(len(grads))}, os.path.join(logdir_grad, params.env + "-epoch-{}-grad.pt".format(ts)))
+            # if ts==0:
+            #     torch.save({'shapes': shapes}, os.path.join(logdir_grad, params.env + "-epoch-{}-shapes.pt".format(ts)))
+            #     torch.save({'shapes': val_shapes}, os.path.join(logdir_grad, params.val_env + "-epoch-{}-val_shapes.pt".format(ts)))
+            # torch.save({'env {}'.format(i): grad_sum[i] for i in  range(len(grad_sum))}, os.path.join(logdir_grad, params.env + "-epoch-{}-grad.pt".format(ts)))
+            # torch.save({'env {}'.format(i): grad_sum_val[i] for i in  range(len(grad_sum_val))}, os.path.join(logdir_grad, params.val_env + "-epoch-{}-val_grad.pt".format(ts)))
+            # torch.save({'m': m, 'm_val': m_val, 'v': v, 'v_val': v_val}, os.path.join(logdir_grad, params.val_env + "-epoch-{}-optimizer_m_and_v.pt".format(ts)))
+            torch.save({'grad_sum': mean_flat_grad, 'grad_grad_sum': mean_flat_grad_grad, 'grad_sum_val': mean_flat_grad_val}, os.path.join(logdir_grad, params.val_env + "-epoch-{}-optimizer_grad_sum_of_{}.pt".format(ts,params.max_grad_sum)))
+
+            # # max gradient summation
+            # grad_sum = grads
+            # grad_sum_val = val_grads
+
 
         if ts % params.log_every == 0:
-            total_num_steps = (ts+1)*params.num_processes*params.task_steps*params.mini_batch_size
             out_str = "Iter {}, Timestep {}".format(ts, total_num_steps)
             if len(episode_rewards) > 1:
                 # out_str += ", Last {} training episodes: mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}".format(len(episode_rewards), np.mean(episode_rewards),
@@ -330,18 +443,60 @@ def main_dqn(params):
             if len(losses) > 0:
                 out_str += ", TD Loss: {}".format(losses[-1])
                 summary_writer.add_scalar(f'losses/TD_loss', losses[-1], total_num_steps)
+                summary_writer.add_scalar(f'losses/val_TD_loss', val_losses[-1], total_num_steps)
+                summary_writer.add_scalar(f'losses/grad_TD_loss', grad_losses[-1], total_num_steps)
                 # summary_writer.add_scalar(f'losses/mean_loss', mean_loss, total_num_steps)
                 # summary_writer.add_scalar(f'losses/var_loss', var_loss, total_num_steps)
-                summary_writer.add_scalars(f'GradNorms/F_norm', {'env {}'.format(i): F_norms_all[i] for i in range(len(F_norms_all))}, total_num_steps)
-                summary_writer.add_scalars(f'GradNorms/F_norms_gru',{'env {}'.format(i): F_norms_gru[i] for i in range(len(F_norms_gru))}, total_num_steps)
-                summary_writer.add_scalars(f'GradNorms/F_norms_dqn',{'env {}'.format(i): F_norms_dqn[i] for i in range(len(F_norms_dqn))}, total_num_steps)
+                # summary_writer.add_scalars(f'GradNorms/F_norm', {'env {}'.format(i): F_norms_all[i] for i in range(len(F_norms_all))}, total_num_steps)
+                # summary_writer.add_scalars(f'GradNorms/F_norms_gru',{'env {}'.format(i): F_norms_gru[i] for i in range(len(F_norms_gru))}, total_num_steps)
+                # summary_writer.add_scalars(f'GradNorms/F_norms_dqn',{'env {}'.format(i): F_norms_dqn[i] for i in range(len(F_norms_dqn))}, total_num_steps)
             print(out_str)
+
+            mean_grad = optimizer._unflatten_grad(mean_flat_grad, shapes)
+            mean_grad_grad = optimizer._unflatten_grad(mean_flat_grad_grad, shapes)
+            mean_grad_val = optimizer._unflatten_grad(mean_flat_grad_val, val_shapes)
+
+            mean_gru = optimizer._flatten_grad(mean_grad[0:4])
+            mean_gru_grad = optimizer._flatten_grad(mean_grad_grad[0:4])
+            mean_gru_val = optimizer._flatten_grad(mean_grad_val[0:4])
+            mean_dqn = optimizer._flatten_grad(mean_grad[4:])
+            mean_dqn_grad = optimizer._flatten_grad(mean_grad_grad[4:])
+            mean_dqn_val = optimizer._flatten_grad(mean_grad_val[4:])
+
+            Corr_all = (mean_flat_grad * mean_flat_grad_val).sum()/(mean_flat_grad.norm(2) * mean_flat_grad_val.norm(2))
+            Corr_gru = (mean_gru * mean_gru_val).sum()/(mean_gru.norm(2) * mean_gru_val.norm(2))
+            Corr_dqn = (mean_dqn * mean_dqn_val).sum()/(mean_dqn.norm(2) * mean_dqn_val.norm(2))
+
+            Corr_all_grad = (mean_flat_grad_grad * mean_flat_grad_val).sum()/(mean_flat_grad_grad.norm(2) * mean_flat_grad_val.norm(2))
+            Corr_gru_grad = (mean_gru_grad * mean_gru_val).sum()/(mean_gru_grad.norm(2) * mean_gru_val.norm(2))
+            Corr_dqn_grad = (mean_dqn_grad * mean_dqn_val).sum()/(mean_dqn_grad.norm(2) * mean_dqn_val.norm(2))
+
+            summary_writer.add_scalar(f'Norms/mean_norm_all', mean_flat_grad.norm(2), total_num_steps)
+            summary_writer.add_scalar(f'Norms/mean_norms_gru', mean_gru.norm(2), total_num_steps)
+            summary_writer.add_scalar(f'Norms/mean_norms_dqn', mean_dqn.norm(2), total_num_steps)
+
+            summary_writer.add_scalar(f'Norms_val/val_norm_all', mean_flat_grad_val.norm(2), total_num_steps)
+            summary_writer.add_scalar(f'Norms_val/val_norms_gru', mean_gru_val.norm(2), total_num_steps)
+            summary_writer.add_scalar(f'Norms_val/val_norms_dqn', mean_dqn_val.norm(2), total_num_steps)
+
+            summary_writer.add_scalar(f'Norms_grad/grad_norm_all', mean_flat_grad_grad.norm(2), total_num_steps)
+            summary_writer.add_scalar(f'Norms_grad/grad_norms_gru', mean_gru_grad.norm(2), total_num_steps)
+            summary_writer.add_scalar(f'Norms_grad/grad_norms_dqn', mean_dqn_grad.norm(2), total_num_steps)
+
+            summary_writer.add_scalar(f'Correlation/Corr_all', Corr_all, total_num_steps)
+            summary_writer.add_scalar(f'Correlation/Corr_gru', Corr_gru, total_num_steps)
+            summary_writer.add_scalar(f'Correlation/Corr_dqn', Corr_dqn, total_num_steps)
+
+            summary_writer.add_scalar(f'Correlation_grad/Corr_all_grad', Corr_all_grad, total_num_steps)
+            summary_writer.add_scalar(f'Correlation_grad/Corr_gru_grad', Corr_gru_grad, total_num_steps)
+            summary_writer.add_scalar(f'Correlation_grad/Corr_dqn_grad', Corr_dqn_grad, total_num_steps)
 
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default=None)
+    parser.add_argument('--val-env', type=str, default=None)
     parser.add_argument("--num-processes", type=int, default=25, help='how many envs to use (default: 25)')
     parser.add_argument("--num-steps", type=int, default=5, help='number of forward steps in (default: 5)')
     parser.add_argument("--seed", type=int, default=1, help='random seed (default: 1)')
@@ -361,7 +516,8 @@ if __name__ == "__main__":
     # parser.add_argument("--target_update_rate", type=float, default=0.1)
     # parser.add_argument("--replay_size", type=int, default=100000)
     parser.add_argument("--save-interval",type=int,default=1000, help='save interval, one save per n updates (default: 1000)')
-    parser.add_argument("--save-grad",type=int,default=1000, help='save interval, one save per n updates (default: 1000)')
+    parser.add_argument("--save-grad",type=int,default=1000, help='save gradient, one save per n updates (default: 1000)')
+    parser.add_argument("--max-grad-sum",type=int,default=1000, help='max gradient sum, one save per n updates (default: 1000)')
     parser.add_argument("--max_ts", type=int, default=1400000)
     # parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--gamma", type=float, default=0.99)
@@ -369,4 +525,5 @@ if __name__ == "__main__":
     parser.add_argument("--target_network_update_f", type=int, default=10000)
     parser.add_argument("--loss_var_coeff", type=float, default=0.0)
     parser.add_argument("--zero_ind", action='store_true', default=False)
+    parser.add_argument("--weight_decay", type=float, default=0.0)
     main_dqn(parser.parse_args())

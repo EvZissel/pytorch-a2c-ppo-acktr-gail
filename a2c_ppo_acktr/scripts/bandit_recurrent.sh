@@ -24,11 +24,11 @@
 #--epsilon_end 0.01 --epsilon_decay 30000000 --max_ts 40000000 --gamma 0.99 --log_every 1 --target_network_update_f 4 > outputs/dqn_bandit_out_25_seed_0_recurrent_epsilon_decay30000000.out &
 #
 #sleep 3
-
-# larger lr
-CUDA_VISIBLE_DEVICES=0 nohup python main_dqn.py --env "h_bandit-randchoose-v8" --num-processes 25 --num-steps 100 --seed 0 --task_steps 6 \
- --free_exploration 6 --recurrent-policy --no_normalize --log-dir dqn_logs --num-mini-batch 25 --learning_rate 0.001 --epsilon_start 1.0 \
---epsilon_end 0.01 --epsilon_decay 300000 --max_ts 40000000 --gamma 0.99 --log_every 1 --target_network_update_f 4 > nohub_e300000.out &
+#
+## larger lr
+#CUDA_VISIBLE_DEVICES=0 nohup python main_dqn.py --env "h_bandit-randchoose-v8" --num-processes 25 --num-steps 100 --seed 0 --task_steps 6 \
+# --free_exploration 6 --recurrent-policy --no_normalize --log-dir dqn_logs --num-mini-batch 25 --learning_rate 0.001 --epsilon_start 1.0 \
+#--epsilon_end 0.01 --epsilon_decay 300000 --max_ts 40000000 --gamma 0.99 --log_every 1 --target_network_update_f 4 > nohub_e300000.out &
 
 #sleep 3
 #
@@ -44,9 +44,91 @@ CUDA_VISIBLE_DEVICES=0 nohup python main_dqn.py --env "h_bandit-randchoose-v8" -
 # --free_exploration 6 --recurrent-policy --no_normalize --log-dir dqn_logs --num-mini-batch 25 --learning_rate 0.1 --epsilon_start 1.0 \
 #--epsilon_end 0.01 --epsilon_decay 3000000 --max_ts 40000000 --gamma 0.99 --log_every 1 --target_network_update_f 4 > outputs/dqn_bandit_out_25_seed_0_recurrentlr0.1.out &
 
+#sleep 3
+#
+## offline
+#CUDA_VISIBLE_DEVICES=3 nohup python main_dqn_offline.py --env "h_bandit-randchoose-v8" --num-processes 25 --num-steps 1080 --seed 0 --task_steps 6 \
+# --free_exploration 6 --recurrent-policy --no_normalize --log-dir dqn_logs --num-mini-batch 180 --mini-batch-size 2 --learning_rate 0.0001 --epsilon_start 1.0 \
+#--epsilon_end 0.01 --epsilon_decay 300000 --max_ts 40000000 --gamma 0.99 --log_every 25 --target_network_update_f 1000 --save-interval 50000 > nohub_offline.out &
+#
+#sleep 3
+
+#attention offline
+#CUDA_VISIBLE_DEVICES=3 nohup python dual_dqn_offline.py --env "h_bandit-obs-randchoose-v8" --val-env "h_bandit-obs-randchoose-v9" --num-processes 25 --num-steps 108000 --seed 0 --task_steps 6 \
+# --free_exploration 6 --obs_recurrent --no_normalize --log-dir dqn_logs --num-mini-batch 18000 --mini-batch-size 10 --learning_rate 0.001 --attn_learning_rate 0.01 \
+#--attn-steps 1080 --max_ts 40000000 --gamma 0.99 --log_every 25 --target_network_update_f 100 --save-interval 25000 --alpha_mean 0.1 --atten_update 1 > nohub_offline_amean0.1_attenLR0.001.out &
+#
+#sleep 3
+#
+#CUDA_VISIBLE_DEVICES=3 nohup python dual_dqn_offline.py --env "h_bandit-obs-randchoose-v8" --val-env "h_bandit-obs-randchoose-v9" --num-processes 25 --num-steps 108000 --seed 0 --task_steps 6 \
+# --free_exploration 6 --obs_recurrent --no_normalize --log-dir dqn_logs --num-mini-batch 18000 --mini-batch-size 10 --learning_rate 0.001 --attn_learning_rate 0.01 \
+#--attn-steps 1080 --max_ts 40000000 --gamma 0.99 --log_every 25 --target_network_update_f 100 --save-interval 25000 --alpha_mean 0.2 --atten_update 1 > nohub_offline_amean0.2_attenLR0.001.out &
+#
+#sleep 3
+#
+#CUDA_VISIBLE_DEVICES=3 nohup python dual_dqn_offline.py --env "h_bandit-obs-randchoose-v8" --val-env "h_bandit-obs-randchoose-v9" --num-processes 25 --num-steps 108000 --seed 0 --task_steps 6 \
+# --free_exploration 6 --obs_recurrent --no_normalize --log-dir dqn_logs --num-mini-batch 18000 --mini-batch-size 10 --learning_rate 0.001 --attn_learning_rate 0.01 \
+#--attn-steps 1080 --max_ts 40000000 --gamma 0.99 --log_every 25 --target_network_update_f 100 --save-interval 25000 --alpha_mean 0.4 --atten_update 1 > nohub_offline_amean0.4_attenLR0.001.out &
+#
+#sleep 3
+#
+#CUDA_VISIBLE_DEVICES=3 nohup python dual_dqn_offline.py --env "h_bandit-obs-randchoose-v8" --val-env "h_bandit-obs-randchoose-v9" --num-processes 25 --num-steps 108000 --seed 0 --task_steps 6 \
+# --free_exploration 6 --obs_recurrent --no_normalize --log-dir dqn_logs --num-mini-batch 18000 --mini-batch-size 10 --learning_rate 0.001 --attn_learning_rate 0.01 \
+#--attn-steps 1080 --max_ts 40000000 --gamma 0.99 --log_every 25 --target_network_update_f 100 --save-interval 25000 --alpha_mean 0.8 --atten_update 1 > nohub_offline_amean0.8_attenLR0.001.out &
+#
+#sleep 3
+#
+#CUDA_VISIBLE_DEVICES=2 nohup python dual_dqn_offline.py --env "h_bandit-obs-randchoose-v8" --val-env "h_bandit-obs-randchoose-v9" --num-processes 25 --num-steps 108000 --seed 0 --task_steps 6 \
+# --free_exploration 6 --obs_recurrent --no_normalize --log-dir dqn_logs --num-mini-batch 18000 --mini-batch-size 10 --learning_rate 0.001 --attn_learning_rate 0.001 \
+#--attn-steps 1080 --max_ts 40000000 --gamma 0.99 --log_every 25 --target_network_update_f 100 --save-interval 25000 --alpha_mean 0.9 --atten_update 1 > nohub_offline_amean0.9_attenUpdate1.out &
+
+#sleep 3
+
+CUDA_VISIBLE_DEVICES=1 nohup python dual_dqn_offline.py --env "h_bandit-obs-randchoose-v8" --val-env "h_bandit-obs-randchoose-v9" --num-processes 25 --num-steps 108000 --seed 0 --task_steps 6 \
+ --free_exploration 6 --obs_recurrent --no_normalize --log-dir dqn_logs --num-mini-batch 18000 --mini-batch-size 10 --learning_rate 0.001 --attn_learning_rate 0.001 \
+--attn-steps 1080 --max_ts 40000000 --gamma 0.99 --log_every 25 --target_network_update_f 100 --save-interval 25000 --alpha_mean 0.1 --atten_update 3 > nohub_offline_amean0.1_attenUpdate3.out &
+
 sleep 3
 
-# offline
-CUDA_VISIBLE_DEVICES=0 nohup python main_dqn_offline.py --env "h_bandit-randchoose-v8" --num-processes 25 --num-steps 1080 --seed 0 --task_steps 6 \
- --free_exploration 6 --recurrent-policy --no_normalize --log-dir dqn_logs --num-mini-batch 180 --mini-batch-size 2 --learning_rate 0.0001 --epsilon_start 1.0 \
---epsilon_end 0.01 --epsilon_decay 300000 --max_ts 40000000 --gamma 0.99 --log_every 25 --target_network_update_f 1000 --save-interval 50000 > nohub_offline.out &
+
+CUDA_VISIBLE_DEVICES=1 nohup python dual_dqn_offline.py --env "h_bandit-obs-randchoose-v8" --val-env "h_bandit-obs-randchoose-v9" --num-processes 25 --num-steps 108000 --seed 0 --task_steps 6 \
+ --free_exploration 6 --obs_recurrent --no_normalize --log-dir dqn_logs --num-mini-batch 18000 --mini-batch-size 10 --learning_rate 0.001 --attn_learning_rate 0.001 \
+--attn-steps 1080 --max_ts 40000000 --gamma 0.99 --log_every 25 --target_network_update_f 100 --save-interval 25000 --alpha_mean 0.1 --atten_update 5 > nohub_offline_amean0.1_attenUpdate5.out &
+
+sleep 3
+
+
+CUDA_VISIBLE_DEVICES=1 nohup python dual_dqn_offline.py --env "h_bandit-obs-randchoose-v8" --val-env "h_bandit-obs-randchoose-v9" --num-processes 25 --num-steps 108000 --seed 0 --task_steps 6 \
+ --free_exploration 6 --obs_recurrent --no_normalize --log-dir dqn_logs --num-mini-batch 18000 --mini-batch-size 10 --learning_rate 0.001 --attn_learning_rate 0.001 \
+--attn-steps 1080 --max_ts 40000000 --gamma 0.99 --log_every 25 --target_network_update_f 100 --save-interval 25000 --alpha_mean 0.1 --atten_update 10 > nohub_offline_amean0.1_attenUpdate10.out &
+
+sleep 3
+
+
+CUDA_VISIBLE_DEVICES=1 nohup python dual_dqn_offline.py --env "h_bandit-obs-randchoose-v8" --val-env "h_bandit-obs-randchoose-v9" --num-processes 25 --num-steps 108000 --seed 0 --task_steps 6 \
+ --free_exploration 6 --obs_recurrent --no_normalize --log-dir dqn_logs --num-mini-batch 18000 --mini-batch-size 10 --learning_rate 0.001 --attn_learning_rate 0.001 \
+--attn-steps 1080 --max_ts 40000000 --gamma 0.99 --log_every 25 --target_network_update_f 100 --save-interval 25000 --alpha_mean 0.1 --atten_update 50 > nohub_offline_amean0.1_attenUpdate50.out &
+
+#
+#CUDA_VISIBLE_DEVICES=1 nohup python dual_dqn_offline_WattnBuffer.py --env "h_bandit-obs-randchoose-v8" --val-env "h_bandit-obs-randchoose-v9" --num-processes 25 --num-steps 108000 --seed 0 --task_steps 6 \
+# --free_exploration 6 --obs_recurrent --no_normalize --log-dir dqn_logs --num-mini-batch 18000 --mini-batch-size 10 --learning_rate 0.001 --attn_learning_rate 0.001 \
+#--attn-steps 1080 --max_ts 40000000 --gamma 0.99 --gae_lambda 0.95 --use_gae --log_every 25 --target_network_update_f 100 --save-interval 25000  > nohub_offline_WattnBuffer_use_gae.out &
+#
+#sleep 3
+#
+#CUDA_VISIBLE_DEVICES=1 nohup python dual_dqn_offline_WattnBuffer.py --env "h_bandit-obs-randchoose-v8" --val-env "h_bandit-obs-randchoose-v9" --num-processes 25 --num-steps 108000 --seed 0 --task_steps 6 \
+# --free_exploration 6 --obs_recurrent --no_normalize --log-dir dqn_logs --num-mini-batch 18000 --mini-batch-size 10 --learning_rate 0.001 --attn_learning_rate 0.001 \
+#--attn-steps 1080 --max_ts 40000000 --gamma 0.99 --log_every 25 --target_network_update_f 100 --save-interval 25000  > nohub_offline_WattnBuffer.out &
+#
+#sleep 3
+#
+#CUDA_VISIBLE_DEVICES=1 nohup python dual_dqn_offline_WattnBuffer.py --env "h_bandit-obs-randchoose-v8" --val-env "h_bandit-obs-randchoose-v9" --num-processes 25 --num-steps 108000 --seed 0 --task_steps 6 \
+# --free_exploration 6 --obs_recurrent --no_normalize --log-dir dqn_logs --num-mini-batch 18000 --mini-batch-size 1 --learning_rate 0.001 --attn_learning_rate 0.001 \
+#--attn-steps 1080 --max_ts 40000000 --gamma 0.99 --gae_lambda 0.95 --use_gae --log_every 25 --target_network_update_f 1000 --save-interval 25000  > nohub_offline_WattnBuffer_use_gae_BS1.out &
+#
+#sleep 3
+#
+#CUDA_VISIBLE_DEVICES=1 nohup python dual_dqn_offline_WattnBuffer.py --env "h_bandit-obs-randchoose-v8" --val-env "h_bandit-obs-randchoose-v9" --num-processes 25 --num-steps 108000 --seed 0 --task_steps 6 \
+# --free_exploration 6 --obs_recurrent --no_normalize --log-dir dqn_logs --num-mini-batch 18000 --mini-batch-size 1 --learning_rate 0.001 --attn_learning_rate 0.001 \
+#--attn-steps 1080 --max_ts 40000000 --gamma 0.99 --log_every 25 --target_network_update_f 1000 --save-interval 25000  > nohub_offline_WattnBuffer_BS1.out &
+#

@@ -212,11 +212,12 @@ class CNNBase(NNBase):
 
 
 class MLPBase(NNBase):
-    def __init__(self, num_inputs, recurrent=False, hidden_size=64):
+    def __init__(self, num_inputs, zero_ind, recurrent=False, hidden_size=64):
         super(MLPBase, self).__init__(recurrent, num_inputs, hidden_size)
 
         if recurrent:
             num_inputs = hidden_size
+        self.zero_ind = zero_ind
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
                                constant_(x, 0), np.sqrt(2))
@@ -235,6 +236,8 @@ class MLPBase(NNBase):
 
     def forward(self, inputs, rnn_hxs, masks, attn_masks = None, reuse_masks=False):
         x = inputs
+        if self.zero_ind:
+            x = torch.cat((torch.zeros(x.size()[1]-2), torch.ones(2)),0).cuda() * x
 
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)

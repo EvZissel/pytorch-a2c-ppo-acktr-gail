@@ -3,7 +3,8 @@
 import torch
 import torch.nn as nn
 from a2c_ppo_acktr.model import NNBase
-
+from a2c_ppo_acktr.utils import init
+import numpy as np
 
 class Deep_feature(nn.Module):
     def __init__(self, input_shape, feature_dimension, num_actions):
@@ -63,8 +64,31 @@ class CnnDQN(nn.Module):
 
 
 class DQN(NNBase):
-    def __init__(self, input_shape, num_actions, recurrent=False, hidden_size=64):
+    def __init__(self, input_shape, num_actions, zero_ind, recurrent=False, hidden_size=64):
         super(DQN, self).__init__(recurrent, input_shape[0], hidden_size)
+        self.input_shape = input_shape
+        self.num_actions = num_actions
+
+        num_inputs = input_shape[0]
+        self.zero_ind = zero_ind
+        if recurrent:
+            num_inputs = hidden_size
+
+        self.layers = nn.Sequential(
+            nn.Linear(num_inputs, 64), nn.ReLU(), nn.Linear(64, self.num_actions)
+        )
+
+    def forward(self, x, rnn_hxs, masks):
+        if self.zero_ind:
+            x = torch.cat((torch.zeros(x.size()[1]-2), torch.ones(2)),0).cuda() * x
+        if self.is_recurrent:
+            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+        return self.layers(x), rnn_hxs
+
+
+class DQN_Attention(NNBase):
+    def __init__(self, input_shape, num_actions, recurrent=False, hidden_size=64):
+        super(DQN_Attention, self).__init__(recurrent, input_shape[0], hidden_size)
         self.input_shape = input_shape
         self.num_actions = num_actions
 
@@ -75,8 +99,79 @@ class DQN(NNBase):
         self.layers = nn.Sequential(
             nn.Linear(num_inputs, 64), nn.ReLU(), nn.Linear(64, self.num_actions)
         )
+        # self.input_attention = nn.Parameter(torch.cat((-1000000*torch.ones(input_shape[0]-2), torch.ones(2)),0), requires_grad=True)
+        self.input_attention = nn.Parameter(torch.ones(input_shape), requires_grad=True)
 
-    def forward(self, x, rnn_hxs, masks):
+    def forward(self, x, rnn_hxs, masks, attn_masks=None, reuse_masks=False):
+        # if self.is_recurrent:
+        #     x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+        # return self.layers(x), rnn_hxs
+
+        probs = torch.sigmoid(self.input_attention.repeat([x.shape[0], 1]))
+        probs = torch.distributions.bernoulli.Bernoulli(probs=probs)
+        sampled_mask = probs.sample() / (1 - probs.probs)
+        # sampled_mask = sampled_mask.repeat([x.shape[0], 1])
+        new_attn_masks = attn_masks if reuse_masks else sampled_mask
+        attn_masks = new_attn_masks * (1 - masks) + attn_masks * masks  # masks=1 in first step of episode
+        attn_log_probs = probs.log_prob((attn_masks > 0).float()).sum(dim=1).reshape([x.shape[0], 1])
+        x = attn_masks * x
+
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
-        return self.layers(x), rnn_hxs
+
+        return self.layers(x), rnn_hxs, attn_log_probs, attn_masks
+
+    def attn_log_probs(self, attn_masks):
+        probs = torch.sigmoid(self.input_attention)
+        probs = torch.distributions.bernoulli.Bernoulli(probs=probs)
+        attn_log_probs = probs.log_prob((attn_masks>0).float()).sum(dim=1).reshape([attn_masks.shape[0], 1])
+        return attn_log_probs
+
+
+
+class DQN_Attention_Wvalue(NNBase):
+    def __init__(self, input_shape, num_actions, recurrent=False, hidden_size=64):
+        super(DQN_Attention_Wvalue, self).__init__(recurrent, input_shape[0], hidden_size)
+        self.input_shape = input_shape
+        self.num_actions = num_actions
+
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                               constant_(x, 0), np.sqrt(2))
+
+        num_inputs = input_shape[0]
+        if recurrent:
+            num_inputs = hidden_size
+
+        self.layers = nn.Sequential(
+            init_(nn.Linear(num_inputs, 64)), nn.ReLU(), init_(nn.Linear(64, self.num_actions))
+        )
+        # self.input_attention = nn.Parameter(torch.cat((-1000000*torch.ones(input_shape[0]-2), torch.ones(2)),0), requires_grad=True)
+        self.input_attention = nn.Parameter(torch.ones(input_shape), requires_grad=True)
+        self.value = nn.Sequential(
+            init_(nn.Linear(num_inputs, hidden_size)), nn.Tanh(),
+            init_(nn.Linear(hidden_size, hidden_size)), nn.Tanh(), init_(nn.Linear(hidden_size, 1)))
+
+    def forward(self, x, rnn_hxs, masks, attn_masks=None, reuse_masks=False):
+        # if self.is_recurrent:
+        #     x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+        # return self.layers(x), rnn_hxs
+
+        probs = torch.sigmoid(self.input_attention.repeat([x.shape[0], 1]))
+        probs = torch.distributions.bernoulli.Bernoulli(probs=probs)
+        sampled_mask = probs.sample() / (1 - probs.probs)
+        # sampled_mask = sampled_mask.repeat([x.shape[0], 1])
+        new_attn_masks = attn_masks if reuse_masks else sampled_mask
+        attn_masks = new_attn_masks * (1 - masks) + attn_masks * masks  # masks=1 in first step of episode
+        attn_log_probs = probs.log_prob((attn_masks > 0).float()).sum(dim=1).reshape([x.shape[0], 1])
+        x = attn_masks * x
+
+        if self.is_recurrent:
+            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+
+        return self.layers(x), self.value(x), rnn_hxs, attn_log_probs, attn_masks
+
+    def attn_log_probs(self, attn_masks):
+        probs = torch.sigmoid(self.input_attention)
+        probs = torch.distributions.bernoulli.Bernoulli(probs=probs)
+        attn_log_probs = probs.log_prob((attn_masks>0).float()).sum(dim=1).reshape([attn_masks.shape[0], 1])
+        return attn_log_probs

@@ -24,7 +24,7 @@ def evaluate(actor_critic, obs_rms, eval_envs_dic, eval_locations_dic ,env_name,
         eval_recurrent_hidden_states = torch.zeros(
             num_processes, actor_critic.recurrent_hidden_state_size, device=device)
         eval_masks = torch.zeros(num_processes, 1, device=device)
-        eval_attn_masks = torch.zeros(num_processes, 7, device=device)
+        eval_attn_masks = torch.zeros(num_processes, 8, device=device)
         if mid:
             eval_attn_masks = torch.zeros(num_processes, actor_critic.recurrent_hidden_state_size, device=device)
 

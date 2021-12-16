@@ -376,3 +376,118 @@ class ReplayBufferBandit(object):
             # next_obs = obs_batch[1:,:]
 
             yield obs_batch, actions_batch, rewards_batch, masks_batch
+
+class AttnReplayBufferBandit(object):
+    def __init__(self, num_steps, num_processes, obs_shape, action_space):
+        self.obs = torch.zeros(num_steps + 1, num_processes, *obs_shape)
+        self.rewards = torch.zeros(num_steps, num_processes, 1)
+        self.value_preds = torch.zeros(num_steps + 1, num_processes, 1)
+        self.returns = torch.zeros(num_steps + 1, num_processes, 1)
+        self.action_log_probs = torch.zeros(num_steps, num_processes, 1)
+        if action_space.__class__.__name__ == 'Discrete':
+            action_shape = 1
+        else:
+            action_shape = action_space.shape[0]
+        self.actions = torch.zeros(num_steps, num_processes, action_shape)
+        if action_space.__class__.__name__ == 'Discrete':
+            self.actions = self.actions.long()
+        self.masks = torch.ones(num_steps + 1, num_processes, 1)
+        self.attn_masks = torch.ones(num_steps + 1, num_processes, *obs_shape)
+
+        self.num_steps = num_steps
+        self.step = 0
+        self.num_processes = num_processes
+
+    def to(self, device):
+        self.obs = self.obs.to(device)
+        self.rewards = self.rewards.to(device)
+        self.value_preds = self.value_preds.to(device)
+        self.returns = self.returns.to(device)
+        self.action_log_probs = self.action_log_probs.to(device)
+        self.actions = self.actions.to(device)
+        self.masks = self.masks.to(device)
+        self.attn_masks = self.attn_masks.to(device)
+
+    def insert(self, obs, actions, rewards, action_log_probs, value_preds, masks, attn_masks):
+        self.obs[self.step + 1].copy_(obs)
+        self.actions[self.step].copy_(actions)
+        self.rewards[self.step].copy_(rewards)
+        self.action_log_probs[self.step].copy_(action_log_probs)
+        self.value_preds[self.step].copy_(value_preds)
+        self.masks[self.step + 1].copy_(masks)
+        self.attn_masks[self.step + 1].copy_(attn_masks)
+        self.step = (self.step + 1) % self.num_steps
+
+    def after_update(self):
+        self.obs[0].copy_(self.obs[-1])
+        self.masks[0].copy_(self.masks[-1])
+        self.attn_masks[0].copy_(self.attn_masks[-1])
+
+    def compute_returns(self, next_value, use_gae, gamma, gae_lambda):
+        if use_gae:
+            self.value_preds[-1] = next_value
+            gae = 0
+            for step in reversed(range(self.rewards.size(0))):
+                delta = self.rewards[step] + gamma * self.value_preds[step + 1] * self.masks[step + 1] - self.value_preds[step]
+                gae = delta + gamma * gae_lambda * self.masks[step + 1] * gae
+                self.returns[step] = gae + self.value_preds[step]
+        else:
+            self.returns[-1] = next_value
+            for step in reversed(range(self.rewards.size(0))):
+                self.returns[step] = self.returns[step + 1] * gamma * self.masks[step + 1] + self.rewards[step]
+
+
+    def sampler(self, num_env_per_batch, advantages, start_ind, num_steps_per_mini_batch):
+        num_processes = self.rewards.size(1)
+        assert num_processes >= num_env_per_batch, (
+            "dqn requires the number of processes ({}) "
+            "to be greater than or equal to the number of "
+            "dqn mini batches ({}).".format(num_processes, num_env_per_batch))
+        num_envs_per_mini_batch = num_processes // num_env_per_batch
+        perm = torch.randperm(num_processes)
+        end_ind = start_ind + num_steps_per_mini_batch
+
+        for ind in perm:
+            obs_batch = []
+            actions_batch = []
+            rewards_batch = []
+            value_preds_batch = []
+            return_batch = []
+            masks_batch = []
+            attn_masks_batch = []
+            adv_targ = []
+
+            obs_batch.append(self.obs[start_ind:end_ind + 1, ind])
+            actions_batch.append(self.actions[start_ind:end_ind, ind])
+            rewards_batch.append(self.rewards[start_ind:end_ind, ind])
+            value_preds_batch.append(self.value_preds[start_ind:end_ind, ind])
+            return_batch.append(self.returns[start_ind:end_ind, ind])
+            masks_batch.append(self.masks[start_ind:end_ind + 1, ind])
+            attn_masks_batch.append(self.attn_masks[start_ind:end_ind + 1, ind])
+            adv_targ.append(advantages[start_ind:end_ind, ind])
+
+            T, N = num_steps_per_mini_batch , num_envs_per_mini_batch
+            # These are all tensors of size (T, N, -1)
+            obs_batch = torch.stack(obs_batch, 1)
+            actions_batch = torch.stack(actions_batch, 1)
+            rewards_batch = torch.stack(rewards_batch, 1)
+            value_preds_batch = torch.stack(value_preds_batch, 1)
+            return_batch = torch.stack(return_batch, 1)
+            masks_batch = torch.stack(masks_batch, 1)
+            attn_masks_batch = torch.stack(attn_masks_batch, 1)
+            adv_targ = torch.stack(adv_targ, 1)
+
+
+            # Flatten the (T, N, ...) tensors to (T * N, ...)
+            obs_batch = _flatten_helper(T+1, N, obs_batch)
+            actions_batch = _flatten_helper(T, N, actions_batch)
+            rewards_batch = _flatten_helper(T, N, rewards_batch)
+            value_preds_batch = _flatten_helper(T, N, value_preds_batch)
+            return_batch = _flatten_helper(T, N, return_batch)
+            masks_batch = _flatten_helper(T+1, N, masks_batch)
+            attn_masks_batch = _flatten_helper(T+1, N, attn_masks_batch)
+            adv_targ = _flatten_helper(T, N, adv_targ)
+            # next_obs = obs_batch[1:,:]
+
+            yield obs_batch, actions_batch, rewards_batch, value_preds_batch, return_batch, masks_batch, attn_masks_batch, adv_targ
+

@@ -55,6 +55,9 @@ def main():
     logdir = os.path.join(os.path.expanduser(args.log_dir), logdir)
     utils.cleanup_log_dir(logdir)
 
+    logdir_grad = os.path.join(logdir, 'grads')
+    utils.cleanup_log_dir(logdir_grad)
+
     # Ugly but simple logging
     log_dict = {
         'task_steps': args.task_steps,
@@ -141,7 +144,7 @@ def main():
     actor_critic = Policy(
         envs.observation_space.shape,
         envs.action_space,
-        base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
+        base_kwargs={'zero_ind': args.zero_ind, 'recurrent': args.recurrent_policy or args.obs_recurrent})
     actor_critic.to(device)
 
     # if (args.continue_from_epoch > 0) and args.save_dir != "":
@@ -254,7 +257,7 @@ def main():
         #     prev_opt_state = copy.deepcopy(agent.optimizer.state_dict())
         #     save_copy = False
 
-        value_loss, action_loss, dist_entropy, dist_l2 = agent.update(rollouts)
+        grads, shapes, value_loss, action_loss, dist_entropy, dist_l2, F_norms_all, F_norms_gru, F_norms_actor, F_norms_critic, F_norms_cat = agent.update(rollouts)
 
         rollouts.after_update()
 
@@ -276,6 +279,11 @@ def main():
         if (j % args.save_interval == 0 or j == args.continue_from_epoch + num_updates - 1):
             torch.save({'state_dict': actor_critic.state_dict(), 'optimizer_state_dict': agent.optimizer.state_dict(),
                         'step': j, 'obs_rms': getattr(utils.get_vec_normalize(envs), 'obs_rms', None)}, os.path.join(logdir, args.env_name + "-epoch-{}.pt".format(j)))
+
+        if (j % args.save_grad == 0 or j == args.continue_from_epoch + num_updates - 1):
+            if j==0:
+                torch.save({'shapes': shapes}, os.path.join(logdir_grad, args.env_name + "-epoch-{}-shapes.pt".format(j)))
+            torch.save({'env {}'.format(i): grads[i] for i in  range(len(grads))}, os.path.join(logdir_grad, args.env_name + "-epoch-{}-grad.pt".format(j)))
 
         if j % args.log_interval == 0 and len(episode_rewards) > 1:
             total_num_steps = (j + 1) * args.num_processes * args.num_steps
@@ -319,6 +327,11 @@ def main():
             summary_writer.add_scalar(f'losses/value', value_loss, (j + 1) * args.num_processes * args.num_steps)
             summary_writer.add_scalar(f'losses/entropy', dist_entropy, (j + 1) * args.num_processes * args.num_steps)
             summary_writer.add_scalar(f'losses/l2', dist_l2, (j + 1) * args.num_processes * args.num_steps)
+            summary_writer.add_scalars(f'GradNorms/F_norm', {'env {}'.format(i): F_norms_all[i] for i in  range(len(F_norms_all))}, (j + 1) * args.num_processes * args.num_steps)
+            summary_writer.add_scalars(f'GradNorms/F_norms_gru', {'env {}'.format(i): F_norms_gru[i] for i in  range(len(F_norms_gru))}, (j + 1) * args.num_processes * args.num_steps)
+            summary_writer.add_scalars(f'GradNorms/F_norms_actor', {'env {}'.format(i): F_norms_actor[i] for i in  range(len(F_norms_actor))}, (j + 1) * args.num_processes * args.num_steps)
+            summary_writer.add_scalars(f'GradNorms/F_norms_critic', {'env {}'.format(i): F_norms_critic[i] for i in  range(len(F_norms_critic))}, (j + 1) * args.num_processes * args.num_steps)
+            summary_writer.add_scalars(f'GradNorms/F_norms_cat', {'env {}'.format(i): F_norms_cat[i] for i in  range(len(F_norms_cat))}, (j + 1) * args.num_processes * args.num_steps)
             if j % args.eval_nondet_interval == 0:
                 eval_r_nondet = evaluate(actor_critic, obs_rms, eval_envs_dic, eval_locations_dic, 'test_eval', args.seed,
                                          args.num_processes, eval_env_name[1], logdir, device,

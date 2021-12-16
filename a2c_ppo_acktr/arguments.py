@@ -125,6 +125,16 @@ def get_args():
         default=None,
         help='eval interval, one eval per n updates (default: None)')
     parser.add_argument(
+        '--save_grad',
+        type=int,
+        default=10,
+        help='save gradient (default: 10)')
+    parser.add_argument(
+        '--max_grad_sum',
+        type=int,
+        default=10,
+        help='maximum gradient sum(default: 10)')
+    parser.add_argument(
         '--num-env-steps',
         type=int,
         default=10e6,
@@ -301,6 +311,12 @@ def get_args():
         action='store_true',
         default=False,
         help='rotate observations')
+    parser.add_argument('--zero_ind',
+        action='store_true',
+        default=False)
+    parser.add_argument('--det-val',
+        action='store_true',
+        default=False)
     args = parser.parse_args()
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
