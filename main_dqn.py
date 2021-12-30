@@ -5,6 +5,7 @@ Usage:
 
 $ . ~/env/bin/activate
 
+code from: https://github.com/econti/minimal_dqn/tree/6c5f777c63efc1a2628a88c33427d12f30d0ac63
 Example pong command (~900k ts solve):
     python main_dqn.py \
         --env "PongNoFrameskip-v4" --CnnDQN --learning_rate 0.00001 \

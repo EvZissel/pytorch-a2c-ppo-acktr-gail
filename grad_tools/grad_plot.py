@@ -190,6 +190,13 @@ class GradPlotDqn():
 
         return self._optim.state_dict()
 
+    def load_state_dict(self, optimizer_state_dict):
+        '''
+        Load optimizer state
+        '''
+
+        return self._optim.load_state_dict(optimizer_state_dict)
+
     def plot_backward(self, objectives):
         '''
         calculate the gradient of the parameters

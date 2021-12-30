@@ -55,16 +55,21 @@ class Agent:
         self.target_q_network = target_q_network
         self.num_actions = env.action_space.n
 
-    def act(self, state, hidden_state, epsilon, masks):
+    def act(self, state, hidden_state, epsilon, masks, attn_mask_ind=None):
         """DQN action - max q-value w/ epsilon greedy exploration."""
         # state = torch.tensor(np.float32(state)).type(dtype).unsqueeze(0)
-        q_value, rnn_hxs = self.q_network.forward(state, hidden_state, masks)
+        attn_mask = torch.ones(8).type(dtypelong)
+        if attn_mask_ind:
+            attn_mask[list(attn_mask_ind)] = torch.zeros(2).type(dtypelong)
+            attn_mask = 1 - attn_mask
+
+        q_value, rnn_hxs = self.q_network.forward(state, hidden_state, masks, attn_mask)
         if random.random() > epsilon:
             return q_value.max(1)[1].unsqueeze(-1), rnn_hxs
         return torch.tensor(np.random.randint(self.env.action_space.n, size=q_value.size()[0])).type(dtypelong).unsqueeze(-1), rnn_hxs
 
 
-def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optimizer, gamma, loss_var_coeff, make_update=True):
+def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optimizer, gamma, loss_var_coeff, make_update=True, attn_mask_ind=None):
     num_processes = replay_buffer.rewards.size(1)
     num_steps = replay_buffer.rewards.size(0)
     num_steps_per_batch = int(num_steps/num_mini_batch)
@@ -79,6 +84,11 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
     for i in range(num_processes):
         all_losses.append(0)
 
+    attn_mask = torch.ones(8).type(dtypelong)
+    if attn_mask_ind:
+        attn_mask[list(attn_mask_ind)] = torch.zeros(2).type(dtypelong)
+        attn_mask = 1 - attn_mask
+
     for start_ind in start_ind_array:
         data_sampler = replay_buffer.sampler(num_processes, start_ind, num_steps_per_batch)
 
@@ -89,16 +99,16 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
             # double q-learning
             with torch.no_grad():
                     # recurrent_hidden.detach()
-                online_q_values, _ = agent.q_network(states, recurrent_hidden, done)
+                online_q_values, _ = agent.q_network(states, recurrent_hidden, done, attn_mask)
                 _, max_indicies = torch.max(online_q_values, dim=1)
-                target_q_values, _ = agent.target_q_network(states, recurrent_hidden, done)
+                target_q_values, _ = agent.target_q_network(states, recurrent_hidden, done, attn_mask)
                 next_q_value = target_q_values.gather(1, max_indicies.unsqueeze(1))
 
                 next_q_value = next_q_value * done
                 expected_q_value = (rewards + gamma * next_q_value[1:, :]).squeeze(1)
 
             # Normal DDQN update
-            q_values, _ = agent.q_network(states, recurrent_hidden, done)
+            q_values, _ = agent.q_network(states, recurrent_hidden, done, attn_mask)
             q_value = q_values[:-1, :].gather(1, actions).squeeze(1)
 
             losses.append((q_value - expected_q_value.data).pow(2).mean())
@@ -124,7 +134,7 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
     return total_loss, mean_grad, grads, shapes, F_norms_all, F_norms_gru, F_norms_dqn
 
 
-def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, num_tasks, **kwargs):
+def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, num_tasks, attn_mask_ind, **kwargs):
 
     eval_envs = eval_envs_dic[env_name]
     locations = eval_locations_dic[env_name]
@@ -140,7 +150,7 @@ def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, 
 
         for t in range(kwargs["steps"]):
             with torch.no_grad():
-                actions, recurrent_hidden = agent.act(obs, recurrent_hidden, epsilon=-1, masks=masks)
+                actions, recurrent_hidden = agent.act(obs, recurrent_hidden, epsilon=-1, masks=masks, attn_mask_ind=attn_mask_ind)
 
             # Observe reward and next obs
             obs, _, done, infos = eval_envs.step(actions.cpu())
@@ -181,7 +191,7 @@ def hard_update(q_network, target_q_network):
 def main_dqn(params):
     EVAL_ENVS = {'train_eval': [params.env, params.num_processes],
                  'valid_eval': [params.val_env, params.num_processes],
-                 'test_eval': ['h_bandit-obs-randchoose-v1', 100]}
+                 'test_eval' : ['h_bandit-obs-randchoose-v1', 100]}
 
     random.seed(params.seed)
     torch.manual_seed(params.seed)
@@ -193,7 +203,7 @@ def main_dqn(params):
     if USE_CUDA:
         device = "cuda"
 
-    logdir = 'offline_' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes)+ '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    logdir = 'offline_comb_' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes)+ '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
     if params.rotate:
         logdir = logdir + '_rotate'
     if params.zero_ind:
@@ -359,25 +369,39 @@ def main_dqn(params):
     grad_grad_sumQ = deque(maxlen=params.max_grad_sum)
     grad_sumQ_val = deque(maxlen=params.max_grad_sum)
 
+    grad_grad_sumQ_attn = []
+    grad_sumQ_val_attn = []
+    attn_mask_ind = None
+    attn_masks = [(a, b) for b in range(8) for a in range(b + 1, 8)]
+    # attn_masks = [(0,1),(2,3),(4,5),(6,7)]
+    max_grad_sum_attn = params.max_grad_sum
+
+    print('number of masks {}'.format(len(attn_masks)))
+
+    for i in range(len(attn_masks)):
+        grad_grad_sumQ_attn.append(deque(maxlen=params.max_grad_sum))
+        grad_sumQ_val_attn.append(deque(maxlen=params.max_grad_sum))
+
     Corr_all_grad_vec = deque(maxlen=params.max_grad_sum)
     Corr_gru_grad_vec = deque(maxlen=params.max_grad_sum)
     Corr_dqn_grad_vec = deque(maxlen=params.max_grad_sum)
+    attn_mask_ind_vec = deque(maxlen=params.max_grad_sum)
 
     for ts in range(num_updates):
         # Update the q-network & the target network
         loss, mean_grad, grads, shapes, F_norms_all, F_norms_gru, F_norms_dqn = compute_td_loss(
-            agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff
+            agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, make_update=True, attn_mask_ind=attn_mask_ind
         )
         losses.append(loss.data)
 
         grad_loss, grad_mean_grad, grad_grads, grad_shapes, grad_F_norms_all, grad_F_norms_gru, grad_F_norms_dqn = compute_td_loss(
-            agent, params.num_mini_batch, params.mini_batch_size_val, grad_replay_buffer, optimizer, params.gamma, params.loss_var_coeff, make_update=False
+            agent, params.num_mini_batch, params.mini_batch_size_val, grad_replay_buffer, optimizer, params.gamma, params.loss_var_coeff, make_update=False, attn_mask_ind=attn_mask_ind
         )
         grad_losses.append(grad_loss.data)
 
         # compute validation gradient
         val_loss, val_mean_grad, val_grads, val_shapes, val_F_norms_all, val_F_norms_gru, val_F_norms_dqn = compute_td_loss(
-            agent, params.num_mini_batch, params.mini_batch_size_val, val_replay_buffer, optimizer, params.gamma, params.loss_var_coeff, make_update=False
+            agent, params.num_mini_batch, params.mini_batch_size_val, val_replay_buffer, optimizer, params.gamma, params.loss_var_coeff, make_update=False, attn_mask_ind=attn_mask_ind
         )
         val_losses.append(val_loss.data)
 
@@ -413,6 +437,60 @@ def main_dqn(params):
         mean_flat_grad_grad = sum(grad_grad_sumQ)
         mean_flat_grad_val = sum(grad_sumQ_val)
 
+        mean_grad = optimizer._unflatten_grad(mean_flat_grad, shapes)
+        mean_grad_grad = optimizer._unflatten_grad(mean_flat_grad_grad, grad_shapes)
+        mean_grad_val = optimizer._unflatten_grad(mean_flat_grad_val, val_shapes)
+
+        mean_gru = optimizer._flatten_grad(mean_grad[0:4])
+        mean_gru_grad = optimizer._flatten_grad(mean_grad_grad[0:4])
+        mean_gru_val = optimizer._flatten_grad(mean_grad_val[0:4])
+        mean_dqn = optimizer._flatten_grad(mean_grad[4:])
+        mean_dqn_grad = optimizer._flatten_grad(mean_grad_grad[4:])
+        mean_dqn_val = optimizer._flatten_grad(mean_grad_val[4:])
+
+        Corr_all = (mean_flat_grad * mean_flat_grad_val).sum() / (mean_flat_grad.norm(2) * mean_flat_grad_val.norm(2))
+        Corr_gru = (mean_gru * mean_gru_val).sum() / (mean_gru.norm(2) * mean_gru_val.norm(2))
+        Corr_dqn = (mean_dqn * mean_dqn_val).sum() / (mean_dqn.norm(2) * mean_dqn_val.norm(2))
+
+        Corr_all_grad = (mean_flat_grad_grad * mean_flat_grad_val).sum() / (mean_flat_grad_grad.norm(2) * mean_flat_grad_val.norm(2))
+        Corr_gru_grad = (mean_gru_grad * mean_gru_val).sum() / (mean_gru_grad.norm(2) * mean_gru_val.norm(2))
+        Corr_dqn_grad = (mean_dqn_grad * mean_dqn_val).sum() / (mean_dqn_grad.norm(2) * mean_dqn_val.norm(2))
+
+        Corr_all_grad_vec.append(Corr_all_grad)
+        Corr_gru_grad_vec.append(Corr_gru_grad)
+        Corr_dqn_grad_vec.append(Corr_dqn_grad)
+
+        if ((sum(Corr_all_grad_vec) / len(Corr_all_grad_vec)) < 0.9) and (mean_flat_grad_grad.norm(2) > 20) and (mean_flat_grad_val.norm(2) > 20):
+            print("step {}, average cosine similarity is lower than 0.9 - start checking gradient directions".format(total_num_steps))
+
+            Corr_grad_vec = []
+            for i in range(len(attn_masks)):
+
+                grad_loss_i, grad_mean_grad_i, grad_grads_i, grad_shapes_i, _, _, _ = compute_td_loss(
+                    agent, params.num_mini_batch, params.mini_batch_size_val, grad_replay_buffer, optimizer, params.gamma,
+                    params.loss_var_coeff, make_update=False, attn_mask_ind=attn_masks[i]
+                )
+                val_loss_i, val_mean_grad_i, val_grads_i, val_shapes_i, _, _, _ = compute_td_loss(
+                    agent, params.num_mini_batch, params.mini_batch_size_val, val_replay_buffer, optimizer, params.gamma,
+                    params.loss_var_coeff, make_update=False, attn_mask_ind=attn_masks[i]
+                )
+                grad_grad_sumQ_attn[i].append(grad_mean_grad_i)
+                grad_sumQ_val_attn[i].append(val_mean_grad_i)
+
+                grad_grad_attn = sum(grad_grad_sumQ_attn[i])
+                grad_val_attn = sum(grad_sumQ_val_attn[i])
+                Corr_grad_vec.append((grad_grad_attn * grad_val_attn).sum() / (grad_grad_attn.norm(2) * grad_val_attn.norm(2)))
+
+            attn_mask_ind_vec.append(np.argmax([Corr_grad_vec[i].cpu() for i in range(len(Corr_grad_vec))]))
+
+
+            if len(attn_mask_ind_vec) == max_grad_sum_attn:
+                print("step {}, update mask with sum of {} gradients".format(total_num_steps, max_grad_sum_attn))
+                attn_mask_ind = attn_masks[np.argmax([attn_mask_ind_vec.count(i) for i in range(len(attn_mask_ind_vec))])]
+
+
+
+
         if (ts % params.save_grad == 0 or ts == params.continue_from_epoch + num_updates - 1):
             if ts==0:
                 torch.save({'shapes': shapes}, os.path.join(logdir_grad, params.env + "-epoch-{}-shapes.pt".format(ts)))
@@ -428,7 +506,7 @@ def main_dqn(params):
 
 
         if ts % params.log_every == 0:
-            out_str = "Iter {}, Timestep {}".format(ts, total_num_steps)
+            out_str = "Iter {}, Timestep {}, mask {}".format(ts, total_num_steps,attn_mask_ind)
             if len(episode_rewards) > 1:
                 # out_str += ", Last {} training episodes: mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}".format(len(episode_rewards), np.mean(episode_rewards),
                 #         np.median(episode_rewards), np.min(episode_rewards), np.max(episode_rewards))
@@ -440,6 +518,7 @@ def main_dqn(params):
                     eval_r[eval_disp_name] = evaluate(agent, eval_envs_dic, eval_disp_name, eval_locations_dic,
                                                       params.num_processes,
                                                       eval_env_name[1],
+                                                      attn_mask_ind,
                                                       steps=params.task_steps,
                                                       recurrent=params.recurrent_policy, obs_recurrent=params.obs_recurrent,
                                                       multi_task=True, free_exploration=params.free_exploration)
@@ -456,30 +535,6 @@ def main_dqn(params):
                 # summary_writer.add_scalars(f'GradNorms/F_norms_gru',{'env {}'.format(i): F_norms_gru[i] for i in range(len(F_norms_gru))}, total_num_steps)
                 # summary_writer.add_scalars(f'GradNorms/F_norms_dqn',{'env {}'.format(i): F_norms_dqn[i] for i in range(len(F_norms_dqn))}, total_num_steps)
             print(out_str)
-
-            mean_grad = optimizer._unflatten_grad(mean_flat_grad, shapes)
-            mean_grad_grad = optimizer._unflatten_grad(mean_flat_grad_grad, shapes)
-            mean_grad_val = optimizer._unflatten_grad(mean_flat_grad_val, val_shapes)
-
-            mean_gru = optimizer._flatten_grad(mean_grad[0:4])
-            mean_gru_grad = optimizer._flatten_grad(mean_grad_grad[0:4])
-            mean_gru_val = optimizer._flatten_grad(mean_grad_val[0:4])
-            mean_dqn = optimizer._flatten_grad(mean_grad[4:])
-            mean_dqn_grad = optimizer._flatten_grad(mean_grad_grad[4:])
-            mean_dqn_val = optimizer._flatten_grad(mean_grad_val[4:])
-
-            Corr_all = (mean_flat_grad * mean_flat_grad_val).sum()/(mean_flat_grad.norm(2) * mean_flat_grad_val.norm(2))
-            Corr_gru = (mean_gru * mean_gru_val).sum()/(mean_gru.norm(2) * mean_gru_val.norm(2))
-            Corr_dqn = (mean_dqn * mean_dqn_val).sum()/(mean_dqn.norm(2) * mean_dqn_val.norm(2))
-
-            Corr_all_grad = (mean_flat_grad_grad * mean_flat_grad_val).sum()/(mean_flat_grad_grad.norm(2) * mean_flat_grad_val.norm(2))
-            Corr_gru_grad = (mean_gru_grad * mean_gru_val).sum()/(mean_gru_grad.norm(2) * mean_gru_val.norm(2))
-            Corr_dqn_grad = (mean_dqn_grad * mean_dqn_val).sum()/(mean_dqn_grad.norm(2) * mean_dqn_val.norm(2))
-
-            Corr_all_grad_vec.append((mean_flat_grad_grad * mean_flat_grad_val).sum()/(mean_flat_grad_grad.norm(2) * mean_flat_grad_val.norm(2)))
-            Corr_gru_grad_vec.append((mean_gru_grad * mean_gru_val).sum()/(mean_gru_grad.norm(2) * mean_gru_val.norm(2)))
-            Corr_dqn_grad_vec.append((mean_dqn_grad * mean_dqn_val).sum()/(mean_dqn_grad.norm(2) * mean_dqn_val.norm(2)))
-
 
             summary_writer.add_scalar(f'Norms/mean_norm_all', mean_flat_grad.norm(2), total_num_steps)
             summary_writer.add_scalar(f'Norms/mean_norms_gru', mean_gru.norm(2), total_num_steps)
@@ -501,9 +556,9 @@ def main_dqn(params):
             summary_writer.add_scalar(f'Correlation_grad/Corr_gru_grad', Corr_gru_grad, total_num_steps)
             summary_writer.add_scalar(f'Correlation_grad/Corr_dqn_grad', Corr_dqn_grad, total_num_steps)
 
-            summary_writer.add_scalar(f'Correlation_grad/Corr_all_grad_vec', sum(Corr_all_grad_vec) / len(Corr_all_grad_vec), total_num_steps)
-            summary_writer.add_scalar(f'Correlation_grad/Corr_gru_grad_vec', sum(Corr_gru_grad) / len(Corr_gru_grad), total_num_steps)
-            summary_writer.add_scalar(f'Correlation_grad/Corr_dqn_grad_vec', sum(Corr_dqn_grad) / len(Corr_dqn_grad), total_num_steps)
+            summary_writer.add_scalar(f'Correlation_grad_vec/Corr_all_grad_vec', sum(Corr_all_grad_vec) / len(Corr_all_grad_vec), total_num_steps)
+            summary_writer.add_scalar(f'Correlation_grad_vec/Corr_gru_grad_vec', sum(Corr_gru_grad_vec) / len(Corr_gru_grad_vec), total_num_steps)
+            summary_writer.add_scalar(f'Correlation_grad_vec/Corr_dqn_grad_vec', sum(Corr_dqn_grad_vec) / len(Corr_dqn_grad_vec), total_num_steps)
 
 
 

@@ -78,7 +78,8 @@ class DQN(NNBase):
             nn.Linear(num_inputs, 64), nn.ReLU(), nn.Linear(64, self.num_actions)
         )
 
-    def forward(self, x, rnn_hxs, masks):
+    def forward(self, x, rnn_hxs, masks, attn_masks):
+        x = attn_masks * x
         if self.zero_ind:
             x = torch.cat((torch.zeros(x.size()[1]-2), torch.ones(2)),0).cuda() * x
         if self.is_recurrent:
