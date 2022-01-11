@@ -32,7 +32,7 @@ from torch.utils.tensorboard import SummaryWriter
 from a2c_ppo_acktr import utils
 import pandas as pd
 from grad_tools.grad_plot import GradPlotDqn
-
+import itertools
 
 USE_CUDA = torch.cuda.is_available()
 if USE_CUDA:
@@ -55,16 +55,21 @@ class Agent:
         self.target_q_network = target_q_network
         self.num_actions = env.action_space.n
 
-    def act(self, state, hidden_state, epsilon, masks):
+    def act(self, state, hidden_state, epsilon, masks, attn_mask_ind=None):
         """DQN action - max q-value w/ epsilon greedy exploration."""
         # state = torch.tensor(np.float32(state)).type(dtype).unsqueeze(0)
-        q_value, rnn_hxs = self.q_network.forward(state, hidden_state, masks)
+        attn_mask = torch.ones(self.env.observation_space.shape[0]).type(dtypelong)
+        # if attn_mask_ind:
+        attn_mask[list(attn_mask_ind)] = torch.zeros(len(attn_mask_ind)).type(dtypelong)
+        attn_mask = 1 - attn_mask
+
+        q_value, rnn_hxs = self.q_network.forward(state, hidden_state, masks, attn_mask)
         if random.random() > epsilon:
             return q_value.max(1)[1].unsqueeze(-1), rnn_hxs
         return torch.tensor(np.random.randint(self.env.action_space.n, size=q_value.size()[0])).type(dtypelong).unsqueeze(-1), rnn_hxs
 
 
-def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optimizer, gamma, loss_var_coeff):
+def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optimizer, gamma, loss_var_coeff, attn_mask_ind=None):
     num_processes = replay_buffer.rewards.size(1)
     num_steps = replay_buffer.rewards.size(0)
     num_steps_per_batch = int(num_steps/num_mini_batch)
@@ -78,6 +83,11 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
     for i in range(num_processes):
         all_losses.append(0)
 
+    attn_mask = torch.ones(agent.env.observation_space.shape[0]).type(dtypelong)
+    # if attn_mask_ind:
+    attn_mask[list(attn_mask_ind)] = torch.zeros(len(attn_mask_ind)).type(dtypelong)
+    attn_mask = 1 - attn_mask
+
     for start_ind in start_ind_array:
         data_sampler = replay_buffer.sampler(num_processes, start_ind, num_steps_per_batch)
 
@@ -88,16 +98,16 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
             # double q-learning
             with torch.no_grad():
                     # recurrent_hidden.detach()
-                online_q_values, _ = agent.q_network(states, recurrent_hidden, done)
+                online_q_values, _ = agent.q_network(states, recurrent_hidden, done, attn_mask)
                 _, max_indicies = torch.max(online_q_values, dim=1)
-                target_q_values, _ = agent.target_q_network(states, recurrent_hidden, done)
+                target_q_values, _ = agent.target_q_network(states, recurrent_hidden, done, attn_mask)
                 next_q_value = target_q_values.gather(1, max_indicies.unsqueeze(1))
 
                 next_q_value = next_q_value * done
                 expected_q_value = (rewards + gamma * next_q_value[1:, :]).squeeze(1)
 
             # Normal DDQN update
-            q_values, _ = agent.q_network(states, recurrent_hidden, done)
+            q_values, _ = agent.q_network(states, recurrent_hidden, done, attn_mask)
             q_value = q_values[:-1, :].gather(1, actions).squeeze(1)
 
             losses.append((q_value - expected_q_value.data).pow(2).mean())
@@ -116,13 +126,13 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
 
     # return total_loss, all_losses.mean(), all_losses.var()
     optimizer.zero_grad()
-    grads, shapes, F_norms_all, F_norms_gru, F_norms_dqn = optimizer.plot_backward(all_losses)
+    mean_grad, grads, shapes, F_norms_all, F_norms_gru, F_norms_dqn = optimizer.plot_backward(all_losses)
     optimizer.step()
 
     return total_loss, grads, shapes, F_norms_all, F_norms_gru, F_norms_dqn
 
 
-def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, num_tasks, **kwargs):
+def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, num_tasks, attn_mask_ind, **kwargs):
 
     eval_envs = eval_envs_dic[env_name]
     locations = eval_locations_dic[env_name]
@@ -138,7 +148,7 @@ def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, 
 
         for t in range(kwargs["steps"]):
             with torch.no_grad():
-                actions, recurrent_hidden = agent.act(obs, recurrent_hidden, epsilon=-1, masks=masks)
+                actions, recurrent_hidden = agent.act(obs, recurrent_hidden, epsilon=-1, masks=masks, attn_mask_ind=attn_mask_ind)
 
             # Observe reward and next obs
             obs, _, done, infos = eval_envs.step(actions.cpu())
@@ -196,7 +206,10 @@ def main_dqn(params):
     if params.zero_ind:
         logdir = logdir + '_Zero_ind'
 
-    logdir = os.path.join('dqn_runs_offline', logdir)
+    if params.rand_obs_loc:
+        logdir = os.path.join('dqn_runs_offline_RandObsLocation', logdir)
+    else:
+        logdir = os.path.join('dqn_runs', logdir)
     logdir = os.path.join(os.path.expanduser(params.log_dir), logdir)
     utils.cleanup_log_dir(logdir)
     summary_writer = SummaryWriter(log_dir=logdir)
@@ -226,12 +239,12 @@ def main_dqn(params):
     envs = make_vec_envs(params.env, params.seed, params.num_processes, eval_locations_dic['train_eval'],
                          params.gamma, None, device, False, steps=params.task_steps,
                          free_exploration=params.free_exploration, recurrent=params.recurrent_policy,
-                         obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate)
+                         obs_recurrent=params.obs_recurrent, obs_rand_loc=params.rand_obs_loc, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate)
     for eval_disp_name, eval_env_name in EVAL_ENVS.items():
         eval_envs_dic[eval_disp_name] = make_vec_envs(eval_env_name[0], params.seed, params.num_processes, eval_locations_dic[eval_disp_name],
                                                       None, None, device, True, steps=params.task_steps,
                                                       recurrent=params.recurrent_policy,
-                                                      obs_recurrent=params.obs_recurrent, multi_task=True,
+                                                      obs_recurrent=params.obs_recurrent, obs_rand_loc=params.rand_obs_loc, multi_task=True,
                                                       free_exploration=params.free_exploration, normalize=not params.no_normalize, rotate=params.rotate)
 
     q_network = DQN(envs.observation_space.shape, envs.action_space.n, params.zero_ind, recurrent=True)
@@ -263,6 +276,9 @@ def main_dqn(params):
 
     losses = []
 
+    attn_masks = list(itertools.combinations([i for i in range(envs.observation_space.shape[0])], r=envs.observation_space.shape[0]))
+    attn_mask_ind = attn_masks[0]
+
     # Collect data
     # recurrent_hidden_states = torch.zeros(params.num_processes, agent.q_network.recurrent_hidden_state_size).type(dtypelong)
     for step in range(params.num_steps):
@@ -286,10 +302,10 @@ def main_dqn(params):
     # Training
     num_updates = int(
         params.max_ts  // params.num_processes // params.task_steps // params.mini_batch_size)
-    for ts in range(num_updates):
+    for ts in range(params.continue_from_epoch, params.continue_from_epoch+num_updates):
         # Update the q-network & the target network
         loss, grads, shapes, F_norms_all, F_norms_gru, F_norms_dqn = compute_td_loss(
-            agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff
+            agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, attn_mask_ind=attn_mask_ind
         )
         losses.append(loss.data)
 
@@ -322,6 +338,7 @@ def main_dqn(params):
                     eval_r[eval_disp_name] = evaluate(agent, eval_envs_dic, eval_disp_name, eval_locations_dic,
                                                       params.num_processes,
                                                       eval_env_name[1],
+                                                      attn_mask_ind,
                                                       steps=params.task_steps,
                                                       recurrent=params.recurrent_policy, obs_recurrent=params.obs_recurrent,
                                                       multi_task=True, free_exploration=params.free_exploration)
@@ -369,4 +386,5 @@ if __name__ == "__main__":
     parser.add_argument("--target_network_update_f", type=int, default=10000)
     parser.add_argument("--loss_var_coeff", type=float, default=0.0)
     parser.add_argument("--zero_ind", action='store_true', default=False)
+    parser.add_argument("--rand_obs_loc", action='store_true', default=False)
     main_dqn(parser.parse_args())

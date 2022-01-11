@@ -32,7 +32,7 @@ from torch.utils.tensorboard import SummaryWriter
 from a2c_ppo_acktr import utils
 import pandas as pd
 from grad_tools.grad_plot import GradPlotDqn
-
+import itertools
 
 USE_CUDA = torch.cuda.is_available()
 if USE_CUDA:
@@ -59,9 +59,9 @@ class Agent:
         """DQN action - max q-value w/ epsilon greedy exploration."""
         # state = torch.tensor(np.float32(state)).type(dtype).unsqueeze(0)
         attn_mask = torch.ones(8).type(dtypelong)
-        if attn_mask_ind:
-            attn_mask[list(attn_mask_ind)] = torch.zeros(2).type(dtypelong)
-            attn_mask = 1 - attn_mask
+        # if attn_mask_ind:
+        attn_mask[list(attn_mask_ind)] = torch.zeros(len(attn_mask_ind)).type(dtypelong)
+        attn_mask = 1 - attn_mask
 
         q_value, rnn_hxs = self.q_network.forward(state, hidden_state, masks, attn_mask)
         if random.random() > epsilon:
@@ -85,9 +85,9 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
         all_losses.append(0)
 
     attn_mask = torch.ones(8).type(dtypelong)
-    if attn_mask_ind:
-        attn_mask[list(attn_mask_ind)] = torch.zeros(2).type(dtypelong)
-        attn_mask = 1 - attn_mask
+    # if attn_mask_ind:
+    attn_mask[list(attn_mask_ind)] = torch.zeros(len(attn_mask_ind)).type(dtypelong)
+    attn_mask = 1 - attn_mask
 
     for start_ind in start_ind_array:
         data_sampler = replay_buffer.sampler(num_processes, start_ind, num_steps_per_batch)
@@ -371,9 +371,18 @@ def main_dqn(params):
 
     grad_grad_sumQ_attn = []
     grad_sumQ_val_attn = []
-    attn_mask_ind = None
-    attn_masks = [(a, b) for b in range(8) for a in range(b + 1, 8)]
+    # attn_mask_ind = (0, 1, 2, 3, 4, 5, 6, 7)
+    # attn_masks = [(a, b) for b in range(8) for a in range(b + 1, 8)]
     # attn_masks = [(0,1),(2,3),(4,5),(6,7)]
+
+    attn_masks = list(itertools.combinations([0, 1, 2, 3, 4, 5, 6, 7], r=8))
+    attn_mask_ind = attn_masks[0]
+
+    for i in range(1, 8):
+        attn_masks = attn_masks + list(itertools.combinations([0, 1, 2, 3, 4, 5, 6, 7], r=i))
+    # attn_masks = list(itertools.combinations([0, 1, 2, 3, 4, 5, 6, 7], r=2))
+    # attn_mask_ind = attn_masks[27]
+
     max_grad_sum_attn = params.max_grad_sum
 
     print('number of masks {}'.format(len(attn_masks)))
@@ -385,9 +394,9 @@ def main_dqn(params):
     Corr_all_grad_vec = deque(maxlen=params.max_grad_sum)
     Corr_gru_grad_vec = deque(maxlen=params.max_grad_sum)
     Corr_dqn_grad_vec = deque(maxlen=params.max_grad_sum)
-    attn_mask_ind_vec = deque(maxlen=params.max_grad_sum)
+    # attn_mask_ind_vec = deque(maxlen=params.max_grad_sum)
 
-    for ts in range(num_updates):
+    for ts in range(params.continue_from_epoch, params.continue_from_epoch+num_updates):
         # Update the q-network & the target network
         loss, mean_grad, grads, shapes, F_norms_all, F_norms_gru, F_norms_dqn = compute_td_loss(
             agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, make_update=True, attn_mask_ind=attn_mask_ind
@@ -460,10 +469,15 @@ def main_dqn(params):
         Corr_gru_grad_vec.append(Corr_gru_grad)
         Corr_dqn_grad_vec.append(Corr_dqn_grad)
 
-        if ((sum(Corr_all_grad_vec) / len(Corr_all_grad_vec)) < 0.9) and (mean_flat_grad_grad.norm(2) > 20) and (mean_flat_grad_val.norm(2) > 20):
+        # if ((sum(Corr_all_grad_vec) / len(Corr_all_grad_vec)) < 0.9) and (mean_flat_grad_grad.norm(2) > 20) and (mean_flat_grad_val.norm(2) > 20):
+        if ((sum(Corr_all_grad_vec) / len(Corr_all_grad_vec)) < 0.9) or ((mean_flat_grad_grad.norm(2) < 5) and (mean_flat_grad_val.norm(2) < 5)):
             print("step {}, average cosine similarity is lower than 0.9 - start checking gradient directions".format(total_num_steps))
 
-            Corr_grad_vec = []
+            # Corr_grad_vec = []
+            # max_corr = 0.85
+            corr_th = 0.9
+            max_grad_norm = 0
+            mac_corr_ind = attn_mask_ind
             for i in range(len(attn_masks)):
 
                 grad_loss_i, grad_mean_grad_i, grad_grads_i, grad_shapes_i, _, _, _ = compute_td_loss(
@@ -479,15 +493,21 @@ def main_dqn(params):
 
                 grad_grad_attn = sum(grad_grad_sumQ_attn[i])
                 grad_val_attn = sum(grad_sumQ_val_attn[i])
-                Corr_grad_vec.append((grad_grad_attn * grad_val_attn).sum() / (grad_grad_attn.norm(2) * grad_val_attn.norm(2)))
+                # Corr_grad_vec.append((grad_grad_attn * grad_val_attn).sum() / (grad_grad_attn.norm(2) * grad_val_attn.norm(2)))
+                correlation = (grad_grad_attn * grad_val_attn).sum() / (grad_grad_attn.norm(2) * grad_val_attn.norm(2))
+                # if (grad_grad_attn.norm(2) > 15) and (grad_val_attn.norm(2) > 15) and (correlation > max_corr):
+                if (correlation > corr_th) and (grad_grad_attn.norm(2) > max_grad_norm) :
+                    print("step {}, chosen correlation {}".format(total_num_steps, correlation))
+                    # max_corr = correlation
+                    mac_corr_ind = attn_masks[i]
 
-            attn_mask_ind_vec.append(np.argmax([Corr_grad_vec[i].cpu() for i in range(len(Corr_grad_vec))]))
+            # attn_mask_ind_vec.append(np.argmax([Corr_grad_vec[i].cpu() for i in range(len(Corr_grad_vec))]))
 
 
-            if len(attn_mask_ind_vec) == max_grad_sum_attn:
+            if len(grad_grad_sumQ_attn[0]) == max_grad_sum_attn:
                 print("step {}, update mask with sum of {} gradients".format(total_num_steps, max_grad_sum_attn))
-                attn_mask_ind = attn_masks[np.argmax([attn_mask_ind_vec.count(i) for i in range(len(attn_mask_ind_vec))])]
-
+                # attn_mask_ind = attn_masks[np.argmax([attn_mask_ind_vec.count(i) for i in range(len(attn_mask_ind_vec))])]
+                attn_mask_ind = mac_corr_ind
 
 
 
@@ -506,7 +526,7 @@ def main_dqn(params):
 
 
         if ts % params.log_every == 0:
-            out_str = "Iter {}, Timestep {}, mask {}".format(ts, total_num_steps,attn_mask_ind)
+            out_str = "Iter {}, Timestep {}, mask {}".format(ts, total_num_steps, attn_mask_ind)
             if len(episode_rewards) > 1:
                 # out_str += ", Last {} training episodes: mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}".format(len(episode_rewards), np.mean(episode_rewards),
                 #         np.median(episode_rewards), np.min(episode_rewards), np.max(episode_rewards))
