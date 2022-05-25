@@ -339,7 +339,7 @@ class ImpalaModel(NNBase):
             ImpalaBlock(in_channels=num_inputs, out_channels=16),
             ImpalaBlock(in_channels=16, out_channels=32),
             ImpalaBlock(in_channels=32, out_channels=32), nn.ReLU(), Flatten(),
-            init_(nn.Linear(in_features=32 * 8 * 8, out_features=256)),nn.ReLU())
+            init_(nn.Linear(in_features=32 * 8 * 8, out_features=hidden_size)),nn.ReLU())
 
         self.critic_linear = init_2(nn.Linear(hidden_size, 1))
 

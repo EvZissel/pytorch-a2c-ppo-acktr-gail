@@ -5,8 +5,6 @@ import time
 from collections import deque
 import sys
 
-import numpy as np
-import torch
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -23,8 +21,16 @@ from a2c_ppo_acktr.procgen_wrappers import *
 from a2c_ppo_acktr.logger import Logger
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import torch.nn as nn
+from a2c_ppo_acktr.utils import init
 
 EVAL_ENVS = ['train_eval','test_eval']
+
+init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                       constant_(x, 0), nn.init.calculate_gain('relu'))
+init_2 = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=1)
 
 def main():
     args = get_args()
@@ -40,6 +46,8 @@ def main():
     logdir = args.env_name + '_seed_' + str(args.seed) + '_num_env_' + str(args.num_level) + '_entro_' + str(args.entropy_coef) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
     if args.normalize_rew:
         logdir = logdir + '_normalize_rew'
+    if not args.recurrent_policy:
+        logdir = logdir + '_noRNN'
     if args.mask_all:
         logdir = logdir + '_mask_all'
     if args.mask_size > 0:
@@ -137,7 +145,8 @@ def main():
         envs.observation_space.shape,
         envs.action_space,
         base=ImpalaModel,
-        base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
+        base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent,'hidden_size': args.recurrent_hidden_size})
+        # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
     actor_critic.to(device)
 
 
@@ -160,19 +169,33 @@ def main():
         max_grad_norm=args.max_grad_norm,
         weight_decay=args.weight_decay)
 
-
-    # Load previous model
-    if (args.continue_from_epoch > 0) and args.save_dir != "":
-        save_path = args.save_dir
-        actor_critic_weighs = torch.load(os.path.join(save_path, args.env_name + "-epoch-{}.pt".format(args.continue_from_epoch)))
-        actor_critic.load_state_dict(actor_critic_weighs['state_dict'])
-        agent.optimizer.load_state_dict(actor_critic_weighs['optimizer_state_dict'])
-
-
     # rollout storage for agent
     rollouts = RolloutStorage(args.num_steps, args.num_processes,
                               envs.observation_space.shape, envs.action_space,
                               actor_critic.recurrent_hidden_state_size, args.mask_size, device=device)
+
+    # Load previous model
+    if (args.continue_from_epoch > 0) and args.save_dir != "":
+        save_path = args.save_dir
+        actor_critic_weighs = torch.load(os.path.join(save_path, args.env_name + "-epoch-{}.pt".format(args.continue_from_epoch)), map_location=device)
+        actor_critic.load_state_dict(actor_critic_weighs['state_dict'])
+        agent.optimizer.load_state_dict(actor_critic_weighs['optimizer_state_dict'])
+        rollouts.obs                            = actor_critic_weighs['buffer_obs']
+        rollouts.recurrent_hidden_states = actor_critic_weighs['buffer_recurrent_hidden_states']
+        rollouts.rewards                 = actor_critic_weighs['buffer_rewards']
+        rollouts.seeds                   = actor_critic_weighs['buffer_seeds']
+        rollouts.value_preds             = actor_critic_weighs['buffer_value_preds']
+        rollouts.returns                 = actor_critic_weighs['buffer_returns']
+        rollouts.action_log_probs        = actor_critic_weighs['buffer_action_log_probs']
+        rollouts.actions                 = actor_critic_weighs['buffer_actions']
+        rollouts.masks                   = actor_critic_weighs['buffer_masks']
+        rollouts.bad_masks               = actor_critic_weighs['buffer_bad_masks']
+        rollouts.info_batch              = actor_critic_weighs['buffer_info_batch']
+        rollouts.num_steps               = actor_critic_weighs['buffer_num_steps']
+        rollouts.step                    = actor_critic_weighs['buffer_step']
+        rollouts.num_processes           = actor_critic_weighs['buffer_num_processes']
+
+
     logger = Logger(args.num_processes)
 
     obs = envs.reset()
@@ -190,6 +213,9 @@ def main():
     # episode_len_buffer = []
     # for _ in range(args.num_processes):
     #     episode_len_buffer.append(0)
+    eval_test_nondet_rew = np.zeros((args.num_steps, args.num_processes))
+    eval_test_nondet_done = np.zeros((args.num_steps, args.num_processes))
+
     for j in range(args.continue_from_epoch, args.continue_from_epoch+num_updates):
 
         # plot mazes
@@ -259,6 +285,22 @@ def main():
         if (j % args.save_interval == 0 or j == args.continue_from_epoch + num_updates - 1):
             torch.save({'state_dict': actor_critic.state_dict(), 'optimizer_state_dict': agent.optimizer.state_dict(),
                         'step': j}, os.path.join(logdir, args.env_name + "-epoch-{}.pt".format(j)))
+            torch.save({'state_dict': actor_critic.state_dict(), 'optimizer_state_dict': agent.optimizer.state_dict(),
+                        'step': j,
+                        'buffer_obs': rollouts.obs,
+                        'buffer_recurrent_hidden_states': rollouts.recurrent_hidden_states,
+                        'buffer_rewards': rollouts.rewards,
+                        'buffer_seeds': rollouts.seeds,
+                        'buffer_value_preds': rollouts.value_preds,
+                        'buffer_returns': rollouts.returns,
+                        'buffer_action_log_probs': rollouts.action_log_probs,
+                        'buffer_actions': rollouts.actions,
+                        'buffer_masks': rollouts.masks,
+                        'buffer_bad_masks': rollouts.bad_masks,
+                        'buffer_info_batch': rollouts.info_batch,
+                        'buffer_num_steps': rollouts.num_steps,
+                        'buffer_step': rollouts.step,
+                        'buffer_num_processes': rollouts.num_processes}, os.path.join(logdir, args.env_name + "-epoch-{}.pt".format(j)))
 
         # print some stats
         if j % args.log_interval == 0:
@@ -275,7 +317,7 @@ def main():
                         train_statistics['Rewards_median_episodes'], train_statistics['Rewards_min_episodes'], train_statistics['Rewards_max_episodes'], dist_entropy, value_loss,
                         action_loss, np.unique(rollouts.seeds.squeeze().numpy()).size))
         # evaluate agent on evaluation tasks
-        if (args.eval_interval is not None and j % args.eval_interval == 0):
+        if ((args.eval_interval is not None and j % args.eval_interval == 0) or j == args.continue_from_epoch):
             actor_critic.eval()
             printout = f'Seed {args.seed} Iter {j} '
             eval_dic_rew = {}
@@ -289,10 +331,27 @@ def main():
                 # printout += eval_disp_name + ' ' + str(np.mean(eval_dic_rew[eval_disp_name])) + ' '
                 # print(printout)
 
-            logger.feed_eval(eval_dic_rew['train_eval'], eval_dic_done['train_eval'],eval_dic_rew['test_eval'], eval_dic_done['test_eval'],eval_dic_rew['test_eval'], eval_dic_done['test_eval'])
+            if ((args.eval_nondet_interval is not None and j % args.eval_nondet_interval == 0) or j == args.continue_from_epoch):
+                eval_test_nondet_rew, eval_test_nondet_done = evaluate_procgen(actor_critic, eval_envs_dic, 'test_eval',
+                                                  args.num_processes, device, args.num_steps, deterministic=False)
+
+            logger.feed_eval(eval_dic_rew['train_eval'], eval_dic_done['train_eval'],eval_dic_rew['test_eval'], eval_dic_done['test_eval'],
+                             eval_dic_rew['test_eval'], eval_dic_done['test_eval'], eval_test_nondet_rew, eval_test_nondet_done)
             episode_statistics = logger.get_episode_statistics()
             print(printout)
             print(episode_statistics)
+
+            # reinitialize the last layers of networks + GRU unit
+            if j % 500 == 0:
+                print('initialize weights j = {}'.format(j))
+                init_2(actor_critic.base.critic_linear)
+                init_(actor_critic.base.main[5])
+                for name, param in actor_critic.base.gru.named_parameters():
+                    if 'bias' in name:
+                        nn.init.constant_(param, 0)
+                    elif 'weight' in name:
+                        nn.init.orthogonal_(param)
+
 
             # summary_writer.add_scalars('eval_mean_rew', {f'{eval_disp_name}': np.mean(eval_dic_rew[eval_disp_name])},
             #                               (j+1) * args.num_processes * args.num_steps)

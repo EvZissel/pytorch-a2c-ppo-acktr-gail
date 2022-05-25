@@ -519,3 +519,31 @@ class MaskFrame(VecEnvWrapper):
         obs = obs * indexes + self.brown * torch.logical_not(indexes)
 
         return obs
+
+
+# class ChangeRewardLoc(VecEnvWrapper):
+#     def __init__(self, env):
+#         super().__init__(venv=env)
+#         obs_shape = self.observation_space.shape
+#         self.observation_space = gym.spaces.Box(low=0, high=1, shape=obs_shape, dtype=np.float32)
+#
+#         brown = np.stack([191 * np.ones((64, 64)), 127 *  np.ones((64, 64)), 63 *  np.ones((64, 64))], axis=0)
+#         self.brown = np.expand_dims(brown, axis=0)
+#
+#
+#     def step_wait(self):
+#         obs, reward, done, info = self.venv.step_wait()
+#
+#         indexes = np.stack([(obs[:, 1, :, :] == 255), (obs[:, 1, :, :] == 255), (obs[:, 1, :, :] == 255)], axis=1)
+#         obs = obs * indexes + self.brown * (1 - indexes)
+#
+#         return obs, reward, done, info
+#
+#     def reset(self):
+#         obs = self.venv.reset()
+#
+#         brown = np.repeat(self.brown, obs.shape[0], axis=0)
+#
+#         indexes = np.stack([(obs[:, 1, :, :] == 255), (obs[:, 1, :, :] == 255), (obs[:, 1, :, :] == 255)], axis=1)
+#         obs = obs * indexes + brown * (1 - indexes)
+#         return obs

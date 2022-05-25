@@ -45,3 +45,12 @@ plt.plot(entropy3, entropy_test3, 'ro--', label='test seed 35431')
 plt.xlabel('Entropy')
 plt.legend()
 plt.show()
+
+## 128 environments continue training
+iteration = [3050, 4000, 4500, 4574, 5000, 5500, 6000, 6098]
+train = [9.609375, 9.53125, 9.609375, 9.609375, 9.609375, 9.609375, 9.609375, 9.5312]
+test = [5.078125, 5.0, 5.078125, 5.3125, 5.078125, 5.078125, 4.921875, 5.234375]
+plt.plot(iteration, train, 'ro-', label='train')
+plt.plot(iteration, test, 'bo-', label='test')
+plt.legend()
+plt.show()

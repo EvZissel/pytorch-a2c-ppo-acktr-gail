@@ -55,7 +55,7 @@ def evaluate(actor_critic, obs_rms, eval_envs_dic, env_name, seed, num_processes
     return eval_episode_rewards
 
 def evaluate_procgen(actor_critic, eval_envs_dic, env_name, num_processes,
-                     device, steps, attention_features=False, det_masks=False, elsif=None):
+                     device, steps, attention_features=False, det_masks=False, deterministic=True):
 
     eval_envs = eval_envs_dic[env_name]
     rew_batch = []
@@ -109,7 +109,7 @@ def evaluate_procgen(actor_critic, eval_envs_dic, env_name, num_processes,
                 attn_masks1=eval_attn_masks1,
                 attn_masks2=eval_attn_masks2,
                 attn_masks3=eval_attn_masks3,
-                deterministic=True,
+                deterministic=deterministic,
                 reuse_masks=det_masks)
 
             # Observe reward and next obs

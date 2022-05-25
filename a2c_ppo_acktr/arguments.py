@@ -113,13 +113,18 @@ def get_args():
     parser.add_argument(
         '--save-interval',
         type=int,
-        default=10e2,
-        help='save interval, one save per n updates (default: 100)')
+        default=10e3,
+        help='save interval, one save per n updates (default: 10e2)')
     parser.add_argument(
         '--eval-interval',
         type=int,
         default=None,
         help='eval interval, one eval per n updates (default: None)')
+    parser.add_argument(
+        '--eval-nondet_interval',
+        type=int,
+        default=None,
+        help='eval interval non-deterministic, one eval per n updates (default: None)')
     parser.add_argument(
         '--num-env-steps',
         type=int,
@@ -149,8 +154,8 @@ def get_args():
         help='directory to save agent logs (default: /tmp/gym)')
     parser.add_argument(
         '--save-dir',
-        default='./trained_models/',
-        help='directory to save agent logs (default: ./trained_models/)')
+        default="",
+        help='directory to save agent logs (default: "")')
     parser.add_argument(
         '--no-cuda',
         action='store_true',
@@ -177,6 +182,12 @@ def get_args():
         action='store_true',
         default=False,
         help='use a recurrent policy and observations input')
+    parser.add_argument(
+        '--recurrent-hidden-size',
+        type=int,
+        default=int(256),
+        required=False,
+        help='GRU hidden layer size')
     parser.add_argument(
         '--use-linear-lr-decay',
         action='store_true',
