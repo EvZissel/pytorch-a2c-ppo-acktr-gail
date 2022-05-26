@@ -189,6 +189,11 @@ def get_args():
         required=False,
         help='GRU hidden layer size')
     parser.add_argument(
+        '--reinitialization',
+        action='store_true',
+        default=False,
+        help='reinitialize GRU and the last few layers')
+    parser.add_argument(
         '--use-linear-lr-decay',
         action='store_true',
         default=False,

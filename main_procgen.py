@@ -5,7 +5,6 @@ import time
 from collections import deque
 import sys
 
-
 from torch.utils.tensorboard import SummaryWriter
 
 from a2c_ppo_acktr import algo, utils
@@ -284,8 +283,6 @@ def main():
         # save for every interval-th episode or for the last epoch
         if (j % args.save_interval == 0 or j == args.continue_from_epoch + num_updates - 1):
             torch.save({'state_dict': actor_critic.state_dict(), 'optimizer_state_dict': agent.optimizer.state_dict(),
-                        'step': j}, os.path.join(logdir, args.env_name + "-epoch-{}.pt".format(j)))
-            torch.save({'state_dict': actor_critic.state_dict(), 'optimizer_state_dict': agent.optimizer.state_dict(),
                         'step': j,
                         'buffer_obs': rollouts.obs,
                         'buffer_recurrent_hidden_states': rollouts.recurrent_hidden_states,
@@ -342,7 +339,7 @@ def main():
             print(episode_statistics)
 
             # reinitialize the last layers of networks + GRU unit
-            if j % 500 == 0:
+            if args.reinitialization and (j % 500 == 0):
                 print('initialize weights j = {}'.format(j))
                 init_2(actor_critic.base.critic_linear)
                 init_(actor_critic.base.main[5])
