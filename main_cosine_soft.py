@@ -13,7 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 from a2c_ppo_acktr import algo, utils
 from a2c_ppo_acktr.arguments import get_args
 from a2c_ppo_acktr.envs import make_vec_envs
-from a2c_ppo_acktr.model import Policy
+from a2c_ppo_acktr.model import Policy, MLPAttnBase
 from a2c_ppo_acktr.storage import RolloutStorage
 from evaluation import evaluate
 from a2c_ppo_acktr.utils import save_obj, load_obj
@@ -42,10 +42,11 @@ def main():
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
-    EVAL_ENVS = {'train_eval': [args.env_name, args.num_processes],
-                 'test_eval': ['h_bandit-obs-randchoose-v1', 100]}
+    EVAL_ENVS = {'train_eval': [args.env, args.num_processes],
+                 'valid_eval': [args.val_env, args.num_processes],
+                 'test_eval' : ['h_bandit-obs-randchoose-v1', 100]}
 
-    logdir = args.env_name + '_' + args.algo + '_seed_' + str(args.seed) + '_num_arms_' + str(args.num_processes) + '_entro_' + str(args.entropy_coef) \
+    logdir = 'main_soft_'+ args.env_name + '_' + args.algo + '_seed_' + str(args.seed) + '_num_arms_' + str(args.num_processes) + '_entro_' + str(args.entropy_coef) \
              + '_l2_' + str(args.l2_coef) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
     if args.rotate:
         logdir = logdir + '_rotate'
@@ -94,23 +95,6 @@ def main():
         argslog.to_csv(f, index=False)
 
     summary_writer = SummaryWriter(log_dir=logdir)
-    # summary_writer.add_hparams({'task_steps': args.task_steps,
-    #                             'grad_noise_ratio': args.grad_noise_ratio,
-    #                             'max_task_grad_norm': args.max_task_grad_norm,
-    #                             'use_noisygrad': args.use_noisygrad,
-    #                             'use_pcgrad': args.use_pcgrad,
-    #                             'use_testgrad': args.use_testgrad,
-    #                             'use_testgrad_median': args.use_testgrad_median,
-    #                             'testgrad_quantile': args.testgrad_quantile,
-    #                             'median_grad': args.use_median_grad,
-    #                             'use_meanvargrad': args.use_meanvargrad,
-    #                             'meanvar_beta': args.meanvar_beta,
-    #                             'no_special_grad_for_critic': args.no_special_grad_for_critic,
-    #                             'use_privacy': args.use_privacy,
-    #                             'seed': args.seed,
-    #                             'recurrent': args.recurrent_policy,
-    #                             'obs_recurrent': args.obs_recurrent,
-    #                             'cmd': ' '.join(sys.argv[1:])}, {})
     summary_writer.add_hparams(vars(args), {})
 
     torch.set_num_threads(1)
@@ -129,6 +113,12 @@ def main():
                          free_exploration=args.free_exploration, recurrent=args.recurrent_policy,
                          obs_recurrent=args.obs_recurrent, multi_task=True, normalize=not args.no_normalize, rotate=args.rotate)
 
+    val_envs = make_vec_envs(args.val_env, args.seed, args.num_processes, eval_locations_dic['valid_eval'],
+                         args.gamma, None, device, False, steps=args.task_steps,
+                         free_exploration=args.free_exploration, recurrent=args.recurrent_policy,
+                         obs_recurrent=args.obs_recurrent, multi_task=True, normalize=not args.no_normalize, rotate=args.rotate)
+
+
     # monitor_dir_test = os.path.join(logdir, 'monitor_test')
     # utils.cleanup_log_dir(monitor_dir_test)
     for eval_disp_name, eval_env_name in EVAL_ENVS.items():
@@ -138,25 +128,19 @@ def main():
                                                       obs_recurrent=args.obs_recurrent, multi_task=True,
                                                       free_exploration=args.free_exploration, normalize=not args.no_normalize, rotate=args.rotate)
 
-    prev_eval_r = {}
     print('done')
-
+    base = MLPAttnBase
     actor_critic = Policy(
         envs.observation_space.shape,
         envs.action_space,
+        base = base,
         base_kwargs={'zero_ind': args.zero_ind, 'recurrent': args.recurrent_policy or args.obs_recurrent})
     actor_critic.to(device)
-
-    # if (args.continue_from_epoch > 0) and args.save_dir != "":
-    #     save_path = os.path.join(args.save_dir, args.algo)
-    #     actor_critic_, loaded_obs_rms_ = torch.load(os.path.join(save_path,
-    #                                                                args.env_name +
-    #                                                                "-epoch-{}.pt".format(args.continue_from_epoch)))
-    #     actor_critic.load_state_dict(actor_critic_.state_dict())
 
 
     if args.algo != 'ppo':
         raise print("only PPO is supported")
+    # training agent
     agent = algo.PPO(
         actor_critic,
         args.clip_param,
@@ -167,23 +151,25 @@ def main():
         args.l2_coef,
         lr=args.lr,
         eps=args.eps,
-        max_grad_norm=args.max_grad_norm,
         num_tasks=args.num_processes,
-        use_pcgrad=args.use_pcgrad,
-        use_noisygrad=args.use_noisygrad,
-        use_testgrad=args.use_testgrad,
-        use_graddrop=args.use_graddrop,
-        use_testgrad_median=args.use_testgrad_median,
-        testgrad_quantile=args.testgrad_quantile,
-        use_privacy=args.use_privacy,
-        use_median_grad=args.use_median_grad,
-        use_meanvargrad=args.use_meanvargrad,
-        meanvar_beta=args.meanvar_beta,
-        max_task_grad_norm=args.max_task_grad_norm,
-        grad_noise_ratio=args.grad_noise_ratio,
-        testgrad_alpha=args.testgrad_alpha,
-        testgrad_beta=args.testgrad_beta,
-        no_special_grad_for_critic=args.no_special_grad_for_critic,
+        attention_policy=False,
+        max_grad_norm=args.max_grad_norm,
+        weight_decay=args.weight_decay)
+
+    # validation agent
+    val_agent = algo.PPO(
+        actor_critic,
+        args.clip_param,
+        args.ppo_epoch,
+        args.num_mini_batch,
+        value_loss_coef=0.0,  # we don't learn the value function with the validation agent
+        entropy_coef=0.0,
+        l2_coef=args.l2_coef,# we don't implement entropy for reinforce update
+        lr=args.val_lr,
+        eps=args.eps,
+        num_tasks=args.num_processes,
+        attention_policy=True,
+        max_grad_norm=args.max_grad_norm,
         weight_decay=args.weight_decay)
 
 
@@ -199,12 +185,22 @@ def main():
                               envs.observation_space.shape, envs.action_space,
                               actor_critic.recurrent_hidden_state_size)
 
+    val_rollouts = RolloutStorage(args.num_steps, args.num_processes,
+                                  envs.observation_space.shape,envs.action_space,
+                                  actor_critic.recurrent_hidden_state_size)
+
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
 
+    val_obs = val_envs.reset()
+    val_rollouts.obs[0].copy_(val_obs)
+    val_rollouts.to(device)
+
     episode_rewards = deque(maxlen=25)
+    val_episode_rewards = deque(maxlen=25)
     episode_len = deque(maxlen=25)
+    val_episode_len = deque(maxlen=25)
 
     start = time.time()
     num_updates = int(
@@ -213,6 +209,7 @@ def main():
     save_copy = True
     for j in range(args.continue_from_epoch, args.continue_from_epoch+num_updates):
 
+        # Train rrollouts
         for step in range(args.num_steps):
             # Sample actions
             actor_critic.eval()
@@ -262,19 +259,45 @@ def main():
 
         rollouts.after_update()
 
-        # save for every interval-th episode or for the last epoch
-        # if (j % args.save_interval == 0
-        #         or j == num_updates - 1) and args.save_dir != "":
-        #     save_path = os.path.join(args.save_dir, args.algo)
-        #     try:
-        #         os.makedirs(save_path)
-        #     except OSError:
-        #         pass
-        #
-        #     torch.save([
-        #         actor_critic,
-        #         getattr(utils.get_vec_normalize(envs), 'obs_rms', None)
-        #     ], os.path.join(save_path, args.env_name + "-epoch-{}.pt".format(j)))
+        # validation rollouts
+        for val_iter in range(args.val_agent_steps):  # we allow several PPO steps for each validation update
+            actor_critic.eval()
+            for step in range(args.num_steps):
+                # Sample actions
+                with torch.no_grad():
+                    value, action, action_log_prob, recurrent_hidden_states, attn_masks = actor_critic.act(
+                        val_rollouts.obs[step], val_rollouts.recurrent_hidden_states[step],
+                        val_rollouts.masks[step], val_rollouts.attn_masks[step], deterministic=True,
+                        attention_act=True)
+
+                # Observe reward and next obs
+                obs, reward, done, infos = val_envs.step(action.cpu())
+
+                for info in infos:
+                    if 'episode' in info.keys():
+                        val_episode_rewards.append(info['episode']['r'])
+                        val_episode_len.append(info['episode']['l'])
+
+                # If done then clean the history of observations.
+                masks = torch.FloatTensor(
+                    [[0.0] if done_ else [1.0] for done_ in done])
+                bad_masks = torch.FloatTensor(
+                    [[0.0] if 'bad_transition' in info.keys() else [1.0]
+                     for info in infos])
+                val_rollouts.insert(obs, recurrent_hidden_states, action,
+                                    action_log_prob, value, reward, masks, bad_masks, attn_masks)
+
+            with torch.no_grad():
+                next_value = actor_critic.get_value(
+                    val_rollouts.obs[-1], val_rollouts.recurrent_hidden_states[-1],
+                    val_rollouts.masks[-1], val_rollouts.attn_masks[-1]).detach()
+
+            actor_critic.train()
+            val_rollouts.compute_returns(next_value, args.use_gae, args.gamma,
+                                         args.gae_lambda, args.use_proper_time_limits)
+            val_value_loss, val_action_loss, val_dist_entropy, val_dist_l2 = val_agent.update(val_rollouts,
+                                                                                              attention_update=True)
+            val_rollouts.after_update()
 
         # save for every interval-th episode or for the last epoch
         if (j % args.save_interval == 0 or j == args.continue_from_epoch + num_updates - 1):

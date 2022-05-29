@@ -89,7 +89,7 @@ class PPO():
                 self.optimizer = optim.Adam(self.non_attention_parameters, lr=lr, eps=eps, weight_decay=weight_decay)
         self.attention_policy = attention_policy
 
-        self.optimizer = GradPlot(self.optimizer)
+        # self.optimizer = GradPlot(self.optimizer)
         # self.max_task_grad_norm = max_task_grad_norm
         # self.use_pcgrad = use_pcgrad
         # self.use_testgrad = use_testgrad
@@ -197,7 +197,7 @@ class PPO():
                     action_loss_epoch += action_loss.item()
                     dist_entropy_epoch += dist_entropy.item()
                     dist_l2_epoch += dist_l2.item()
-                # total_loss = torch.stack(task_losses).mean()
+                total_loss = torch.stack(task_losses).mean()
                 self.optimizer.zero_grad()
                 # (value_loss * self.value_loss_coef + action_loss -
                 #  dist_entropy * self.entropy_coef).backward()
@@ -214,8 +214,8 @@ class PPO():
                 # elif self.use_graddrop:
                 #     self.optimizer.pc_backward(task_losses)
                 # else:
-                # total_loss.backward()
-                mean_grad, grads, shapes, F_norms_all, F_norms_gru, F_norms_actor, F_norms_critic, F_norms_cat = self.optimizer.plot_backward(task_losses)
+                total_loss.backward()
+                # mean_grad, grads, shapes, F_norms_all, F_norms_gru, F_norms_actor, F_norms_critic, F_norms_cat = self.optimizer.plot_backward(task_losses)
                 # nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                 #                          self.max_grad_norm)
                 # if self.attention_policy:
@@ -226,9 +226,9 @@ class PPO():
                 #                              self.max_grad_norm)
                 if make_update:
                     self.optimizer.step()
-        last_grad = grads
-        last_mean_grad = mean_grad
-        last_shapes = shapes
+        # last_grad = grads
+        # last_mean_grad = mean_grad
+        # last_shapes = shapes
 
                 # value_loss_epoch += value_loss.item()
                 # action_loss_epoch += action_loss.item()
@@ -242,4 +242,5 @@ class PPO():
         dist_entropy_epoch /= num_updates
         dist_l2_epoch /= num_updates
 
-        return last_mean_grad, last_grad, last_shapes, value_loss_epoch, action_loss_epoch, dist_entropy_epoch, dist_l2_epoch, F_norms_all, F_norms_gru, F_norms_actor, F_norms_critic, F_norms_cat
+        # return last_mean_grad, last_grad, last_shapes, value_loss_epoch, action_loss_epoch, dist_entropy_epoch, dist_l2_epoch, F_norms_all, F_norms_gru, F_norms_actor, F_norms_critic, F_norms_cat
+        return value_loss_epoch, action_loss_epoch, dist_entropy_epoch, dist_l2_epoch

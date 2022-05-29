@@ -334,6 +334,13 @@ class ReplayBufferBandit(object):
         self.masks[self.step + 1].copy_(masks)
         self.step = (self.step + 1) % self.num_steps
 
+    def copy(self, replay_buffer):
+        self.obs.copy_(replay_buffer.obs)
+        self.actions.copy_(replay_buffer.actions)
+        self.rewards.copy_(replay_buffer.rewards)
+        self.masks.copy_(replay_buffer.masks)
+        self.step = replay_buffer.step
+
     def after_update(self):
         self.obs[0].copy_(self.obs[-1])
         self.masks[0].copy_(self.masks[-1])
@@ -345,7 +352,8 @@ class ReplayBufferBandit(object):
             "to be greater than or equal to the number of "
             "dqn mini batches ({}).".format(num_processes, num_env_per_batch))
         num_envs_per_mini_batch = num_processes // num_env_per_batch
-        perm = torch.randperm(num_processes)
+        # perm = torch.randperm(num_processes)
+        perm = torch.tensor([i for i in range(25)])
         end_ind = start_ind + num_steps_per_mini_batch
 
         for ind in perm:

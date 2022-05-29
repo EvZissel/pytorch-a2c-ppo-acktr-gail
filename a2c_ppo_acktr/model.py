@@ -106,8 +106,10 @@ class NNBase(nn.Module):
             for name, param in self.gru.named_parameters():
                 if 'bias' in name:
                     nn.init.constant_(param, 0)
+                    # nn.init.zeros_(param)
                 elif 'weight' in name:
                     nn.init.orthogonal_(param)
+                    # nn.init.eye_(param)
 
     @property
     def is_recurrent(self):
@@ -274,9 +276,10 @@ class MLPAttnBase(NNBase):
 
         self.train()
 
-    def forward(self, inputs, rnn_hxs, masks):
+    def forward(self, inputs, rnn_hxs, masks, attn_masks = None, reuse_masks=False):
         x = inputs
-        x = F.softmax(self.input_attention, dim=0) * x
+        # x = F.softmax(self.input_attention, dim=0) * x
+        x = torch.sigmoid(self.input_attention) * x
 
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
@@ -284,7 +287,7 @@ class MLPAttnBase(NNBase):
         hidden_critic = self.critic(x)
         hidden_actor = self.actor(x)
 
-        return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs
+        return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs, None,  attn_masks
 
 
 class MLPHardAttnBase(NNBase):

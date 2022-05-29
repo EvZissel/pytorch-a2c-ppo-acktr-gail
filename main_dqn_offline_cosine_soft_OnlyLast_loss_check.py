@@ -15,7 +15,6 @@ Example pong command (~900k ts solve):
 
 import argparse
 import math
-import math
 import random
 from copy import deepcopy
 import os
@@ -26,13 +25,14 @@ import numpy as np
 import torch
 import torch.optim as optim
 from helpers_dqn import ReplayBuffer, make_atari, make_gym_env, wrap_deepmind, wrap_pytorch, ReplayBufferBandit
-from models_dqn import DQN, CnnDQN
+from models_dqn import DQN, CnnDQN, DQN_softAttn, DQN_softAttn_L2grad
 from a2c_ppo_acktr.envs import make_vec_envs
 from torch.utils.tensorboard import SummaryWriter
 from a2c_ppo_acktr import utils
 import pandas as pd
-from grad_tools.grad_plot import GradPlotDqn
 import itertools
+from collections import OrderedDict
+import matplotlib.pyplot as plt
 
 USE_CUDA = torch.cuda.is_available()
 if USE_CUDA:
@@ -48,6 +48,10 @@ else:
     dtypelong = torch.LongTensor
 
 
+def _flatten_grad(grads):
+    flatten_grad = torch.cat([g.flatten() for g in grads])
+    return flatten_grad
+
 class Agent:
     def __init__(self, env, q_network, target_q_network):
         self.env = env
@@ -55,84 +59,121 @@ class Agent:
         self.target_q_network = target_q_network
         self.num_actions = env.action_space.n
 
-    def act(self, state, hidden_state, epsilon, masks, attn_mask_ind=None):
+    def act(self, state, hidden_state, epsilon, masks):
         """DQN action - max q-value w/ epsilon greedy exploration."""
         # state = torch.tensor(np.float32(state)).type(dtype).unsqueeze(0)
-        attn_mask = torch.ones(self.env.observation_space.shape[0]).type(dtypelong)
-        # if attn_mask_ind:
-        attn_mask[list(attn_mask_ind)] = torch.zeros(len(attn_mask_ind)).type(dtypelong)
-        attn_mask = 1 - attn_mask
 
-        q_value, rnn_hxs = self.q_network.forward(state, hidden_state, masks, attn_mask)
+        q_value, _, rnn_hxs = self.q_network.forward(state, hidden_state, masks)
         if random.random() > epsilon:
             return q_value.max(1)[1].unsqueeze(-1), rnn_hxs
         return torch.tensor(np.random.randint(self.env.action_space.n, size=q_value.size()[0])).type(dtypelong).unsqueeze(-1), rnn_hxs
 
 
-def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optimizer, gamma, loss_var_coeff, attn_mask_ind=None):
+def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optimizer, gamma, loss_var_coeff, train=True, same_ind=False, start_ind_array=None):
     num_processes = replay_buffer.rewards.size(1)
     num_steps = replay_buffer.rewards.size(0)
     num_steps_per_batch = int(num_steps/num_mini_batch)
 
-    # all_losses =[]
-    start_ind_array = [i for i in range(0, num_steps, num_steps_per_batch)]
-    start_ind_array = random.choices(start_ind_array, k=mini_batch_size)
-    # start_ind = random.choices(start_ind_array, k=1)
+
+    if not same_ind:
+        start_ind_array = [i for i in range(0, num_steps, num_steps_per_batch)]
+        start_ind_array = np.random.choice(start_ind_array, size=mini_batch_size, replace=False)
 
     all_losses = []
+    all_grad_W2 = []
+    all_grad_b2 = []
     for i in range(num_processes):
         all_losses.append(0)
-
-    attn_mask = torch.ones(agent.env.observation_space.shape[0]).type(dtypelong)
-    # if attn_mask_ind:
-    attn_mask[list(attn_mask_ind)] = torch.zeros(len(attn_mask_ind)).type(dtypelong)
-    attn_mask = 1 - attn_mask
+        all_grad_W2.append(0)
+        all_grad_b2.append(0)
 
     for start_ind in start_ind_array:
         data_sampler = replay_buffer.sampler(num_processes, start_ind, num_steps_per_batch)
 
         losses = []
+        grad_W2 = []
+        grad_b2 = []
         recurrent_hidden = torch.zeros(1, agent.q_network.recurrent_hidden_state_size).type(dtypelong)
+        updated_train_params = OrderedDict()
+        updated_val_params = OrderedDict()
+        for name, p in agent.q_network.named_parameters():
+            if 'attention' in name:
+                # p.requires_grad = False
+                updated_val_params[name] = p
+            else:
+                # p.requires_grad = True
+                updated_train_params[name] = p
+
+
         for states, actions, rewards, done in data_sampler:
 
             # double q-learning
             with torch.no_grad():
                     # recurrent_hidden.detach()
-                online_q_values, _ = agent.q_network(states, recurrent_hidden, done, attn_mask)
+                online_q_values, _, _ = agent.q_network(states, recurrent_hidden, done)
                 _, max_indicies = torch.max(online_q_values, dim=1)
-                target_q_values, _ = agent.target_q_network(states, recurrent_hidden, done, attn_mask)
+                target_q_values, _, _ = agent.target_q_network(states, recurrent_hidden, done)
                 next_q_value = target_q_values.gather(1, max_indicies.unsqueeze(1))
 
                 next_q_value = next_q_value * done
                 expected_q_value = (rewards + gamma * next_q_value[1:, :]).squeeze(1)
 
             # Normal DDQN update
-            q_values, _ = agent.q_network(states, recurrent_hidden, done, attn_mask)
+            q_values, out_1, _ = agent.q_network(states, recurrent_hidden, done)
             q_value = q_values[:-1, :].gather(1, actions).squeeze(1)
+            out_1 = out_1[:-1, :]
 
-            losses.append((q_value - expected_q_value.data).pow(2).mean())
+            e_actions = torch.sparse_coo_tensor(torch.cat((actions, torch.tensor([0, 1, 2, 3, 4, 5], device=actions.device).unsqueeze(1)), dim=1).t(),(q_value - expected_q_value.data), (6, 6)).to_dense()
+            batch_grad_b2 = e_actions.mean(1)
+            e_actions = e_actions.t().unsqueeze(2)
+            out_1 = out_1.unsqueeze(1)
+            batch_grad_W2 = torch.matmul(e_actions, out_1).mean(0)
+
+            one_loss = 0.5*(q_value - expected_q_value.data).pow(2).mean()
+            losses.append(one_loss)
+            grad_W2.append(batch_grad_W2)
+            grad_b2.append(batch_grad_b2)
+
+            # grads = torch.autograd.grad(one_loss,
+            #                             updated_train_params.values(),
+            #                             create_graph=create_graph)
 
         # loss = torch.stack(losses)
         # loss = losses.mean(0)
         # all_losses.append(loss)
         for i in range(num_processes):
-            all_losses[i] += losses[i]
+            all_losses[i] += losses[i]/mini_batch_size
+            all_grad_W2[i] += grad_W2[i]/mini_batch_size
+            all_grad_b2[i] += grad_b2[i]/mini_batch_size
+
 
     total_loss = torch.stack(all_losses)
+    total_grad_W2 = torch.stack(all_grad_W2).mean(0)
+    total_grad_b2 = torch.stack(all_grad_b2).mean(0)
+
+    total_grad_L2 = _flatten_grad((total_grad_W2, total_grad_b2))
     total_loss = total_loss.mean() + loss_var_coeff * total_loss.var()
     # optimizer.zero_grad()
     # total_loss.backward()
     # optimizer.step()
 
-    # return total_loss, all_losses.mean(), all_losses.var()
     optimizer.zero_grad()
-    mean_grad, grads, shapes, F_norms_all, F_norms_gru, F_norms_dqn = optimizer.plot_backward(all_losses)
-    optimizer.step()
+    # grads = torch.autograd.grad(total_loss,
+    #                             updated_train_params.values(),
+    #                             create_graph=create_graph)
 
-    return total_loss, grads, shapes, F_norms_all, F_norms_gru, F_norms_dqn
+    if train:
+        total_loss.backward()
+        optimizer.step()
+    grads = None
+    # else:
+    #     grads = torch.autograd.grad(total_loss,
+    #                                 updated_train_params.values(),
+    #                                 create_graph=create_graph)
+    return total_loss, total_grad_L2, grads, start_ind_array
 
 
-def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, num_tasks, attn_mask_ind, **kwargs):
+def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, num_tasks, **kwargs):
 
     eval_envs = eval_envs_dic[env_name]
     locations = eval_locations_dic[env_name]
@@ -148,7 +189,7 @@ def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, 
 
         for t in range(kwargs["steps"]):
             with torch.no_grad():
-                actions, recurrent_hidden = agent.act(obs, recurrent_hidden, epsilon=-1, masks=masks, attn_mask_ind=attn_mask_ind)
+                actions, recurrent_hidden = agent.act(obs, recurrent_hidden, epsilon=-1, masks=masks)
 
             # Observe reward and next obs
             obs, _, done, infos = eval_envs.step(actions.cpu())
@@ -159,7 +200,6 @@ def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, 
             for info in infos:
                 if 'episode' in info.keys():
                     eval_episode_rewards.append(info['episode']['r'])
-
 
     return eval_episode_rewards
 
@@ -185,37 +225,39 @@ def hard_update(q_network, target_q_network):
         new_param = param.data
         t_param.data.copy_(new_param)
 
+def sigmoid(x):
+  return 1 / (1 + math.exp(-x))
+
+sigmoid_v = np.vectorize(sigmoid)
+
 
 def main_dqn(params):
     EVAL_ENVS = {'train_eval': [params.env, params.num_processes],
-                 'test_eval': ['h_bandit-obs-randchoose-v1', 100]}
+                 'valid_eval': [params.val_env, params.num_processes],
+                 'test_eval' : ['h_bandit-obs-randchoose-v1', 100]}
 
     random.seed(params.seed)
     torch.manual_seed(params.seed)
     torch.cuda.manual_seed_all(params.seed)
     np.random.seed(params.seed)
 
-
     device = "cpu"
     if USE_CUDA:
         device = "cuda"
 
-    logdir = 'offline' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes)+ '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
-    if params.rotate:
-        logdir = logdir + '_rotate'
-    if params.zero_ind:
-        logdir = logdir + '_Zero_ind'
+    # logdir = 'offline_soft_OL_one_buffer' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    # if params.rotate:
+    #     logdir = logdir + '_rotate'
+    # if params.zero_ind:
+    #     logdir = logdir + '_Zero_ind'
 
-    if params.rand_obs_loc:
-        logdir = os.path.join('dqn_runs_offline_RandObsLocation', logdir)
-    else:
-        logdir = os.path.join('dqn_runs', logdir)
-    logdir = os.path.join(os.path.expanduser(params.log_dir), logdir)
-    utils.cleanup_log_dir(logdir)
-    summary_writer = SummaryWriter(log_dir=logdir)
-    summary_writer.add_hparams(vars(params), {})
+    # logdir = os.path.join('dqn_runs_offline', logdir)
+    # logdir = os.path.join(os.path.expanduser(params.log_dir), logdir)
+    # utils.cleanup_log_dir(logdir)
+    # summary_writer = SummaryWriter(log_dir=logdir)
+    # summary_writer.add_hparams(vars(params), {})
 
-    print("logdir: " + logdir)
+    # print("logdir: " + logdir)
     for key in vars(params):
         print(key, ':', vars(params)[key])
 
@@ -224,11 +266,11 @@ def main_dqn(params):
         log = [key] + [vars(params)[key]]
         argslog.loc[len(argslog)] = log
 
-    with open(logdir + '/args.csv', 'w') as f:
-        argslog.to_csv(f, index=False)
-
-    logdir_grad = os.path.join(logdir, 'grads')
-    utils.cleanup_log_dir(logdir_grad)
+    # with open(logdir + '/args.csv', 'w') as f:
+    #     argslog.to_csv(f, index=False)
+    #
+    # logdir_grad = os.path.join(logdir, 'grads')
+    # utils.cleanup_log_dir(logdir_grad)
 
     print('making envs...')
     eval_envs_dic = {}
@@ -239,47 +281,72 @@ def main_dqn(params):
     envs = make_vec_envs(params.env, params.seed, params.num_processes, eval_locations_dic['train_eval'],
                          params.gamma, None, device, False, steps=params.task_steps,
                          free_exploration=params.free_exploration, recurrent=params.recurrent_policy,
-                         obs_recurrent=params.obs_recurrent, obs_rand_loc=params.rand_obs_loc, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate)
+                         obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate)
+
+    val_envs = make_vec_envs(params.val_env, params.seed, params.num_processes, eval_locations_dic['valid_eval'],
+                         params.gamma, None, device, False, steps=params.task_steps,
+                         free_exploration=params.free_exploration, recurrent=params.recurrent_policy,
+                         obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate)
+
     for eval_disp_name, eval_env_name in EVAL_ENVS.items():
         eval_envs_dic[eval_disp_name] = make_vec_envs(eval_env_name[0], params.seed, params.num_processes, eval_locations_dic[eval_disp_name],
                                                       None, None, device, True, steps=params.task_steps,
                                                       recurrent=params.recurrent_policy,
-                                                      obs_recurrent=params.obs_recurrent, obs_rand_loc=params.rand_obs_loc, multi_task=True,
+                                                      obs_recurrent=params.obs_recurrent, multi_task=True,
                                                       free_exploration=params.free_exploration, normalize=not params.no_normalize, rotate=params.rotate)
 
-    q_network = DQN(envs.observation_space.shape, envs.action_space.n, params.zero_ind, recurrent=True)
+    q_network = DQN_softAttn_L2grad(envs.observation_space.shape, envs.action_space.n, params.zero_ind, recurrent=True, hidden_size=params.hidden_size)
     target_q_network = deepcopy(q_network)
+    if params.target_hard:
+        target_q_network.target = True
 
     q_network = q_network.to(device)
     target_q_network = target_q_network.to(device)
 
     agent = Agent(envs, q_network, target_q_network)
-    optimizer = optim.Adam(q_network.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
-    optimizer = GradPlotDqn(optimizer)
+    attention_parameters = []
+    non_attention_parameters = []
+    for name, p in q_network.named_parameters():
+        if 'attention' in name:
+            attention_parameters.append(p)
+        else:
+            non_attention_parameters.append(p)
+
+    optimizer = optim.Adam(non_attention_parameters, lr=params.learning_rate, weight_decay=params.weight_decay)
+    # optimizer_val = optim.Adam(attention_parameters, lr=params.learning_rate_val, weight_decay=params.weight_decay)
+
     replay_buffer = ReplayBufferBandit(params.num_steps, params.num_processes, envs.observation_space.shape, envs.action_space)
+    # grad_replay_buffer = ReplayBufferBandit(params.num_steps, params.num_processes, envs.observation_space.shape, envs.action_space)
+    val_replay_buffer = ReplayBufferBandit(params.num_steps, params.num_processes, envs.observation_space.shape, envs.action_space)
 
     # Load previous model
     if (params.continue_from_epoch > 0) and params.save_dir != "":
         save_path = params.save_dir
         q_network_weighs = torch.load(os.path.join(save_path, params.env + "-epoch-{}.pt".format(params.continue_from_epoch)), map_location=device)
         agent.q_network.load_state_dict(q_network_weighs['state_dict'])
-        hard_update(agent.q_network, agent.target_q_network)
-        optimizer.load_state_dict(q_network_weighs['optimizer_state_dict'])
+        agent.target_q_network.load_state_dict(q_network_weighs['target_state_dict'])
+        # hard_update(agent.q_network, agent.target_q_network)
+        # optimizer.load_state_dict(q_network_weighs['optimizer_state_dict'])
 
 
     obs = envs.reset()
     replay_buffer.obs[0].copy_(obs)
     replay_buffer.to(device)
 
+    val_obs = val_envs.reset()
+    val_replay_buffer.obs[0].copy_(val_obs)
+    val_replay_buffer.to(device)
+
     episode_rewards = deque(maxlen=25)
     episode_len = deque(maxlen=25)
+    # val_episode_rewards = deque(maxlen=25)
+    # val_episode_len = deque(maxlen=25)
 
-    losses = []
+    # losses = []
+    # grad_losses = []
+    # val_losses = []
 
-    attn_masks = list(itertools.combinations([i for i in range(envs.observation_space.shape[0])], r=envs.observation_space.shape[0]))
-    attn_mask_ind = attn_masks[0]
-
-    # Collect data
+    # Collect train data
     # recurrent_hidden_states = torch.zeros(params.num_processes, agent.q_network.recurrent_hidden_state_size).type(dtypelong)
     for step in range(params.num_steps):
 
@@ -299,66 +366,85 @@ def main_dqn(params):
 
         replay_buffer.insert(next_obs, actions, reward, masks)
 
-    # Training
-    num_updates = int(
-        params.max_ts  // params.num_processes // params.task_steps // params.mini_batch_size)
-    for ts in range(params.continue_from_epoch, params.continue_from_epoch+num_updates):
-        # Update the q-network & the target network
-        loss, grads, shapes, F_norms_all, F_norms_gru, F_norms_dqn = compute_td_loss(
-            agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, attn_mask_ind=attn_mask_ind
-        )
-        losses.append(loss.data)
+    val_replay_buffer.copy(replay_buffer)
+    val_replay_buffer.obs[:,:,:-2] = val_obs[:,:-2].repeat([replay_buffer.obs.size(0),1,1])
 
+    loss, grads_L2, _, start_ind = compute_td_loss(
+        agent, params.num_mini_batch, 10 * params.mini_batch_size_val, replay_buffer, optimizer,
+        params.gamma, params.loss_var_coeff, train=False
+    )
 
-        if ts % params.target_network_update_f == 0:
-            hard_update(agent.q_network, agent.target_q_network)
+    val_loss, val_grads_L2, _, _ = compute_td_loss(
+        agent, params.num_mini_batch, 10 * params.mini_batch_size_val, val_replay_buffer, optimizer,
+        params.gamma, params.loss_var_coeff, train=False, same_ind=True, start_ind_array=start_ind
+    )
 
-        if (ts % params.save_interval == 0 or ts == params.continue_from_epoch + num_updates- 1):
-            torch.save(
-                {'state_dict': q_network.state_dict(), 'optimizer_state_dict': optimizer.state_dict(),
-                    'step': ts, 'obs_rms': getattr(utils.get_vec_normalize(envs), 'obs_rms', None)},
-                os.path.join(logdir, params.env + "-epoch-{}.pt".format(ts)))
+    Corr_dqn_L2_grad = (grads_L2 * val_grads_L2).sum() / (grads_L2.norm(2) * val_grads_L2.norm(2))
+    print("correlation: {}".format(Corr_dqn_L2_grad))
 
-        if (ts % params.save_grad == 0 or ts == params.continue_from_epoch + num_updates - 1):
-            if ts==0:
-                torch.save({'shapes': shapes}, os.path.join(logdir_grad, params.env + "-epoch-{}-shapes.pt".format(ts)))
-            torch.save({'env {}'.format(i): grads[i] for i in  range(len(grads))}, os.path.join(logdir_grad, params.env + "-epoch-{}-grad.pt".format(ts)))
+    for j in range(8):
+        print("attention number {}".format(j))
 
-        if ts % params.log_every == 0:
-            total_num_steps = (ts+1)*params.num_processes*params.task_steps*params.mini_batch_size
-            out_str = "Iter {}, Timestep {}".format(ts, total_num_steps)
-            if len(episode_rewards) > 1:
-                # out_str += ", Last {} training episodes: mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}".format(len(episode_rewards), np.mean(episode_rewards),
-                #         np.median(episode_rewards), np.min(episode_rewards), np.max(episode_rewards))
-                # summary_writer.add_scalar(f'eval/train episode reward', np.mean(episode_rewards), ts)
-                # summary_writer.add_scalar(f'eval/train episode len', np.mean(episode_len), ts)
+        a_vec = np.linspace(1.0, -90.0, num=10)
+        loss_vec = []
+        val_loss_vec = []
+        corr_vec = []
+        sigmoid_a = sigmoid_v(a_vec)
 
-                eval_r = {}
-                for eval_disp_name, eval_env_name in EVAL_ENVS.items():
-                    eval_r[eval_disp_name] = evaluate(agent, eval_envs_dic, eval_disp_name, eval_locations_dic,
-                                                      params.num_processes,
-                                                      eval_env_name[1],
-                                                      attn_mask_ind,
-                                                      steps=params.task_steps,
-                                                      recurrent=params.recurrent_policy, obs_recurrent=params.obs_recurrent,
-                                                      multi_task=True, free_exploration=params.free_exploration)
+        for i in a_vec:
 
-                    summary_writer.add_scalar(f'eval/{eval_disp_name}', np.mean(eval_r[eval_disp_name]), total_num_steps)
-            if len(losses) > 0:
-                out_str += ", TD Loss: {}".format(losses[-1])
-                summary_writer.add_scalar(f'losses/TD_loss', losses[-1], total_num_steps)
-                # summary_writer.add_scalar(f'losses/mean_loss', mean_loss, total_num_steps)
-                # summary_writer.add_scalar(f'losses/var_loss', var_loss, total_num_steps)
-                summary_writer.add_scalars(f'GradNorms/F_norm', {'env {}'.format(i): F_norms_all[i] for i in range(len(F_norms_all))}, total_num_steps)
-                summary_writer.add_scalars(f'GradNorms/F_norms_gru',{'env {}'.format(i): F_norms_gru[i] for i in range(len(F_norms_gru))}, total_num_steps)
-                summary_writer.add_scalars(f'GradNorms/F_norms_dqn',{'env {}'.format(i): F_norms_dqn[i] for i in range(len(F_norms_dqn))}, total_num_steps)
-            print(out_str)
+            print("a value: {}".format(i))
+            agent.q_network._parameters['input_attention'].requires_grad = False
+            agent.q_network._parameters['input_attention'][j] = i
+            agent.target_q_network._parameters['input_attention'].requires_grad = False
+            agent.target_q_network._parameters['input_attention'][j] = i
+            print("attention {}".format(torch.sigmoid(q_network.input_attention).data))
+
+            loss, grads_L2, _, start_ind = compute_td_loss(
+                agent, params.num_mini_batch, 10 * params.mini_batch_size_val, replay_buffer, optimizer,
+                params.gamma, params.loss_var_coeff, train=False, same_ind=True, start_ind_array=start_ind
+            )
+
+            print("loss: {}".format(loss))
+            loss_vec.append(loss.detach().cpu())
+
+            val_loss, val_grads_L2, _, _ = compute_td_loss(
+                agent, params.num_mini_batch, 10 * params.mini_batch_size_val, val_replay_buffer, optimizer,
+                params.gamma, params.loss_var_coeff, train=False, same_ind=True, start_ind_array=start_ind
+            )
+
+            print("val loss: {}".format(val_loss))
+            val_loss_vec.append(val_loss.detach().cpu())
+
+            Corr_dqn_L2_grad = (grads_L2 * val_grads_L2).sum() / (grads_L2.norm(2) * val_grads_L2.norm(2))
+            print("correlation: {}".format(Corr_dqn_L2_grad))
+            corr_vec.append(Corr_dqn_L2_grad.detach().cpu())
+
+        agent.q_network._parameters['input_attention'][j] = 1.0
+        agent.target_q_network._parameters['input_attention'][j] = 1.0
+
+        plt.plot(sigmoid_a, loss_vec, label='loss')
+        plt.plot(sigmoid_a, val_loss_vec, label='val loss')
+
+        plt.xscale('log')
+        plt.xlabel('sigmoid_a_{}'.format(j))
+        plt.ylabel('loss')
+        plt.legend()
+        plt.show()
+
+        plt.plot(sigmoid_a, corr_vec, label='corr')
+        plt.xscale('log')
+        plt.xlabel('sigmoid_a_{}'.format(j))
+        plt.ylabel('corr')
+        plt.legend()
+        plt.show()
 
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default=None)
+    parser.add_argument('--val-env', type=str, default=None)
     parser.add_argument("--num-processes", type=int, default=25, help='how many envs to use (default: 25)')
     parser.add_argument("--num-steps", type=int, default=5, help='number of forward steps in (default: 5)')
     parser.add_argument("--seed", type=int, default=1, help='random seed (default: 1)')
@@ -373,19 +459,28 @@ if __name__ == "__main__":
     parser.add_argument("--save-dir", default='./trained_models/', help='directory to save agent logs (default: ./trained_models/)')
     parser.add_argument("--num-mini-batch", type=int, default=32, help='number of mini-batches (default: 32)')
     parser.add_argument("--mini-batch-size", type=int, default=32, help='size of mini-batches (default: 32)')
+    parser.add_argument("--mini-batch-size-val", type=int, default=32, help='size of mini-batches (default: 32)')
     # parser.add_argument("--CnnDQN", action="store_true")
     parser.add_argument("--learning_rate", type=float, default=0.00001)
-    parser.add_argument("--weight_decay", type=float, default=0.0)
+    parser.add_argument("--learning_rate_val", type=float, default=0.1)
+    parser.add_argument("--num_val_updates", type=int, default=1)
     # parser.add_argument("--target_update_rate", type=float, default=0.1)
     # parser.add_argument("--replay_size", type=int, default=100000)
     parser.add_argument("--save-interval",type=int,default=1000, help='save interval, one save per n updates (default: 1000)')
-    parser.add_argument("--save-grad",type=int,default=1000, help='save interval, one save per n updates (default: 1000)')
+    # parser.add_argument("--save-grad",type=int,default=1000, help='save gradient, one save per n updates (default: 1000)')
+    parser.add_argument("--max-grad-sum",type=int,default=1000, help='max gradient sum, one save per n updates (default: 1000)')
     parser.add_argument("--max_ts", type=int, default=1400000)
     # parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--log_every", type=int, default=1)
     parser.add_argument("--target_network_update_f", type=int, default=10000)
     parser.add_argument("--loss_var_coeff", type=float, default=0.0)
+    parser.add_argument("--loss_corr_coeff", type=float, default=0.0)
+    parser.add_argument("--loss_corr_coeff_update", type=float, default=1.0)
     parser.add_argument("--zero_ind", action='store_true', default=False)
-    parser.add_argument("--rand_obs_loc", action='store_true', default=False)
+    parser.add_argument("--weight_decay", type=float, default=0.0)
+    parser.add_argument("--target_hard", action='store_true', default=False)
+    parser.add_argument("--update_target", action='store_true', default=False)
+    parser.add_argument("--hidden_size", type=int, default=64)
+    parser.add_argument("--max_attn_grad_norm", type=float, default=20.0)
     main_dqn(parser.parse_args())
