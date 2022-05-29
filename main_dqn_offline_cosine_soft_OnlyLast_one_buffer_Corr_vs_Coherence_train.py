@@ -407,7 +407,7 @@ def main_dqn(params):
     num_updates = int(
         params.max_ts  // params.num_processes // params.task_steps // params.mini_batch_size)
 
-    min_corr = torch.tensor(0.9)
+    min_corr = torch.tensor(0.99)
     epsilon = 1e-6
 
     alpha = params.loss_corr_coeff_update
@@ -425,12 +425,12 @@ def main_dqn(params):
 
         # compute validation gradient
         loss, grads_L2, start_ind_array = compute_td_loss(
-            agent, params.num_mini_batch, 10*params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, train=False,
+            agent, params.num_mini_batch, params.mini_batch_size_val, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, train=False,
         )
         losses.append(loss.data)
 
         val_loss, val_grads_L2, _ = compute_td_loss(
-            agent, params.num_mini_batch, 10*params.mini_batch_size, val_replay_buffer, optimizer, params.gamma, params.loss_var_coeff, train=False,
+            agent, params.num_mini_batch, params.mini_batch_size_val, val_replay_buffer, optimizer, params.gamma, params.loss_var_coeff, train=False, same_ind=True, start_ind_array=start_ind_array
         )
         val_losses.append(val_loss.data)
 
@@ -443,12 +443,13 @@ def main_dqn(params):
 
         train_grads_L2_Corr = grads_L2.mean(0)
         val_grads_L2_Corr = val_grads_L2.mean(0)
-        Corr_dqn_L2_grad_mean = (train_grads_L2_Corr * val_grads_L2_Corr).sum() / (train_grads_L2_Corr.norm(2) * val_grads_L2_Corr.norm(2))
+        Corr_dqn_L2_grad_mean = (train_grads_L2_Corr * val_grads_L2_Corr).sum() / (train_grads_L2_Corr.norm(2) * val_grads_L2_Corr.norm(2) + epsilon)
         print("correlation mean: {}".format(Corr_dqn_L2_grad_mean))
         print("correlation mean denominator: {}".format(train_grads_L2_Corr.norm(2) * val_grads_L2_Corr.norm(2)))
-        if ts==0 or (train_grads_L2_Corr.norm(2) * val_grads_L2_Corr.norm(2) > epsilon):
-            last_Corr = Corr_dqn_L2_grad_mean
-        print("last correlation mean: {}".format(last_Corr))
+        # if ts==0 or (train_grads_L2_Corr.norm(2) * val_grads_L2_Corr.norm(2) > epsilon):
+        #     last_Corr = Corr_dqn_L2_grad_mean
+        # print("last correlation mean: {}".format(last_Corr))
+
         # trajectory_len = grads_L2.size(0)/params.mini_batch_size
         # grads_L2_mean_trajectory = grads_L2[0:int(trajectory_len),:,:].mean(0).unsqueeze(0)
         # grads_L2_sum_mean_trajectory = grads_sum_L2[0:int(trajectory_len),:].mean(0).unsqueeze(0)
@@ -482,6 +483,59 @@ def main_dqn(params):
         Coherence_val = ((val_grads_L2 * (val_grads_L2_sum.unsqueeze(0))).sum()) / (val_grads_L2_sum_squre + epsilon)
         print("Coherence val: {}".format(Coherence_val))
         print("Coherence val denominator: {}".format(val_grads_L2_sum_squre))
+
+        if (Corr_dqn_L2_grad_mean <  min_corr):
+
+            iter = 0
+            while (Corr_dqn_L2_grad_mean < min_corr) and iter < 200:
+                iter += 1
+                optimizer_val.zero_grad()
+                updated_train_params = OrderedDict()
+                updated_val_params = OrderedDict()
+                for name, p in agent.q_network.named_parameters():
+                    if 'attention' in name:
+                        # p.requires_grad = True
+                        updated_val_params[name] = p
+                    else:
+                        # p.requires_grad = False
+                        updated_train_params[name] = p
+
+                # compute validation gradient
+                loss, grads_L2, start_ind_array = compute_td_loss(
+                    agent, params.num_mini_batch, params.mini_batch_size_val, replay_buffer, optimizer, params.gamma,
+                    params.loss_var_coeff, train=False
+                )
+                losses.append(loss.data)
+
+                val_loss, val_grads_L2, _ = compute_td_loss(
+                    agent, params.num_mini_batch, params.mini_batch_size_val, val_replay_buffer, optimizer, params.gamma,
+                    params.loss_var_coeff, train=False, same_ind=True, start_ind_array=start_ind_array
+                )
+                val_losses.append(val_loss.data)
+
+                grads_L2 = grads_L2.resize(grads_L2.size(0) * grads_L2.size(1), grads_L2.size(2))
+                val_grads_L2 = val_grads_L2.resize(val_grads_L2.size(0) * val_grads_L2.size(1), val_grads_L2.size(2))
+
+                train_grads_L2_Corr = grads_L2.mean(0)
+                val_grads_L2_Corr = val_grads_L2.mean(0)
+                Corr_dqn_L2_grad_mean = (train_grads_L2_Corr * val_grads_L2_Corr).sum() / (train_grads_L2_Corr.norm(2) * val_grads_L2_Corr.norm(2) + epsilon)
+
+                attn_grads_Corr_dqn_L2_grad = torch.autograd.grad(Corr_dqn_L2_grad_mean,
+                                                                      updated_val_params.values(),
+                                                                      create_graph=False)
+
+
+                agent.q_network.input_attention._grad = - loss_corr_coeff * attn_grads_Corr_dqn_L2_grad[0]
+
+                optimizer_val.step()
+
+                print("val iter {} update attention correlation {}".format(iter, attn_grads_Corr_dqn_L2_grad))
+                print("correlation mean denominator: {}".format(train_grads_L2_Corr.norm(2) * val_grads_L2_Corr.norm(2)))
+                print("target attention {}".format(torch.sigmoid(target_q_network.input_attention).data))
+                print("attention {}".format(torch.sigmoid(q_network.input_attention).data))
+                print("minus_grads_Corr_dqn_L2_grad {}".format(-loss_corr_coeff * attn_grads_Corr_dqn_L2_grad[0]))
+
+
 
         total_num_steps = (ts + 1) * params.num_processes * params.task_steps * params.mini_batch_size
 
