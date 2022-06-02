@@ -31,6 +31,7 @@ from a2c_ppo_acktr.envs import make_vec_envs
 from torch.utils.tensorboard import SummaryWriter
 from a2c_ppo_acktr import utils
 import pandas as pd
+from grad_tools.grad_coherence import GradCoherenceDqn
 import itertools
 from collections import OrderedDict
 
@@ -83,6 +84,7 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
     # all_grad_W2 = []
     # all_grad_b2 = []
     grad_L2_states_all = 0
+    out1_states_all = 0
     # grad_L2_states_mean_all = 0
     # grad_L2_states_sum_all = 0
     # grad_L2_states_sum_squre_all = 0
@@ -100,6 +102,7 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
         # grad_W2 = []
         # grad_b2 = []
         grad_L2_states = 0
+        out1_states = 0
         # states_all_b = 0
         recurrent_hidden = torch.zeros(1, agent.q_network.recurrent_hidden_state_size).type(dtypelong)
 
@@ -141,9 +144,11 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
             # states_all_b += torch.sigmoid(agent.q_network.input_attention) *states
             if (len(losses)==1):
                 grad_L2_states = grad_L2_states_b
+                out1_states = out_1
                 # states_all = torch.sigmoid(agent.q_network.input_attention) *states
             else:
                 grad_L2_states = torch.cat((grad_L2_states, grad_L2_states_b), dim=1)
+                out1_states = torch.cat((out1_states, out_1), dim=1)
                 # states_all = torch.cat((states_all, torch.sigmoid(agent.q_network.input_attention) *states), dim=0)
 
             # grads = torch.autograd.grad(one_loss,
@@ -163,12 +168,14 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
         # grad_L2_states_sum_squre = (grad_L2_states**2).sum(1)
         if start_ind == start_ind_array[0] :
             grad_L2_states_all = grad_L2_states
+            out1_states_all = out1_states
             # grad_L2_states_mean_all = grad_L2_states_mean
             # grad_L2_states_sum_all = grad_L2_states_sum
             # grad_L2_states_sum_squre_all = grad_L2_states_sum_squre
             # states_all = states_all_b
         else:
             grad_L2_states_all = torch.cat((grad_L2_states_all, grad_L2_states), dim=0)
+            out1_states_all = torch.cat((out1_states_all, out1_states), dim=0)
             # grad_L2_states_mean_all = torch.cat((grad_L2_states_mean_all, grad_L2_states_mean), dim=0)
             # grad_L2_states_sum_all = torch.cat((grad_L2_states_sum_all, grad_L2_states_sum), dim=0)
             # grad_L2_states_sum_squre_all = torch.cat((grad_L2_states_sum_squre_all, grad_L2_states_sum_squre), dim=0)
@@ -192,20 +199,22 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
     # total_loss.backward()
     # optimizer.step()
 
-    optimizer.zero_grad()
+    # optimizer.zero_grad()
     # grads = torch.autograd.grad(total_loss,
     #                             updated_train_params.values(),
     #                             create_graph=create_graph)
 
+    optimizer.zero_grad()
+    mean_flat_grad, grads, shapes, coherence = optimizer.plot_backward(all_losses)
+
     if train:
-        total_loss.backward()
         optimizer.step()
     # grads = None
     # else:
     #     grads = torch.autograd.grad(total_loss,
     #                                 updated_train_params.values(),
     #                                 create_graph=create_graph)
-    return total_loss, grad_L2_states_all, start_ind_array
+    return total_loss, grad_L2_states_all, out1_states_all, mean_flat_grad, grads, shapes, coherence, start_ind_array
 
 
 def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, num_tasks, **kwargs):
@@ -343,6 +352,7 @@ def main_dqn(params):
             non_attention_parameters.append(p)
 
     optimizer = optim.Adam(non_attention_parameters, lr=params.learning_rate, weight_decay=params.weight_decay)
+    optimizer = GradCoherenceDqn(optimizer)
     optimizer_val = optim.Adam(attention_parameters, lr=params.learning_rate_val, weight_decay=params.weight_decay)
     # scheduler = MultiStepLR(optimizer_val, milestones=[30, 80], gamma=0.1)
 
@@ -370,8 +380,8 @@ def main_dqn(params):
 
     episode_rewards = deque(maxlen=25)
     episode_len = deque(maxlen=25)
-    # val_episode_rewards = deque(maxlen=25)
-    # val_episode_len = deque(maxlen=25)
+    val_episode_rewards = deque(maxlen=25)
+    val_episode_len = deque(maxlen=25)
 
     losses = []
     # grad_losses = []
@@ -382,8 +392,8 @@ def main_dqn(params):
     for step in range(params.num_steps):
 
         # actions, recurrent_hidden_states = agent.act(replay_buffer.obs[step], recurrent_hidden_states, epsilon, replay_buffer.masks[step])
-        actions = torch.tensor(np.random.randint(agent.num_actions, size=params.num_processes)).type(dtypelong).unsqueeze(-1)
-        # actions = torch.tensor(np.random.randint(agent.num_actions) * np.ones(params.num_processes)).type(dtypelong).unsqueeze(-1)
+        # actions = torch.tensor(np.random.randint(agent.num_actions, size=params.num_processes)).type(dtypelong).unsqueeze(-1)
+        actions = torch.tensor(np.random.randint(agent.num_actions) * np.ones(params.num_processes)).type(dtypelong).unsqueeze(-1)
 
         next_obs, reward, done, infos = envs.step(actions.cpu())
 
@@ -398,10 +408,28 @@ def main_dqn(params):
 
         replay_buffer.insert(next_obs, actions, reward, masks)
 
+    # Collect validation data
+    for step in range(params.num_steps):
 
-    val_replay_buffer.copy(replay_buffer)
-    # replay_buffer.obs[:,:,:-2] = obs[:,:-2].repeat([replay_buffer.obs.size(0),1,1])
-    val_replay_buffer.obs[:,:,:-2] = val_obs[:,:-2].repeat([replay_buffer.obs.size(0),1,1])
+        # val_actions = torch.tensor(np.random.randint(agent.num_actions, size=params.num_processes)).type(dtypelong).unsqueeze(-1)
+        val_actions = torch.tensor(np.random.randint(agent.num_actions) * np.ones(params.num_processes)).type(dtypelong).unsqueeze(-1)
+
+        val_next_obs, val_reward, val_done, val_infos = val_envs.step(val_actions.cpu())
+
+
+        for info in val_infos:
+            if 'episode' in info.keys():
+                val_episode_rewards.append(info['episode']['r'])
+                val_episode_len.append(info['episode']['l'])
+
+        val_masks = torch.FloatTensor(
+            [[0.0] if val_done_ else [1.0] for val_done_ in val_done])
+
+        val_replay_buffer.insert(val_next_obs, val_actions, val_reward, val_masks)
+
+    # val_replay_buffer.copy(replay_buffer)
+    # # replay_buffer.obs[:,:,:-2] = obs[:,:-2].repeat([replay_buffer.obs.size(0),1,1])
+    # val_replay_buffer.obs[:,:,:-2] = val_obs[:,:-2].repeat([replay_buffer.obs.size(0),1,1])
 
     # Training
     num_updates = int(
@@ -412,43 +440,84 @@ def main_dqn(params):
 
     alpha = params.loss_corr_coeff_update
     loss_corr_coeff = params.loss_corr_coeff
-    last_Corr = 0
+    # last_Corr = 0
+    grads_sum10 = []
+    grads_sum100 = []
+    val_grads_sum10 = []
+    val_grads_sum100 = []
+    mean_grads_sum10 = deque(maxlen=10)
+    mean_grads_sum100 = deque(maxlen=100)
+    val_mean_grads_sum10 = deque(maxlen=10)
+    val_mean_grads_sum100 = deque(maxlen=100)
+    for i in range(params.num_processes):
+        grads_sum10.append(deque(maxlen=10))
+        grads_sum100.append(deque(maxlen=100))
+        val_grads_sum10.append(deque(maxlen=10))
+        val_grads_sum100.append(deque(maxlen=100))
+
 
     for ts in range(params.continue_from_epoch, params.continue_from_epoch+num_updates):
         # Update the q-network & the target network
 
         #### Update Theta #####
-        loss, grads_L2, start_ind_array = compute_td_loss(
+        loss, _, _, _, _, _, _,start_ind_array = compute_td_loss(
             agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, train=True,
         )
         losses.append(loss.data)
 
         # compute validation gradient
-        loss, grads_L2, start_ind_array = compute_td_loss(
-            agent, params.num_mini_batch, 10*params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, train=False,
+        loss, grads_L2, out1, mean_flat_grad, grads, shapes, coherence, start_ind_array = compute_td_loss(
+            agent, params.num_mini_batch, params.mini_batch_size_val, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, train=False,
         )
         losses.append(loss.data)
 
-        val_loss, val_grads_L2, _ = compute_td_loss(
-            agent, params.num_mini_batch, 10*params.mini_batch_size, val_replay_buffer, optimizer, params.gamma, params.loss_var_coeff, train=False,
+        val_loss, val_grads_L2, val_out1, val_mean_flat_grad, val_grads, val_shapes, val_coherence, _ = compute_td_loss(
+            agent, params.num_mini_batch, params.mini_batch_size_val, val_replay_buffer, optimizer, params.gamma, params.loss_var_coeff, train=False,
         )
         val_losses.append(val_loss.data)
 
-        # Corr_dqn_L2_grad = 0
-        # for i in range(grads_L2.size(0)):
-        #     Corr_dqn_L2_grad += ((grads_L2[i] * val_grads_L2[i]).sum() / (grads_L2[i].norm(2) * val_grads_L2[i].norm(2)))/grads_L2.size(0)
+        # compute validation gradient batch 2
+        loss_b2, grads_L2_b2, out1_b2, mean_flat_grad_b2, grads_b2, shapes_b2, coherence_b2, start_ind_array_b2 = compute_td_loss(
+            agent, params.num_mini_batch, params.mini_batch_size_val2, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, train=False,
+        )
+        losses.append(loss.data)
+
+        val_loss_b2, val_grads_L2_b2, val_out1_b2, val_mean_flat_grad_b2, val_grads_b2, val_shapes_b2, val_coherence_b2, _ = compute_td_loss(
+            agent, params.num_mini_batch, params.mini_batch_size_val2, val_replay_buffer, optimizer, params.gamma, params.loss_var_coeff, train=False,
+        )
+        val_losses.append(val_loss.data)
+
 
         grads_L2 = grads_L2.resize(grads_L2.size(0) * grads_L2.size(1), grads_L2.size(2))
         val_grads_L2 = val_grads_L2.resize(val_grads_L2.size(0) * val_grads_L2.size(1), val_grads_L2.size(2))
 
+        out1 = out1.resize(out1.size(0) * out1.size(1), out1.size(2))
+        val_out1 = val_out1.resize(val_out1.size(0) * val_out1.size(1), val_out1.size(2))
+
         train_grads_L2_Corr = grads_L2.mean(0)
         val_grads_L2_Corr = val_grads_L2.mean(0)
         Corr_dqn_L2_grad_mean = (train_grads_L2_Corr * val_grads_L2_Corr).sum() / (train_grads_L2_Corr.norm(2) * val_grads_L2_Corr.norm(2))
-        print("correlation mean: {}".format(Corr_dqn_L2_grad_mean))
-        print("correlation mean denominator: {}".format(train_grads_L2_Corr.norm(2) * val_grads_L2_Corr.norm(2)))
-        if ts==0 or (train_grads_L2_Corr.norm(2) * val_grads_L2_Corr.norm(2) > epsilon):
-            last_Corr = Corr_dqn_L2_grad_mean
-        print("last correlation mean: {}".format(last_Corr))
+        print("correlation mean L2: {}".format(Corr_dqn_L2_grad_mean))
+        print("correlation mean denominator  L2: {}".format(train_grads_L2_Corr.norm(2) * val_grads_L2_Corr.norm(2)))
+        mean_grad = optimizer._unflatten_grad(mean_flat_grad, shapes)
+
+        train_out1_Corr = out1.mean(0)
+        val_out1_Corr = val_out1.mean(0)
+        Corr_dqn_out1_mean = (train_out1_Corr * val_out1_Corr).sum() / (train_out1_Corr.norm(2) * val_out1_Corr.norm(2))
+
+        mean_grads_sum10.append(mean_flat_grad)
+        mean_grads_sum100.append(mean_flat_grad)
+        val_mean_grads_sum10.append(val_mean_flat_grad)
+        val_mean_grads_sum100.append(val_mean_flat_grad)
+        for i in range(params.num_processes):
+            grads_sum10[i].append(grads[i])
+            grads_sum100[i].append(grads[i])
+            val_grads_sum10[i].append(val_grads[i])
+            val_grads_sum100[i].append(val_grads[i])
+
+        # if ts==0 or (train_grads_L2_Corr.norm(2) * val_grads_L2_Corr.norm(2) > epsilon):
+        #     last_Corr = Corr_dqn_L2_grad_mean
+        # print("last correlation mean: {}".format(last_Corr))
         # trajectory_len = grads_L2.size(0)/params.mini_batch_size
         # grads_L2_mean_trajectory = grads_L2[0:int(trajectory_len),:,:].mean(0).unsqueeze(0)
         # grads_L2_sum_mean_trajectory = grads_sum_L2[0:int(trajectory_len),:].mean(0).unsqueeze(0)
@@ -469,6 +538,7 @@ def main_dqn(params):
         #             states_all[i].norm(2) * val_states_all[i].norm(2))) / states_all.size(0)
 
         # grads_L2_mean_trajectory = grads_L2_mean_trajectory.resize(params.mini_batch_size*params.num_processes,grads_L2_mean_trajectory.size(2))
+
         grads_L2_sum = grads_L2.sum(0)
         grads_L2_sum_squre = (grads_L2**2).sum()
 
@@ -482,6 +552,110 @@ def main_dqn(params):
         Coherence_val = ((val_grads_L2 * (val_grads_L2_sum.unsqueeze(0))).sum()) / (val_grads_L2_sum_squre + epsilon)
         print("Coherence val: {}".format(Coherence_val))
         print("Coherence val denominator: {}".format(val_grads_L2_sum_squre))
+        val_mean_grad = optimizer._unflatten_grad(val_mean_flat_grad, shapes)
+
+        mean_grad_sum10_sum = optimizer._unflatten_grad(sum(mean_grads_sum10), shapes)
+        mean_grad_sum100_sum = optimizer._unflatten_grad(sum(mean_grads_sum100), shapes)
+
+        val_mean_grad_sum10_sum = optimizer._unflatten_grad(sum(val_mean_grads_sum10), val_shapes)
+        val_mean_grad_sum100_sum = optimizer._unflatten_grad(sum(val_mean_grads_sum100), val_shapes)
+
+        cosine_layers = []
+        cosine_layers_sum10 = []
+        cosine_layers_sum100 = []
+        for i in range(len(mean_grad)):
+            mean_grad_i = optimizer._flatten_grad(mean_grad[i])
+            val_mean_grad_i = optimizer._flatten_grad(val_mean_grad[i])
+            cosine_layers.append((mean_grad_i * val_mean_grad_i).sum() / (mean_grad_i.norm(2) * val_mean_grad_i.norm(2)))
+
+            mean_grad_i_10 = optimizer._flatten_grad(mean_grad_sum10_sum[i])
+            val_mean_grad_i_10 = optimizer._flatten_grad(val_mean_grad_sum10_sum[i])
+            cosine_layers_sum10.append((mean_grad_i_10 * val_mean_grad_i_10).sum() / (mean_grad_i_10.norm(2) * val_mean_grad_i_10.norm(2)))
+
+            mean_grad_i_100 = optimizer._flatten_grad(mean_grad_sum100_sum[i])
+            val_mean_grad_i_100 = optimizer._flatten_grad(val_mean_grad_sum100_sum[i])
+            cosine_layers_sum100.append((mean_grad_i_100 * val_mean_grad_i_100).sum() / (mean_grad_i_100.norm(2) * val_mean_grad_i_100.norm(2)))
+
+        coherence_sum10 = []
+        coherence_sum100 = []
+        val_coherence_sum10 = []
+        val_coherence_sum100 = []
+        g10_sum = []
+        g100_sum = []
+        g10_sum_squared = []
+        g100_sum_squared = []
+        val_g10_sum = []
+        val_g100_sum = []
+        val_g10_sum_squared = []
+        val_g100_sum_squared = []
+        for i in range(len(mean_grad)):
+            g10_sum.append(0)
+            g100_sum.append(0)
+            g10_sum_squared.append(0)
+            g100_sum_squared.append(0)
+            coherence_sum10.append(0)
+            coherence_sum100.append(0)
+
+            val_g10_sum.append(0)
+            val_g100_sum.append(0)
+            val_g10_sum_squared.append(0)
+            val_g100_sum_squared.append(0)
+            val_coherence_sum10.append(0)
+            val_coherence_sum100.append(0)
+        for i in range(len(grads_sum10)):
+            g_10 = optimizer._unflatten_grad(sum(grads_sum10[i]), shapes)
+            g_100 = optimizer._unflatten_grad(sum(grads_sum100[i]), shapes)
+            val_g_10 = optimizer._unflatten_grad(sum(val_grads_sum10[i]), val_shapes)
+            val_g_100 = optimizer._unflatten_grad(sum(val_grads_sum100[i]), val_shapes)
+
+
+            for i in range(len(g_10)):
+                g10_sum[i] += g_10[i]
+                g100_sum[i] += g_100[i]
+                g10_sum_squared[i] += (g_10[i]**2).sum()
+                g100_sum_squared[i] += (g_100[i]**2).sum()
+
+                val_g10_sum[i] += val_g_10[i]
+                val_g100_sum[i] += val_g_100[i]
+                val_g10_sum_squared[i] += (val_g_10[i]**2).sum()
+                val_g100_sum_squared[i] += (val_g_100[i]**2).sum()
+
+        for i in range(len(grads_sum10)):
+            g_10 = optimizer._unflatten_grad(sum(grads_sum10[i]), shapes)
+            g_100 = optimizer._unflatten_grad(sum(grads_sum100[i]), shapes)
+            val_g_10 = optimizer._unflatten_grad(sum(val_grads_sum10[i]), val_shapes)
+            val_g_100 = optimizer._unflatten_grad(sum(val_grads_sum100[i]), val_shapes)
+
+            for i in range(len(g_10)):
+                coherence_sum10[i] += ((g_10[i]*g10_sum[i]).sum())/g10_sum_squared[i]
+                coherence_sum100[i] += ((g_100[i]*g10_sum[i]).sum())/g100_sum_squared[i]
+
+                val_coherence_sum10[i] += ((val_g_10[i]*val_g10_sum[i]).sum())/val_g10_sum_squared[i]
+                val_coherence_sum100[i] += ((val_g_100[i]*val_g10_sum[i]).sum())/val_g100_sum_squared[i]
+
+        ##### batch 2 #####
+        grads_L2_b2 = grads_L2_b2.resize(grads_L2_b2.size(0) * grads_L2_b2.size(1), grads_L2_b2.size(2))
+        val_grads_L2_b2 = val_grads_L2_b2.resize(val_grads_L2_b2.size(0) * val_grads_L2_b2.size(1), val_grads_L2_b2.size(2))
+
+        out1_b2 = out1_b2.resize(out1_b2.size(0) * out1_b2.size(1), out1_b2.size(2))
+        val_out1_b2 = val_out1_b2.resize(val_out1_b2.size(0) * val_out1_b2.size(1), val_out1_b2.size(2))
+
+        train_grads_L2_Corr_b2 = grads_L2_b2.mean(0)
+        val_grads_L2_Corr_b2 = val_grads_L2_b2.mean(0)
+        Corr_dqn_L2_grad_mean_b2 = (train_grads_L2_Corr_b2 * val_grads_L2_Corr_b2).sum() / (train_grads_L2_Corr_b2.norm(2) * val_grads_L2_Corr_b2.norm(2))
+        mean_grad_b2 = optimizer._unflatten_grad(mean_flat_grad_b2, shapes_b2)
+
+        train_out1_Corr_b2 = out1_b2.mean(0)
+        val_out1_Corr_b2 = val_out1_b2.mean(0)
+        Corr_dqn_out1_mean_b2 = (train_out1_Corr_b2 * val_out1_Corr_b2).sum() / (train_out1_Corr_b2.norm(2) * val_out1_Corr_b2.norm(2))
+
+        val_mean_grad_b2 = optimizer._unflatten_grad(val_mean_flat_grad_b2, shapes)
+        cosine_layers_b2 = []
+        for i in range(len(mean_grad_b2)):
+            mean_grad_i_b2 = optimizer._flatten_grad(mean_grad_b2[i])
+            val_mean_grad_i_b2 = optimizer._flatten_grad(val_mean_grad_b2[i])
+            cosine_layers_b2.append((mean_grad_i_b2 * val_mean_grad_i_b2).sum() / (mean_grad_i_b2.norm(2) * val_mean_grad_i_b2.norm(2)))
+
 
         total_num_steps = (ts + 1) * params.num_processes * params.task_steps * params.mini_batch_size
 
@@ -520,9 +694,29 @@ def main_dqn(params):
             print(out_str)
 
             summary_writer.add_scalar(f'Correlation_grad_vec/Corr_dqn_L2_grad', Corr_dqn_L2_grad_mean, total_num_steps)
-            summary_writer.add_scalar(f'Correlation_grad_vec/Last_Corr_dqn_L2_grad', last_Corr, total_num_steps)
+            summary_writer.add_scalar(f'Correlation_grad_vec/Last_Corr_dqn_out1_grad', Corr_dqn_out1_mean, total_num_steps)
             summary_writer.add_scalar(f'Correlation_grad_vec/Coherence_train_L2_grad', Coherence_train, total_num_steps)
             summary_writer.add_scalar(f'Correlation_grad_vec/Coherence_val_L2_grad', Coherence_val, total_num_steps)
+
+            summary_writer.add_scalar(f'Correlation_grad_vec/Corr_dqn_L2_grad_b2', Corr_dqn_L2_grad_mean_b2, total_num_steps)
+            summary_writer.add_scalar(f'Correlation_grad_vec/Last_Corr_dqn_out1_grad_b2', Corr_dqn_out1_mean_b2, total_num_steps)
+
+            for i in range(len(coherence)):
+                summary_writer.add_scalar(f'Coherence/{i}', coherence[i], total_num_steps)
+                summary_writer.add_scalar(f'Coherence_val/{i}', val_coherence[i], total_num_steps)
+                summary_writer.add_scalar(f'Correlation/{i}', cosine_layers[i], total_num_steps)
+
+                summary_writer.add_scalar(f'Coherence_sum10/{i}', coherence_sum10[i], total_num_steps)
+                summary_writer.add_scalar(f'Coherence_val_sum10/{i}', val_coherence_sum10[i], total_num_steps)
+                summary_writer.add_scalar(f'Correlation_sum10/{i}', cosine_layers_sum10[i], total_num_steps)
+
+                summary_writer.add_scalar(f'Coherence_sum100/{i}', coherence_sum100[i], total_num_steps)
+                summary_writer.add_scalar(f'Coherence_val_sum100/{i}', val_coherence_sum100[i], total_num_steps)
+                summary_writer.add_scalar(f'Correlation_sum100/{i}', cosine_layers_sum100[i], total_num_steps)
+
+                summary_writer.add_scalar(f'Coherence_b2/{i}', coherence_b2[i], total_num_steps)
+                summary_writer.add_scalar(f'Coherence_val_b2/{i}', val_coherence_b2[i], total_num_steps)
+                summary_writer.add_scalar(f'Correlation_b2/{i}', cosine_layers_b2[i], total_num_steps)
 
 
 
@@ -545,6 +739,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-mini-batch", type=int, default=32, help='number of mini-batches (default: 32)')
     parser.add_argument("--mini-batch-size", type=int, default=32, help='size of mini-batches (default: 32)')
     parser.add_argument("--mini-batch-size-val", type=int, default=32, help='size of mini-batches (default: 32)')
+    parser.add_argument("--mini-batch-size-val2", type=int, default=32, help='size of mini-batches (default: 32)')
     # parser.add_argument("--CnnDQN", action="store_true")
     parser.add_argument("--learning_rate", type=float, default=0.00001)
     parser.add_argument("--learning_rate_val", type=float, default=0.1)

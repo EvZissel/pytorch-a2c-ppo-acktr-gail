@@ -353,7 +353,7 @@ class ReplayBufferBandit(object):
             "dqn mini batches ({}).".format(num_processes, num_env_per_batch))
         num_envs_per_mini_batch = num_processes // num_env_per_batch
         # perm = torch.randperm(num_processes)
-        perm = torch.tensor([i for i in range(25)])
+        perm = torch.tensor([i for i in range(num_processes)])
         end_ind = start_ind + num_steps_per_mini_batch
 
         for ind in perm:

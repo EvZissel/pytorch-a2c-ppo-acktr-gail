@@ -382,8 +382,8 @@ def main_dqn(params):
     for step in range(params.num_steps):
 
         # actions, recurrent_hidden_states = agent.act(replay_buffer.obs[step], recurrent_hidden_states, epsilon, replay_buffer.masks[step])
-        actions = torch.tensor(np.random.randint(agent.num_actions, size=params.num_processes)).type(dtypelong).unsqueeze(-1)
-        # actions = torch.tensor(np.random.randint(agent.num_actions) * np.ones(params.num_processes)).type(dtypelong).unsqueeze(-1)
+        # actions = torch.tensor(np.random.randint(agent.num_actions, size=params.num_processes)).type(dtypelong).unsqueeze(-1)
+        actions = torch.tensor(np.random.randint(agent.num_actions) * np.ones(params.num_processes)).type(dtypelong).unsqueeze(-1)
 
         next_obs, reward, done, infos = envs.step(actions.cpu())
 
@@ -407,7 +407,7 @@ def main_dqn(params):
     num_updates = int(
         params.max_ts  // params.num_processes // params.task_steps // params.mini_batch_size)
 
-    min_corr = torch.tensor(0.99)
+    min_corr = torch.tensor(0.9)
     epsilon = 1e-6
 
     alpha = params.loss_corr_coeff_update
@@ -529,7 +529,7 @@ def main_dqn(params):
 
                 optimizer_val.step()
 
-                print("val iter {} update attention correlation {}".format(iter, attn_grads_Corr_dqn_L2_grad))
+                print("val iter {} update attention correlation {}".format(iter, Corr_dqn_L2_grad_mean))
                 print("correlation mean denominator: {}".format(train_grads_L2_Corr.norm(2) * val_grads_L2_Corr.norm(2)))
                 print("target attention {}".format(torch.sigmoid(target_q_network.input_attention).data))
                 print("attention {}".format(torch.sigmoid(q_network.input_attention).data))
