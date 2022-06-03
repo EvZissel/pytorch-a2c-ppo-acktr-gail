@@ -317,6 +317,15 @@ def get_args():
     parser.add_argument('--det-val',
         action='store_true',
         default=False)
+    parser.add_argument('--reinitialization_last',
+        action='store_true',
+        default=False)
+    parser.add_argument('--reinitialization_all',
+        action='store_true',
+        default=False)
+    parser.add_argument('--reinitialization_all_GRU',
+        action='store_true',
+        default=False)
     args = parser.parse_args()
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()

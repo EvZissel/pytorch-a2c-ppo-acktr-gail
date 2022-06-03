@@ -18,6 +18,8 @@ from a2c_ppo_acktr.storage import RolloutStorage
 from evaluation import evaluate
 from a2c_ppo_acktr.utils import save_obj, load_obj
 import pandas as pd
+import torch.nn as nn
+from a2c_ppo_acktr.utils import AddBias, init
 
 
 # EVAL_ENVS = {'five_arms': ['h_bandit-randchoose-v6', 5],
@@ -29,7 +31,14 @@ import pandas as pd
 
 # EVAL_ENVS = {'train_eval': ['h_bandit-obs-randchoose-v8', 25],
 #              'test_eval': ['h_bandit-obs-randchoose-v1', 100]}
+init_categorical = lambda m: init(
+    m,
+    nn.init.orthogonal_,
+    lambda x: nn.init.constant_(x, 0),
+    gain=0.01)
 
+init_actor_critic = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                       constant_(x, 0), np.sqrt(2))
 
 def main():
     args = get_args()
@@ -350,6 +359,36 @@ def main():
             #     print(printout)
             #     prev_eval_r = eval_r.copy()
             # save_copy = True
+
+
+            if args.reinitialization_last and (j % 1200) == 0:
+                init_categorical(actor_critic.dist.linear)
+                init_actor_critic(actor_critic.base.critic_linear)
+                init_actor_critic(actor_critic.base.actor[2])
+                init_actor_critic(actor_critic.base.critic[2])
+
+            if args.reinitialization_all and (j % 1200) == 0:
+                init_categorical(actor_critic.dist.linear)
+                init_actor_critic(actor_critic.base.critic_linear)
+                init_actor_critic(actor_critic.base.actor[0])
+                init_actor_critic(actor_critic.base.critic[0])
+                init_actor_critic(actor_critic.base.actor[2])
+                init_actor_critic(actor_critic.base.critic[2])
+
+            if args.reinitialization_all_GRU and (j % 1200) == 0:
+                init_categorical(actor_critic.dist.linear)
+                init_actor_critic(actor_critic.base.critic_linear)
+                init_actor_critic(actor_critic.base.actor[0])
+                init_actor_critic(actor_critic.base.critic[0])
+                init_actor_critic(actor_critic.base.actor[2])
+                init_actor_critic(actor_critic.base.critic[2])
+                for name, param in actor_critic.base.gru.named_parameters():
+                    if 'bias' in name:
+                        nn.init.constant_(param, 0)
+                    elif 'weight' in name:
+                        nn.init.orthogonal_(param)
+
+
             print(printout)
             actor_critic.train()
 
