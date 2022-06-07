@@ -146,15 +146,13 @@ class DQN_softAttn_L2grad(NNBase):
         # self.gru.double()
 
         self.layer_1 = nn.Linear(num_inputs, hidden_size)
-        # nn.init.eye_(self.layer_1.weight)
         nn.init.orthogonal_(self.layer_1.weight)
         nn.init.zeros_(self.layer_1.bias)
 
         self.activation = nn.ReLU()
         self.layer_2 = nn.Linear(hidden_size, self.num_actions)
-        # nn.init.eye_(self.layer_2.weight)
-        nn.init.orthogonal_(self.layer_1.weight)
-        nn.init.zeros_(self.layer_1.bias)
+        nn.init.orthogonal_(self.layer_2.weight)
+        nn.init.zeros_(self.layer_2.bias)
 
         self.input_attention = nn.Parameter(torch.ones(input_shape), requires_grad=True)
 
@@ -175,6 +173,61 @@ class DQN_softAttn_L2grad(NNBase):
         out_2 = self.layer_2(out_1)
 
         return out_2, out_1, rnn_hxs
+
+class DQN_RNNLast(NNBase):
+    def __init__(self, input_shape, num_actions, zero_ind, recurrent=False, hidden_size=64, target=False):
+        super(DQN_RNNLast, self).__init__(recurrent, hidden_size, hidden_size)
+        self.input_shape = input_shape
+        self.num_actions = num_actions
+
+        num_inputs = input_shape[0]
+        self.zero_ind = zero_ind
+        self.target = target
+        # if recurrent:
+        #     num_inputs = hidden_size
+
+        # should be double precision for finite difference
+        # self.layers = nn.Sequential(
+        #     nn.Linear(num_inputs, hidden_size).double(), nn.ReLU(), nn.Linear(hidden_size, self.num_actions).double()
+        # )
+        # self.input_attention = nn.Parameter(torch.ones(input_shape).double(), requires_grad=True)
+        # self.gru.double()
+
+        self.layer_1 = nn.Linear(num_inputs, hidden_size)
+        nn.init.orthogonal_(self.layer_1.weight)
+        nn.init.zeros_(self.layer_1.bias)
+
+        self.activation = nn.ReLU()
+        self.layer_2 = nn.Linear(hidden_size, hidden_size)
+        nn.init.orthogonal_(self.layer_2.weight)
+        nn.init.zeros_(self.layer_2.bias)
+
+        self.layer_last = nn.Linear(hidden_size, self.num_actions)
+        nn.init.orthogonal_(self.layer_last.weight)
+        nn.init.zeros_(self.layer_last.bias)
+
+        self.input_attention = nn.Parameter(torch.ones(input_shape), requires_grad=True)
+
+
+    def forward(self, x, rnn_hxs, masks):
+        # with torch.backends.cudnn.flags(enabled=False):
+        if self.target:
+            x = (torch.sigmoid(self.input_attention.data) > 0.5).to(self.input_attention.dtype) * x
+        else:
+            # x = self.activation(self.input_attention) * x
+            x = torch.sigmoid(self.input_attention) * x
+        if self.zero_ind:
+            x = torch.cat((torch.zeros(x.size()[1] - 2), torch.ones(2)), 0).cuda() * x
+
+        out_1 = self.activation(self.layer_1(x))
+        out_2 = self.layer_2(out_1)
+
+        if self.is_recurrent:
+            out_2, rnn_hxs = self._forward_gru(out_2, rnn_hxs, masks)
+
+        out = self.layer_last(out_2)
+
+        return out, out_2, rnn_hxs
 
 
 class DQN_Attention(NNBase):

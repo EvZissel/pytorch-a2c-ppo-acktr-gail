@@ -31,9 +31,11 @@ from a2c_ppo_acktr.envs import make_vec_envs
 from torch.utils.tensorboard import SummaryWriter
 from a2c_ppo_acktr import utils
 import pandas as pd
+import torch.nn as nn
 from grad_tools.grad_coherence import GradCoherenceDqn
 import itertools
 from collections import OrderedDict
+import wandb
 
 USE_CUDA = torch.cuda.is_available()
 if USE_CUDA:
@@ -70,7 +72,7 @@ class Agent:
         return torch.tensor(np.random.randint(self.env.action_space.n, size=q_value.size()[0])).type(dtypelong).unsqueeze(-1), rnn_hxs
 
 
-def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optimizer, gamma, loss_var_coeff, grads_L2_last, train=True, same_ind=False, start_ind_array=None):
+def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optimizer, gamma, loss_var_coeff, device = "CPU", train=True, same_ind=False, start_ind_array=None):
     num_processes = replay_buffer.rewards.size(1)
     num_steps = replay_buffer.rewards.size(0)
     num_steps_per_batch = int(num_steps/num_mini_batch)
@@ -94,7 +96,7 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
         # all_grad_W2.append(0)
         # all_grad_b2.append(0)
 
-
+    recurrent_hidden = torch.zeros(1, agent.q_network.recurrent_hidden_state_size).type(dtypelong)
     for start_ind in start_ind_array:
         data_sampler = replay_buffer.sampler(num_processes, start_ind, num_steps_per_batch)
 
@@ -103,30 +105,26 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
         # grad_b2 = []
         grad_L2_states = 0
         out1_states = 0
-        # states_all_b = 0
-        recurrent_hidden = torch.zeros(1, agent.q_network.recurrent_hidden_state_size).type(dtypelong)
-
         for states, actions, rewards, done in data_sampler:
-
             # double q-learning
             with torch.no_grad():
                     # recurrent_hidden.detach()
-                online_q_values, _, _ = agent.q_network(states, recurrent_hidden, done)
+                online_q_values, _, _ = agent.q_network(states.to(device), recurrent_hidden, done.to(device))
                 _, max_indicies = torch.max(online_q_values, dim=1)
-                target_q_values, _, _ = agent.target_q_network(states, recurrent_hidden, done)
+                target_q_values, _, _ = agent.target_q_network(states.to(device), recurrent_hidden, done.to(device))
                 next_q_value = target_q_values.gather(1, max_indicies.unsqueeze(1))
 
-                next_q_value = next_q_value * done
-                expected_q_value = (rewards + gamma * next_q_value[1:, :]).squeeze(1)
+                next_q_value = next_q_value * done.to(device)
+                expected_q_value = (rewards.to(device) + gamma * next_q_value[1:, :]).squeeze(1)
 
             # Normal DDQN update
-            q_values, out_1, _ = agent.q_network(states, recurrent_hidden, done)
-            q_value = q_values[:-1, :].gather(1, actions).squeeze(1)
+            q_values, out_1, _ = agent.q_network(states.to(device), recurrent_hidden, done.to(device))
+            q_value = q_values[:-1, :].gather(1, actions.to(device)).squeeze(1)
             out_1 = out_1[:-1, :].unsqueeze(1)
 
             td_err = (q_value - expected_q_value.data).unsqueeze(1).unsqueeze(1)
-            e = torch.zeros(num_steps_per_batch, actions.size(0), 1, device=actions.device)
-            e[torch.arange(e.size(0)).unsqueeze(1), actions] = 1.
+            e = torch.zeros(num_steps_per_batch, actions.size(0), 1, device=device)
+            e[torch.arange(e.size(0)).unsqueeze(1), actions.to(device)] = 1.
             # grad_b2 = td_err*e
             # e_actions = torch.sparse_coo_tensor(torch.cat((actions, torch.tensor([0, 1, 2, 3, 4, 5], device=actions.device).unsqueeze(1)), dim=1).t(),(q_value - expected_q_value.data), (6, 6)).to_dense().unsqueeze(2)
             # batch_grad_b2 = e_actions.mean(1)
@@ -194,13 +192,7 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
     # for i in range(grad_L2_states_all.shape[0]):
     #     total_grad_L2_state.append(_flatten_grad(grad_L2_states_all[i]))
 
-    td_loss = total_loss.mean()
-    # l2_loss = (torch.flatten(grad_L2_states_all,start_dim=0, end_dim=1).sum(0)-torch.flatten(grads_L2_last,start_dim=0, end_dim=1).sum(0)).norm(2)
-    train_grads_L2_Corr = torch.flatten(grad_L2_states_all,start_dim=0, end_dim=1).mean(0)
-    last_grads_L2_Corr = torch.flatten(grads_L2_last.detach(),start_dim=0, end_dim=1).mean(0)
-    # Corr_l2_grad_loss = (train_grads_L2_Corr * val_grads_L2_Corr).sum() / (train_grads_L2_Corr.norm(2) * val_grads_L2_Corr.norm(2))
-    l2_loss = (train_grads_L2_Corr - last_grads_L2_Corr).norm(2)
-    total_loss = td_loss + loss_var_coeff * total_loss.var() + 1*l2_loss
+    total_loss = total_loss.mean() + loss_var_coeff * total_loss.var()
     # optimizer.zero_grad()
     # total_loss.backward()
     # optimizer.step()
@@ -211,24 +203,16 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
     #                             create_graph=create_graph)
 
     optimizer.zero_grad()
-    mean_flat_grad = None
-    grads = None
-    shapes = None
-    coherence = None
-
-
+    mean_flat_grad, grads, shapes, coherence = optimizer.plot_backward(all_losses)
 
     if train:
-        total_loss.backward()
         optimizer.step()
-    else:
-        mean_flat_grad, grads, shapes, coherence = optimizer.plot_backward(all_losses)
     # grads = None
     # else:
     #     grads = torch.autograd.grad(total_loss,
     #                                 updated_train_params.values(),
     #                                 create_graph=create_graph)
-    return total_loss, td_loss, l2_loss, grad_L2_states_all, out1_states_all, mean_flat_grad, grads, shapes, coherence, start_ind_array
+    return total_loss.detach(), grad_L2_states_all.detach(), out1_states_all.detach(), mean_flat_grad.detach(), grads, shapes, coherence, start_ind_array
 
 
 def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, num_tasks, **kwargs):
@@ -298,7 +282,7 @@ def main_dqn(params):
     if USE_CUDA:
         device = "cuda"
 
-    logdir = 'offline_soft_OL_one_buffer_Corr_vs_Coher' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    logdir = 'offline_soft_OL_one_buffer_Corr_vs_Coher_Bcpu' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
     if params.rotate:
         logdir = logdir + '_rotate'
     if params.zero_ind:
@@ -309,6 +293,9 @@ def main_dqn(params):
     utils.cleanup_log_dir(logdir)
     summary_writer = SummaryWriter(log_dir=logdir)
     summary_writer.add_hparams(vars(params), {})
+
+    # wandb.init(project="my-test-project", entity="ev_zisselman")
+    # wandb.config = vars(params)
 
     print("logdir: " + logdir)
     for key in vars(params):
@@ -386,11 +373,11 @@ def main_dqn(params):
 
     obs = envs.reset()
     replay_buffer.obs[0].copy_(obs)
-    replay_buffer.to(device)
+    # replay_buffer.to(device)
 
     val_obs = val_envs.reset()
     val_replay_buffer.obs[0].copy_(val_obs)
-    val_replay_buffer.to(device)
+    # val_replay_buffer.to(device)
 
     episode_rewards = deque(maxlen=25)
     episode_len = deque(maxlen=25)
@@ -398,8 +385,6 @@ def main_dqn(params):
     val_episode_len = deque(maxlen=25)
 
     losses = []
-    td_losses = []
-    l2_grad_losses = []
     # grad_losses = []
     val_losses = []
 
@@ -409,7 +394,7 @@ def main_dqn(params):
 
         # actions, recurrent_hidden_states = agent.act(replay_buffer.obs[step], recurrent_hidden_states, epsilon, replay_buffer.masks[step])
         # actions = torch.tensor(np.random.randint(agent.num_actions, size=params.num_processes)).type(dtypelong).unsqueeze(-1)
-        actions = torch.tensor(np.random.randint(agent.num_actions) * np.ones(params.num_processes)).type(dtypelong).unsqueeze(-1)
+        actions = torch.tensor(np.random.randint(agent.num_actions) * np.ones(params.num_processes)).type(dtypelong).unsqueeze(-1).cpu()
 
         next_obs, reward, done, infos = envs.step(actions.cpu())
 
@@ -428,7 +413,7 @@ def main_dqn(params):
     for step in range(params.num_steps):
 
         # val_actions = torch.tensor(np.random.randint(agent.num_actions, size=params.num_processes)).type(dtypelong).unsqueeze(-1)
-        val_actions = torch.tensor(np.random.randint(agent.num_actions) * np.ones(params.num_processes)).type(dtypelong).unsqueeze(-1)
+        val_actions = torch.tensor(np.random.randint(agent.num_actions) * np.ones(params.num_processes)).type(dtypelong).unsqueeze(-1).cpu()
 
         val_next_obs, val_reward, val_done, val_infos = val_envs.step(val_actions.cpu())
 
@@ -471,32 +456,28 @@ def main_dqn(params):
         val_grads_sum10.append(deque(maxlen=10))
         val_grads_sum100.append(deque(maxlen=100))
 
-
     # compute validation gradient for start_ind_array
-    grads_L2_init = torch.zeros(params.task_steps*params.mini_batch_size, params.num_processes , (agent.q_network.output_size+1)*params.task_steps).type(dtype)
-    loss, td_loss, l2_loss, grads_L2_train, out1, mean_flat_grad, grads, shapes, coherence, start_ind_array = compute_td_loss(
-        agent, params.num_mini_batch, params.mini_batch_size_val, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, grads_L2_init, train=False,
+    loss, grads_L2, out1, mean_flat_grad, grads, shapes, coherence, start_ind_array = compute_td_loss(
+        agent, params.num_mini_batch, params.mini_batch_size_val, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, device, train=False,
     )
 
     for ts in range(params.continue_from_epoch, params.continue_from_epoch+num_updates):
         # Update the q-network & the target network
 
         #### Update Theta #####
-        loss, td_loss, l2_loss, grads_L2_train, _, _, _, _, _,_ = compute_td_loss(
-            agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, grads_L2_train, train=True,
+        loss, _, _, _, _, _, _,_ = compute_td_loss(
+            agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, device, train=True,
         )
         losses.append(loss.data)
-        td_losses.append(td_loss.data)
-        l2_grad_losses.append(l2_loss.data)
 
         # compute validation gradient
-        loss, _, _, grads_L2, out1, mean_flat_grad, grads, shapes, coherence, _ = compute_td_loss(
-            agent, params.num_mini_batch, params.mini_batch_size_val, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, grads_L2_train, train=False, same_ind=True, start_ind_array=start_ind_array
+        loss, grads_L2, out1, mean_flat_grad, grads, shapes, coherence, _ = compute_td_loss(
+            agent, params.num_mini_batch, params.mini_batch_size_val, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, device, train=False, same_ind=True, start_ind_array=start_ind_array
         )
         # losses.append(loss.data)
 
-        val_loss, _, _, val_grads_L2, val_out1, val_mean_flat_grad, val_grads, val_shapes, val_coherence, _ = compute_td_loss(
-            agent, params.num_mini_batch, params.mini_batch_size_val, val_replay_buffer, optimizer, params.gamma, params.loss_var_coeff, grads_L2_train, train=False, same_ind=True, start_ind_array=start_ind_array
+        val_loss, val_grads_L2, val_out1, val_mean_flat_grad, val_grads, val_shapes, val_coherence, _ = compute_td_loss(
+            agent, params.num_mini_batch, params.mini_batch_size_val, val_replay_buffer, optimizer, params.gamma, params.loss_var_coeff, device, train=False, same_ind=True, start_ind_array=start_ind_array
         )
         val_losses.append(val_loss.data)
 
@@ -716,11 +697,8 @@ def main_dqn(params):
                     summary_writer.add_scalar(f'eval/{eval_disp_name}', np.mean(eval_r[eval_disp_name]), total_num_steps)
             if len(losses) > 0:
                 out_str += ", TD Loss: {}".format(losses[-1])
-                summary_writer.add_scalar(f'losses/total_loss', losses[-1], total_num_steps)
-                summary_writer.add_scalar(f'losses/val_total_loss', val_losses[-1], total_num_steps)
-                summary_writer.add_scalar(f'losses/Td_losses', td_losses[-1], total_num_steps)
-                summary_writer.add_scalar(f'losses/corr_l2_grad_losses', l2_grad_losses[-1], total_num_steps)
-
+                summary_writer.add_scalar(f'losses/TD_loss', losses[-1], total_num_steps)
+                summary_writer.add_scalar(f'losses/val_TD_loss', val_losses[-1], total_num_steps)
 
             print(out_str)
 
@@ -731,6 +709,8 @@ def main_dqn(params):
 
             # summary_writer.add_scalar(f'Correlation_grad_vec/Corr_dqn_L2_grad_b2', Corr_dqn_L2_grad_mean_b2, total_num_steps)
             # summary_writer.add_scalar(f'Correlation_grad_vec/Last_Corr_dqn_out1_grad_b2', Corr_dqn_out1_mean_b2, total_num_steps)
+
+            # wandb.log({f'Correlation_grad_vec/Corr_dqn_L2_grad': Corr_dqn_L2_grad_mean})
 
             for i in range(len(coherence)):
                 summary_writer.add_scalar(f'Coherence/{i}', coherence[i], total_num_steps)
@@ -748,6 +728,26 @@ def main_dqn(params):
                 # summary_writer.add_scalar(f'Coherence_b2/{i}', coherence_b2[i], total_num_steps)
                 # summary_writer.add_scalar(f'Coherence_val_b2/{i}', val_coherence_b2[i], total_num_steps)
                 # summary_writer.add_scalar(f'Correlation_b2/{i}', cosine_layers_b2[i], total_num_steps)
+
+            if params.reinitialization_last and (ts % 2400) == 0:
+                nn.init.orthogonal_(agent.q_network.layer_2.weight)
+                nn.init.zeros_(agent.q_network.layer_2.bias)
+
+                nn.init.orthogonal_(agent.target_q_network.layer_2.weight)
+                nn.init.zeros_(agent.target_q_network.layer_2.bias)
+
+            if params.reinitialization_all and (ts % 2400) == 0:
+                nn.init.orthogonal_(agent.q_network.layer_1.weight)
+                nn.init.zeros_(agent.q_network.layer_1.bias)
+                nn.init.orthogonal_(agent.q_network.layer_2.weight)
+                nn.init.zeros_(agent.q_network.layer_2.bias)
+
+                nn.init.orthogonal_(agent.target_q_network.layer_1.weight)
+                nn.init.zeros_(agent.target_q_network.layer_1.bias)
+                nn.init.orthogonal_(agent.target_q_network.layer_2.weight)
+                nn.init.zeros_(agent.target_q_network.layer_2.bias)
+
+
 
 
 
@@ -794,4 +794,6 @@ if __name__ == "__main__":
     parser.add_argument("--update_target", action='store_true', default=False)
     parser.add_argument("--hidden_size", type=int, default=64)
     parser.add_argument("--max_attn_grad_norm", type=float, default=20.0)
+    parser.add_argument('--reinitialization_last', action='store_true', default=False)
+    parser.add_argument('--reinitialization_all', action='store_true', default=False)
     main_dqn(parser.parse_args())

@@ -361,13 +361,13 @@ def main():
             # save_copy = True
 
 
-            if args.reinitialization_last and (j % 1200) == 0:
+            if args.reinitialization_last and (j % 2400) == 0:
                 init_categorical(actor_critic.dist.linear)
                 init_actor_critic(actor_critic.base.critic_linear)
                 init_actor_critic(actor_critic.base.actor[2])
                 init_actor_critic(actor_critic.base.critic[2])
 
-            if args.reinitialization_all and (j % 1200) == 0:
+            if args.reinitialization_all and (j % 2400) == 0:
                 init_categorical(actor_critic.dist.linear)
                 init_actor_critic(actor_critic.base.critic_linear)
                 init_actor_critic(actor_critic.base.actor[0])
@@ -375,7 +375,7 @@ def main():
                 init_actor_critic(actor_critic.base.actor[2])
                 init_actor_critic(actor_critic.base.critic[2])
 
-            if args.reinitialization_all_GRU and (j % 1200) == 0:
+            if args.reinitialization_all_GRU and (j % 2400) == 0:
                 init_categorical(actor_critic.dist.linear)
                 init_actor_critic(actor_critic.base.critic_linear)
                 init_actor_critic(actor_critic.base.actor[0])
