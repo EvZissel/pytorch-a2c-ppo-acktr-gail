@@ -268,35 +268,35 @@ def main_dqn(params):
     device = "cpu"
     if USE_CUDA:
         device = "cuda"
+    if not params.debug:
+        logdir_ = 'offline_soft_OL_buffer_train_out1_diffb_' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+        if params.rotate:
+            logdir_ = logdir_ + '_rotate'
+        if params.zero_ind:
+            logdir_ = logdir_ + '_Zero_ind'
 
-    logdir_ = 'offline_soft_OL_buffer_train_out1_diffb_' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
-    if params.rotate:
-        logdir_ = logdir_ + '_rotate'
-    if params.zero_ind:
-        logdir_ = logdir_ + '_Zero_ind'
+        logdir = os.path.join('dqn_runs_offline', logdir_)
+        logdir = os.path.join(os.path.expanduser(params.log_dir), logdir)
+        utils.cleanup_log_dir(logdir)
+        summary_writer = SummaryWriter(log_dir=logdir)
+        summary_writer.add_hparams(vars(params), {})
 
-    logdir = os.path.join('dqn_runs_offline', logdir_)
-    logdir = os.path.join(os.path.expanduser(params.log_dir), logdir)
-    utils.cleanup_log_dir(logdir)
-    summary_writer = SummaryWriter(log_dir=logdir)
-    summary_writer.add_hparams(vars(params), {})
+        wandb.init(project="main_dqn_offline_bufferCPU_RNNend_out1_train", entity="ev_zisselman", config=params, name=logdir_, id=logdir_)
 
-    wandb.init(project="main_dqn_offline_bufferCPU_RNNend_out1_train", entity="ev_zisselman", config=params, name=logdir_, id=logdir_)
+        print("logdir: " + logdir)
+        for key in vars(params):
+            print(key, ':', vars(params)[key])
 
-    print("logdir: " + logdir)
-    for key in vars(params):
-        print(key, ':', vars(params)[key])
+        argslog = pd.DataFrame(columns=['args', 'value'])
+        for key in vars(params):
+            log = [key] + [vars(params)[key]]
+            argslog.loc[len(argslog)] = log
 
-    argslog = pd.DataFrame(columns=['args', 'value'])
-    for key in vars(params):
-        log = [key] + [vars(params)[key]]
-        argslog.loc[len(argslog)] = log
+        with open(logdir + '/args.csv', 'w') as f:
+            argslog.to_csv(f, index=False)
 
-    with open(logdir + '/args.csv', 'w') as f:
-        argslog.to_csv(f, index=False)
-
-    logdir_grad = os.path.join(logdir, 'grads')
-    utils.cleanup_log_dir(logdir_grad)
+        logdir_grad = os.path.join(logdir, 'grads')
+        utils.cleanup_log_dir(logdir_grad)
 
     print('making envs...')
     eval_envs_dic = {}
@@ -307,19 +307,19 @@ def main_dqn(params):
     envs = make_vec_envs(params.env, params.seed, params.num_processes, eval_locations_dic['train_eval'],
                          params.gamma, None, device, False, steps=params.task_steps,
                          free_exploration=params.free_exploration, recurrent=params.recurrent_policy,
-                         obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate)
+                         obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate, obs_rand_loc=params.obs_rand_loc)
 
     val_envs = make_vec_envs(params.val_env, params.seed, params.num_processes, eval_locations_dic['valid_eval'],
                          params.gamma, None, device, False, steps=params.task_steps,
                          free_exploration=params.free_exploration, recurrent=params.recurrent_policy,
-                         obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate)
+                         obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate, obs_rand_loc=params.obs_rand_loc)
 
     for eval_disp_name, eval_env_name in EVAL_ENVS.items():
         eval_envs_dic[eval_disp_name] = make_vec_envs(eval_env_name[0], params.seed, params.num_processes, eval_locations_dic[eval_disp_name],
                                                       None, None, device, True, steps=params.task_steps,
                                                       recurrent=params.recurrent_policy,
                                                       obs_recurrent=params.obs_recurrent, multi_task=True,
-                                                      free_exploration=params.free_exploration, normalize=not params.no_normalize, rotate=params.rotate)
+                                                      free_exploration=params.free_exploration, normalize=not params.no_normalize, rotate=params.rotate, obs_rand_loc=params.obs_rand_loc)
 
     q_network = DQN_RNNLast(envs.observation_space.shape, envs.action_space.n, params.zero_ind, recurrent=True, hidden_size=params.hidden_size)
     target_q_network = deepcopy(q_network)
@@ -476,10 +476,11 @@ def main_dqn(params):
         # # if Mean_Corr_all_grad < min_corr:
         if (Corr_dqn_out1_mean < min_corr):
         # if ((sum(Corr_all_grad_vec) / len(Corr_all_grad_vec)) < min_corr) and (mean_grad_grad.norm(2) > 0.0001) and (mean_grad_val.norm(2) > 0.0001):
-            torch.save(
-                {'state_dict': q_network.state_dict(),'target_state_dict': target_q_network.state_dict(), 'optimizer_state_dict': optimizer.state_dict(),
-                 'step': ts, 'obs_rms': getattr(utils.get_vec_normalize(envs), 'obs_rms', None)},
-                os.path.join(logdir, params.env + "-epoch-{}.pt".format(ts)))
+            if not params.debug:
+                torch.save(
+                    {'state_dict': q_network.state_dict(),'target_state_dict': target_q_network.state_dict(), 'optimizer_state_dict': optimizer.state_dict(),
+                     'step': ts, 'obs_rms': getattr(utils.get_vec_normalize(envs), 'obs_rms', None)},
+                    os.path.join(logdir, params.env + "-epoch-{}.pt".format(ts)))
 
 
             iter = 0
@@ -578,19 +579,24 @@ def main_dqn(params):
                                                       recurrent=params.recurrent_policy, obs_recurrent=params.obs_recurrent,
                                                       multi_task=True, free_exploration=params.free_exploration)
 
-                    summary_writer.add_scalar(f'eval/{eval_disp_name}', np.mean(eval_r[eval_disp_name]), total_num_steps)
-                    wandb.log({f'eval/{eval_disp_name}': np.mean(eval_r[eval_disp_name])}, step=total_num_steps)
-            if len(losses) > 0:
-                out_str += ", TD Loss: {}".format(losses[-1])
-                summary_writer.add_scalar(f'losses/TD_loss', losses[-1], total_num_steps)
-                wandb.log({f'losses/TD_loss': losses[-1]}, step=total_num_steps)
-                summary_writer.add_scalar(f'losses/val_TD_loss', val_losses[-1], total_num_steps)
-                wandb.log({f'losses/val_TD_loss': val_losses[-1]}, step=total_num_steps)
+                    if not params.debug:
+                        summary_writer.add_scalar(f'eval/{eval_disp_name}', np.mean(eval_r[eval_disp_name]), total_num_steps)
+                        wandb.log({f'eval/{eval_disp_name}': np.mean(eval_r[eval_disp_name])}, step=total_num_steps)
+            if not params.debug:
+                if len(losses) > 0:
+                    out_str += ", TD Loss: {}".format(losses[-1])
+                    summary_writer.add_scalar(f'losses/TD_loss', losses[-1], total_num_steps)
+                    wandb.log({f'losses/TD_loss': losses[-1]}, step=total_num_steps)
+                    summary_writer.add_scalar(f'losses/val_TD_loss', val_losses[-1], total_num_steps)
+                    wandb.log({f'losses/val_TD_loss': val_losses[-1]}, step=total_num_steps)
 
-            print(out_str)
+                print(out_str)
 
-            summary_writer.add_scalar(f'Correlation_out1_vec/Corr_dqn_L2_out1', Corr_dqn_out1_mean, total_num_steps)
-            wandb.log({f'Correlation_ou1_vec/Corr_dqn_L2_out1': Corr_dqn_out1_mean}, step=total_num_steps)
+                summary_writer.add_scalar(f'Correlation_out1_vec/Corr_dqn_L2_out1', Corr_dqn_out1_mean, total_num_steps)
+                wandb.log({f'Correlation_ou1_vec/Corr_dqn_L2_out1': Corr_dqn_out1_mean}, step=total_num_steps)
+
+    if not params.debug:
+        wandb.finish()
 
 
 
@@ -605,6 +611,7 @@ if __name__ == "__main__":
     parser.add_argument("--free_exploration", type=int, default=0, help='number of steps in each task without reward')
     parser.add_argument("--recurrent-policy", action='store_true', default=False, help='use a recurrent policy')
     parser.add_argument("--obs_recurrent", action='store_true', default=False, help='use a recurrent policy and observations input')
+    parser.add_argument("--obs_rand_loc", action='store_true', default=False, help='use a recurrent policy and observations input with random reward position')
     parser.add_argument("--no_normalize", action='store_true', default=False, help='no normalize inputs')
     parser.add_argument("--rotate", action='store_true', default=False, help='rotate observations')
     parser.add_argument("--continue_from_epoch", type=int, default=0, help='load previous training (from model save dir) and continue')
@@ -636,4 +643,5 @@ if __name__ == "__main__":
     parser.add_argument("--update_target", action='store_true', default=False)
     parser.add_argument("--hidden_size", type=int, default=64)
     parser.add_argument("--max_attn_grad_norm", type=float, default=20.0)
+    parser.add_argument('--debug', action='store_true', default=False)
     main_dqn(parser.parse_args())

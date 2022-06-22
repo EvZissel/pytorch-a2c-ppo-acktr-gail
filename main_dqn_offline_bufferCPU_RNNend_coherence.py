@@ -326,19 +326,19 @@ def main_dqn(params):
     envs = make_vec_envs(params.env, params.seed, params.num_processes, eval_locations_dic['train_eval'],
                          params.gamma, None, device, False, steps=params.task_steps,
                          free_exploration=params.free_exploration, recurrent=params.recurrent_policy,
-                         obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate)
+                         obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate, obs_rand_loc=params.obs_rand_loc)
 
     val_envs = make_vec_envs(params.val_env, params.seed, params.num_processes, eval_locations_dic['valid_eval'],
                          params.gamma, None, device, False, steps=params.task_steps,
                          free_exploration=params.free_exploration, recurrent=params.recurrent_policy,
-                         obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate)
+                         obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate, obs_rand_loc=params.obs_rand_loc)
 
     for eval_disp_name, eval_env_name in EVAL_ENVS.items():
         eval_envs_dic[eval_disp_name] = make_vec_envs(eval_env_name[0], params.seed, params.num_processes, eval_locations_dic[eval_disp_name],
                                                       None, None, device, True, steps=params.task_steps,
                                                       recurrent=params.recurrent_policy,
                                                       obs_recurrent=params.obs_recurrent, multi_task=True,
-                                                      free_exploration=params.free_exploration, normalize=not params.no_normalize, rotate=params.rotate)
+                                                      free_exploration=params.free_exploration, normalize=not params.no_normalize, rotate=params.rotate, obs_rand_loc=params.obs_rand_loc)
 
     q_network = DQN_RNNLast(envs.observation_space.shape, envs.action_space.n, params.zero_ind, recurrent=True, hidden_size=params.hidden_size)
     target_q_network = deepcopy(q_network)
@@ -698,7 +698,7 @@ def main_dqn(params):
                                                       eval_env_name[1],
                                                       steps=params.task_steps,
                                                       recurrent=params.recurrent_policy, obs_recurrent=params.obs_recurrent,
-                                                      multi_task=True, free_exploration=params.free_exploration)
+                                                      multi_task=True, free_exploration=params.free_exploration, obs_rand_loc=params.obs_rand_loc)
 
                     if not params.debug:
                         summary_writer.add_scalar(f'eval/{eval_disp_name}', np.mean(eval_r[eval_disp_name]), total_num_steps)
@@ -791,6 +791,7 @@ if __name__ == "__main__":
     parser.add_argument("--free_exploration", type=int, default=0, help='number of steps in each task without reward')
     parser.add_argument("--recurrent-policy", action='store_true', default=False, help='use a recurrent policy')
     parser.add_argument("--obs_recurrent", action='store_true', default=False, help='use a recurrent policy and observations input')
+    parser.add_argument("--obs_rand_loc", action='store_true', default=False, help='use a recurrent policy and observations input with random reward position')
     parser.add_argument("--no_normalize", action='store_true', default=False, help='no normalize inputs')
     parser.add_argument("--rotate", action='store_true', default=False, help='rotate observations')
     parser.add_argument("--continue_from_epoch", type=int, default=0, help='load previous training (from model save dir) and continue')

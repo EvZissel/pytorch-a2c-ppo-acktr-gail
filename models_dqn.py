@@ -206,7 +206,7 @@ class DQN_RNNLast(NNBase):
         nn.init.orthogonal_(self.layer_last.weight)
         nn.init.zeros_(self.layer_last.bias)
 
-        self.input_attention = nn.Parameter(torch.ones(input_shape), requires_grad=True)
+        self.input_attention = nn.Parameter(torch.ones(input_shape[0],input_shape[0]), requires_grad=True)
 
 
     def forward(self, x, rnn_hxs, masks):
@@ -215,7 +215,8 @@ class DQN_RNNLast(NNBase):
             x = (torch.sigmoid(self.input_attention.data) > 0.5).to(self.input_attention.dtype) * x
         else:
             # x = self.activation(self.input_attention) * x
-            x = torch.sigmoid(self.input_attention) * x
+            # x = torch.sigmoid(self.input_attention) * x
+            x = torch.transpose(torch.matmul(torch.sigmoid(self.input_attention), torch.transpose(x,1,0)),1,0)
         if self.zero_ind:
             x = torch.cat((torch.zeros(x.size()[1] - 2), torch.ones(2)), 0).cuda() * x
 
