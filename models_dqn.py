@@ -259,9 +259,9 @@ class DQN_RNNLast_analytic(NNBase):
 
         # self.input_attention = nn.Parameter(torch.ones(input_shape[0],input_shape[0]), requires_grad=True)
         if self.zero_ind:
-            self.input_attention = nn.Parameter(torch.cat((-1000000*torch.ones(input_shape[0] - 2), 1000000*torch.ones(2)), 0), requires_grad=False)
+            self.input_attention = nn.Parameter(torch.cat((-1000000*torch.ones(input_shape[0] - 2), torch.ones(2)), 0), requires_grad=False)
         else:
-            self.input_attention = nn.Parameter(1000000*torch.ones(input_shape[0]), requires_grad=False)
+            self.input_attention = nn.Parameter(torch.ones(input_shape[0]), requires_grad=False)
         self.input_attention_sig = nn.Parameter(torch.ones(input_shape[0]), requires_grad=True)
         self.input_attention_sig.data = torch.sigmoid(self.input_attention).data
 

@@ -517,13 +517,29 @@ def main_dqn(params):
             val_out1_Corr = val_out1.mean(0)
             # Corr_dqn_out1_mean = (train_out1_Corr * val_out1_Corr).sum() / (train_out1_Corr.norm(2) * val_out1_Corr.norm(2))
 
-            grad_atten_all = torch.matmul((train_out1_Corr - val_out1_Corr).unsqueeze(0),(out1_grad - out1_grad_val)).squeeze()
+            grad_sig_atten_analytic = torch.matmul((train_out1_Corr - val_out1_Corr).unsqueeze(0),(out1_grad - out1_grad_val)).squeeze()
+            grad_sig_atten_pytoch = torch.autograd.grad(0.5*((train_out1_Corr - val_out1_Corr)**2).sum(),
+                                                agent.q_network.input_attention_sig,
+                                                retain_graph=True)
+
+            grad_atten_analytic = grad_sig_atten_analytic*torch.sigmoid(agent.q_network.input_attention)*(1-torch.sigmoid(agent.q_network.input_attention))
+
+            grad_sig_loss_attn_pytoch = torch.autograd.grad(loss,
+                                                        agent.q_network.input_attention_sig,
+                                                        retain_graph=True)
+
+            grad_loss_attn_pytoch = grad_sig_loss_attn_pytoch[0]*(torch.sigmoid(agent.q_network.input_attention)*(1-torch.sigmoid(agent.q_network.input_attention)))
+
 
 
             # print("val iter {} update attention out1 correlation {}".format(iter, Corr_dqn_out1_mean))
             print("target attention {}".format(torch.sigmoid(target_q_network.input_attention).data))
             print("attention {}".format(torch.sigmoid(q_network.input_attention).data))
-            print("grad attention {}".format(grad_atten_all))
+            print("grad sig attention analytic {}".format(grad_sig_atten_analytic))
+            print("grad sig attention pytorch {}".format(grad_sig_atten_pytoch[0]))
+            print("grad attention analytic {}".format(grad_atten_analytic))
+            print("grad sig loss attention pytorch {}".format(grad_sig_loss_attn_pytoch[0]))
+            print("grad loss attention pytorch {}".format(grad_loss_attn_pytoch))
             # print("minus_out1_Corr_dqn_L2_grad {}".format( -loss_corr_coeff*attn_out1_Corr_dqn_L2_grad[0]))
 
 
