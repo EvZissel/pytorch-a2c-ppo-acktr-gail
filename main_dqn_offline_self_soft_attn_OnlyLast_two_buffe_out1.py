@@ -60,11 +60,11 @@ class Agent:
         self.target_q_network = target_q_network
         self.num_actions = env.action_space.n
 
-    def act(self, state, hidden_state, epsilon, masks):
+    def act(self, attn_state, state, hidden_state, epsilon, masks):
         """DQN action - max q-value w/ epsilon greedy exploration."""
         # state = torch.tensor(np.float32(state)).type(dtype).unsqueeze(0)
 
-        q_value, _, rnn_hxs = self.q_network.forward(state, hidden_state, masks)
+        q_value, _, rnn_hxs = self.q_network.forward(state, attn_state, hidden_state, masks)
         if random.random() > epsilon:
             return q_value.max(1)[1].unsqueeze(-1), rnn_hxs
         return torch.tensor(np.random.randint(self.env.action_space.n, size=q_value.size()[0])).type(dtypelong).unsqueeze(-1), rnn_hxs
@@ -116,9 +116,9 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
             # double q-learning
             with torch.no_grad():
                     # recurrent_hidden.detach()
-                online_q_values, _, _ = agent.q_network(states.to(device), recurrent_hidden, done.to(device))
+                online_q_values, _, _ = agent.q_network(states.to(device), states.to(device), recurrent_hidden, done.to(device))
                 _, max_indicies = torch.max(online_q_values, dim=1)
-                target_q_values, _, _ = agent.target_q_network(states.to(device), recurrent_hidden, done.to(device))
+                target_q_values, _, _ = agent.target_q_network(states.to(device), states.to(device), recurrent_hidden, done.to(device))
                 next_q_value = target_q_values.gather(1, max_indicies.unsqueeze(1))
 
                 next_q_value = next_q_value * done.to(device)
@@ -126,7 +126,7 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
 
             # Normal DDQN update
             # with torch.backends.cudnn.flags(enabled=False):
-            q_values, out_1, _ = agent.q_network(states.to(device), recurrent_hidden, done.to(device))
+            q_values, out_1, _ = agent.q_network(states.to(device), states.to(device), recurrent_hidden, done.to(device))
             q_value = q_values[:-1, :].gather(1, actions.to(device)).squeeze(1)
             out_1 = out_1[:-1, :].unsqueeze(1)
 
@@ -242,14 +242,15 @@ def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, 
         for i in range(num_processes):
             eval_envs.set_task_id(task_id=iter+i, task_location=locations[i], indices=i)
 
-        obs = eval_envs.reset().unsqueeze(dim=1).repeat(1, 7, 1)
-        obs[:, :, 6] /= 10
-        recurrent_hidden = torch.zeros(num_processes, agent.q_network.recurrent_hidden_state_size).type(dtype)
-        masks = torch.ones(num_processes, 1).type(dtype)
+        attn_obs = eval_envs.reset().unsqueeze(dim=1).repeat(1, kwargs['steps'] + 1, 1)
+        attn_obs[:, :, 6] /= 10
+        # recurrent_hidden = torch.zeros(num_processes, agent.q_network.recurrent_hidden_state_size).type(dtype)
+        # masks = torch.ones(num_processes, 1).type(dtype)
 
         for t in range(kwargs["steps"]):
-            with torch.no_grad():
-                actions, recurrent_hidden = agent.act(obs, recurrent_hidden, epsilon=-1, masks=masks)
+
+            actions = torch.tensor(np.random.randint(agent.num_actions, size=num_processes)).type(dtypelong).unsqueeze(-1)
+            # actions, recurrent_hidden = agent.act(attn_obs, attn_obs, recurrent_hidden, epsilon=-1, masks=masks)
 
             # Observe reward and next obs
             next_obs, _, done, infos = eval_envs.step(actions.cpu())
@@ -258,19 +259,37 @@ def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, 
             masks = torch.FloatTensor(
                 [[0.0] if done_ else [1.0] for done_ in done]).type(dtype)
 
-            if done[0] == 1:
-                obs = next_obs.unsqueeze(dim=1).repeat(1, 7, 1)
-            else:
-                obs[:,1:,:] = obs[:,:-1,:]
-                obs[:,0,:] = next_obs
+            attn_obs[:,1:,:] = attn_obs[:,:-1,:]
+            attn_obs[:,0,:] = next_obs
+
+        obs = eval_envs.reset()
+        recurrent_hidden = torch.zeros(num_processes, agent.q_network.recurrent_hidden_state_size).type(dtype)
+        masks = torch.ones(num_processes, 1).type(dtype)
+
+        for t in range(kwargs["steps"]):
+            with torch.no_grad():
+                actions, recurrent_hidden = agent.act(attn_obs, obs, recurrent_hidden, epsilon=-1, masks=masks)
+
+            # Observe reward and next obs
+            obs, _, done, infos = eval_envs.step(actions.cpu())
+            obs[:, 6] /= 10
+
+            masks = torch.FloatTensor(
+                [[0.0] if done_ else [1.0] for done_ in done]).type(dtype)
 
             for info in infos:
                 if 'episode' in info.keys():
                     eval_episode_rewards.append(info['episode']['r'])
 
-    key = torch.matmul(torch.transpose(obs.unsqueeze(1), 3, 2), agent.q_network.key_attention.unsqueeze(0)).squeeze(1)
-    query = torch.matmul(agent.q_network.query_attention.unsqueeze(0).unsqueeze(0), obs).squeeze(0)
-    input_attention = agent.q_network.m((agent.q_network.sqrt_din * torch.bmm(key, query)).sum(1).unsqueeze(1)).squeeze()
+    attn_obs = attn_obs[:, :-1, :]
+    key = torch.matmul(torch.transpose(attn_obs.unsqueeze(1), 3, 2), agent.q_network.key_attention.unsqueeze(0)).squeeze(1)
+    query = torch.matmul(agent.q_network.query_attention.unsqueeze(0).unsqueeze(0), attn_obs).squeeze(0)
+    # input_attention = torch.sigmoid((agent.q_network.sqrt_din * torch.bmm(key, query).abs()).sum(1)-100)
+    # input_attention = (torch.sigmoid(torch.bmm(key, query) - 100).sum(1)) / (torch.sigmoid(torch.bmm(key, query) - 100).sum(1)).max(1).values.unsqueeze(1)
+    input_attention = (torch.sigmoid(torch.bmm(key, query) - 100).sum(1))
+    max_val = input_attention.max(1).values.unsqueeze(1)
+    if torch.count_nonzero(max_val) == max_val.size(0):
+        input_attention = input_attention / max_val
 
     return eval_episode_rewards, input_attention
 
@@ -392,8 +411,8 @@ def main_dqn(params):
     if (params.continue_from_epoch > 0) and params.save_dir != "":
         save_path = params.save_dir
         q_network_weighs = torch.load(os.path.join(save_path, params.env + "-epoch-{}.pt".format(params.continue_from_epoch)), map_location=device)
-        agent.q_network.load_state_dict(q_network_weighs['state_dict'])
-        agent.target_q_network.load_state_dict(q_network_weighs['target_state_dict'])
+        agent.q_network.load_state_dict(q_network_weighs['state_dict'], strict=False)
+        agent.target_q_network.load_state_dict(q_network_weighs['target_state_dict'], strict=False)
         # hard_update(agent.q_network, agent.target_q_network)
         optimizer.load_state_dict(q_network_weighs['optimizer_state_dict'])
 

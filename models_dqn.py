@@ -5,6 +5,7 @@ import torch.nn as nn
 from a2c_ppo_acktr.model import NNBase
 from a2c_ppo_acktr.utils import init
 import numpy as np
+from itertools import permutations
 
 class Deep_feature(nn.Module):
     def __init__(self, input_shape, feature_dimension, num_actions):
@@ -234,7 +235,7 @@ class DQN_RNNLast(NNBase):
 
 
 class DQN_self_attention(NNBase):
-    def __init__(self, input_shape, num_actions, zero_ind, trajectory_len=7, recurrent=False, hidden_size=64, attn_hidden_size=32):
+    def __init__(self, input_shape, num_actions, zero_ind, trajectory_len=6, recurrent=False, hidden_size=64, attn_hidden_size=32):
         super(DQN_self_attention, self).__init__(recurrent, hidden_size, hidden_size)
         self.input_shape = input_shape
         self.num_actions = num_actions
@@ -266,22 +267,45 @@ class DQN_self_attention(NNBase):
         nn.init.orthogonal_(self.layer_last.weight)
         nn.init.zeros_(self.layer_last.bias)
 
-        self.key_attention = nn.Parameter(torch.ones(trajectory_len,attn_hidden_size), requires_grad=True)
-        self.query_attention = nn.Parameter(torch.ones(attn_hidden_size,trajectory_len), requires_grad=True)
-        self.m = torch.nn.Softmax(dim=2)
+        # self.key_attention = nn.Parameter(torch.ones(trajectory_len,attn_hidden_size), requires_grad=True)
+        # self.query_attention = nn.Parameter(torch.ones(attn_hidden_size,trajectory_len), requires_grad=True)
+        # attention = list(set(list(permutations([-100.0,-100.0,-100.0,100.0,100.0,100.0,-100.0,-100.0,-100.0,100.0,100.0,100.0,-100.0,-100.0,-100.0,100.0,100.0,100.0,-100.0,100.0],20))))
+        attention = [
+            [-100.0, -100.0, -100.0, 100.0, 100.0, 100.0, -100.0, -100.0, -100.0, 100.0, 100.0, 100.0, -100.0, -100.0,-100.0, 100.0, 100.0, 100.0, -100.0, 100.0],
+            [100.0, 100.0, 100.0, -100.0, -100.0, -100.0, 100.0, 100.0, 100.0, -100.0, -100.0, -100.0, 100.0, 100.0,100.0, -100.0, -100.0, -100.0, 100.0, -100.0],
+            [-100.0, -100.0, -100.0, 100.0, 100.0, 100.0, -100.0, -100.0, -100.0, 100.0, 100.0, 100.0, 100.0, 100.0,100.0, -100.0, -100.0, -100.0, 100.0, -100.0],
+            [100.0, 100.0, 100.0, -100.0, -100.0, -100.0, 100.0, 100.0, 100.0, -100.0, -100.0, -100.0, -100.0, -100.0,-100.0, 100.0, 100.0, 100.0, -100.0, 100.0],
+            [100.0, -100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0,-100.0, 100.0, -100.0, -100.0, -100.0, -100.0],
+            [-100.0, 100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0,-100.0, 100.0, -100.0, -100.0, -100.0, -100.0],
+            [-100.0, 100.0, -100.0, -100.0, -100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0,-100.0, 100.0, -100.0, -100.0, 100.0, 100.0],
+            [-100.0, 100.0, -100.0, -100.0, 100.0, -100.0, 100.0, -100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0,-100.0, 100.0, -100.0, -100.0, 100.0, 100.0],
+            [-100.0, 100.0, -100.0, -100.0, 100.0, -100.0, -100.0, 100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0,-100.0, 100.0, -100.0, -100.0, 100.0, 100.0],
+            [100.0, 100.0, 100.0, 100.0, 100.0, -100.0, -100.0, 100.0, -100.0, 100.0, -100.0, 100.0, 100.0, -100.0,-100.0, 100.0, -100.0, -100.0, -100.0, -100.0],
+        ]
+        self.key_attention = nn.Parameter(torch.transpose(torch.tensor(attention),1,0), requires_grad=False)
+        self.query_attention = nn.Parameter(torch.tensor(attention), requires_grad=False)
+
+        # self.m = torch.nn.Softmax(dim=2)
 
 
-    def forward(self, x, rnn_hxs, masks):
+    def forward(self, x, x_attn, rnn_hxs, masks):
         if x.size(0) != rnn_hxs.size(0): #add "batch size"
             x = x.unsqueeze(0)
+            x_attn = x_attn.unsqueeze(0)
+        # else:
+        #     x = x.unsqueeze(1)
 
-        key = torch.matmul(torch.transpose(x.unsqueeze(1), 3, 2), self.key_attention.unsqueeze(0)).squeeze(1)
-        query = torch.matmul(self.query_attention.unsqueeze(0).unsqueeze(0),x).squeeze(0)
-        input_attention = self.m((self.sqrt_din*torch.bmm(key,query)).sum(1).unsqueeze(1))
-        x = (input_attention * x).squeeze()
+            x_attn = x_attn[:, :-1, :]
+            key = torch.matmul(torch.transpose(x_attn.unsqueeze(1), 3, 2), self.key_attention.unsqueeze(0)).squeeze(1)
+            query = torch.matmul(self.query_attention.unsqueeze(0).unsqueeze(0),x_attn).squeeze(0)
+            input_attention = (torch.sigmoid(torch.bmm(key, query) - 100).sum(1)).unsqueeze(1)
+            max_val = input_attention.max(2).values.unsqueeze(1)
+            if torch.count_nonzero(max_val) == max_val.size(0):
+                input_attention = input_attention / max_val
+            x = (input_attention * x).squeeze()
 
-        if x.size(0) == rnn_hxs.size(0):
-            x = x[:, 0, :]
+        # if x.size(0) == rnn_hxs.size(0):
+        #     x = x[:, 0, :]
 
         out_1 = self.activation(self.layer_1(x))
         out_2 = self.layer_2(out_1)

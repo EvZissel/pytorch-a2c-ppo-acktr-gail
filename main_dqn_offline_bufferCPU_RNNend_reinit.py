@@ -372,7 +372,7 @@ def main_dqn(params):
         agent.q_network.load_state_dict(q_network_weighs['state_dict'])
         agent.target_q_network.load_state_dict(q_network_weighs['target_state_dict'])
         # hard_update(agent.q_network, agent.target_q_network)
-        optimizer.load_state_dict(q_network_weighs['optimizer_state_dict'])
+        # optimizer.load_state_dict(q_network_weighs['optimizer_state_dict'])
 
 
     obs = envs.reset()
