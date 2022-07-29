@@ -202,18 +202,18 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
     #                             updated_train_params.values(),
     #                             create_graph=create_graph)
 
-    optimizer.zero_grad()
-    # mean_flat_grad, grads, shapes, coherence = optimizer.plot_backward(all_losses)
-    total_loss.backward()
-
-    if train:
-        optimizer.step()
-    # grads = None
+    # optimizer.zero_grad()
+    # # mean_flat_grad, grads, shapes, coherence = optimizer.plot_backward(all_losses)
+    # total_loss.backward()
+    #
+    # if train:
+    #     optimizer.step()
+    # # grads = None
     # else:
     #     grads = torch.autograd.grad(total_loss,
     #                                 updated_train_params.values(),
     #                                 create_graph=create_graph)
-    return total_loss.detach(), grad_L2_states_all.detach(), out1_states_all.detach(), start_ind_array
+    return total_loss, grad_L2_states_all, out1_states_all, start_ind_array
 
 
 def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, num_tasks, **kwargs):
@@ -480,7 +480,7 @@ def main_dqn(params):
         # )
         # # losses.append(loss.data)
         #
-        # val_loss, val_grads_L2, val_out1, val_mean_flat_grad, val_grads, val_shapes, val_coherence, _ = compute_td_loss(
+        # val_loss, val_grads_L2, val_out1, _ = compute_td_loss(
         #     agent, params.num_mini_batch, params.mini_batch_size_val, val_replay_buffer, optimizer, params.gamma, params.loss_var_coeff, device, train=False, same_ind=True, start_ind_array=start_ind_array
         # )
         # val_losses.append(val_loss.data)

@@ -234,9 +234,9 @@ class DQN_RNNLast(NNBase):
         return out, out_2, rnn_hxs
 
 
-class DQN_self_attention(NNBase):
+class DQN_self_attention_oracel(NNBase):
     def __init__(self, input_shape, num_actions, zero_ind, trajectory_len=6, recurrent=False, hidden_size=64, attn_hidden_size=32):
-        super(DQN_self_attention, self).__init__(recurrent, hidden_size, hidden_size)
+        super(DQN_self_attention_oracel, self).__init__(recurrent, hidden_size, hidden_size)
         self.input_shape = input_shape
         self.num_actions = num_actions
 
@@ -302,7 +302,8 @@ class DQN_self_attention(NNBase):
             max_val = input_attention.max(2).values.unsqueeze(1)
             if torch.count_nonzero(max_val) == max_val.size(0):
                 input_attention = input_attention / max_val
-            x = (input_attention * x).squeeze()
+            x = (input_attention * x + (1-input_attention)*torch.rand(x.size(),device=x.device)).squeeze()
+        # x = (input_attention * x ).squeeze()
 
         # if x.size(0) == rnn_hxs.size(0):
         #     x = x[:, 0, :]
@@ -313,6 +314,142 @@ class DQN_self_attention(NNBase):
         if self.is_recurrent:
             out_2, rnn_hxs = self._forward_gru(out_2, rnn_hxs, masks)
 
+        out = self.layer_last(out_2)
+
+        return out, out_2, rnn_hxs
+
+
+class DQN_self_attention(NNBase):
+    def __init__(self, input_shape, num_actions, zero_ind, trajectory_len=6, recurrent=False, hidden_size=64, attn_hidden_size=32):
+        super(DQN_self_attention, self).__init__(recurrent, hidden_size, hidden_size)
+        self.input_shape = input_shape
+        self.num_actions = num_actions
+
+        num_inputs = input_shape[0]
+        self.zero_ind = zero_ind
+        self.sqrt_din = 1/torch.sqrt(torch.tensor(trajectory_len))
+
+        # if recurrent:
+        #     num_inputs = hidden_size
+
+        # should be double precision for finite difference
+        # self.layers = nn.Sequential(
+        #     nn.Linear(num_inputs, hidden_size).double(), nn.ReLU(), nn.Linear(hidden_size, self.num_actions).double()
+        # )
+        # self.input_attention = nn.Parameter(torch.ones(input_shape).double(), requires_grad=True)
+        # self.gru.double()
+
+        self.layer_1 = nn.Linear(num_inputs, hidden_size)
+        nn.init.orthogonal_(self.layer_1.weight)
+        nn.init.zeros_(self.layer_1.bias)
+
+        self.activation = nn.ReLU()
+        self.layer_2 = nn.Linear(hidden_size, hidden_size)
+        nn.init.orthogonal_(self.layer_2.weight)
+        nn.init.zeros_(self.layer_2.bias)
+
+        self.layer_last = nn.Linear(hidden_size, self.num_actions)
+        nn.init.orthogonal_(self.layer_last.weight)
+        nn.init.zeros_(self.layer_last.bias)
+
+        self.key_attention = nn.Parameter(torch.ones(trajectory_len,attn_hidden_size), requires_grad=True)
+        self.query_attention = nn.Parameter(torch.ones(attn_hidden_size,trajectory_len), requires_grad=True)
+        # # attention = list(set(list(permutations([-100.0,-100.0,-100.0,100.0,100.0,100.0,-100.0,-100.0,-100.0,100.0,100.0,100.0,-100.0,-100.0,-100.0,100.0,100.0,100.0,-100.0,100.0],20))))
+        # attention = [
+        #     [-100.0, -100.0, -100.0, 100.0, 100.0, 100.0, -100.0, -100.0, -100.0, 100.0, 100.0, 100.0, -100.0, -100.0,-100.0, 100.0, 100.0, 100.0, -100.0, 100.0],
+        #     [100.0, 100.0, 100.0, -100.0, -100.0, -100.0, 100.0, 100.0, 100.0, -100.0, -100.0, -100.0, 100.0, 100.0,100.0, -100.0, -100.0, -100.0, 100.0, -100.0],
+        #     [-100.0, -100.0, -100.0, 100.0, 100.0, 100.0, -100.0, -100.0, -100.0, 100.0, 100.0, 100.0, 100.0, 100.0,100.0, -100.0, -100.0, -100.0, 100.0, -100.0],
+        #     [100.0, 100.0, 100.0, -100.0, -100.0, -100.0, 100.0, 100.0, 100.0, -100.0, -100.0, -100.0, -100.0, -100.0,-100.0, 100.0, 100.0, 100.0, -100.0, 100.0],
+        #     [100.0, -100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0,-100.0, 100.0, -100.0, -100.0, -100.0, -100.0],
+        #     [-100.0, 100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0,-100.0, 100.0, -100.0, -100.0, -100.0, -100.0],
+        #     [-100.0, 100.0, -100.0, -100.0, -100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0,-100.0, 100.0, -100.0, -100.0, 100.0, 100.0],
+        #     [-100.0, 100.0, -100.0, -100.0, 100.0, -100.0, 100.0, -100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0,-100.0, 100.0, -100.0, -100.0, 100.0, 100.0],
+        #     [-100.0, 100.0, -100.0, -100.0, 100.0, -100.0, -100.0, 100.0, 100.0, 100.0, -100.0, 100.0, 100.0, -100.0,-100.0, 100.0, -100.0, -100.0, 100.0, 100.0],
+        #     [100.0, 100.0, 100.0, 100.0, 100.0, -100.0, -100.0, 100.0, -100.0, 100.0, -100.0, 100.0, 100.0, -100.0,-100.0, 100.0, -100.0, -100.0, -100.0, -100.0],
+        # ]
+        # self.key_attention = nn.Parameter(torch.transpose(torch.tensor(attention),1,0), requires_grad=False)
+        # self.query_attention = nn.Parameter(torch.tensor(attention), requires_grad=False)
+
+        # self.m = torch.nn.Softmax(dim=2)
+
+
+    def forward(self, x, x_attn, rnn_hxs, masks):
+        if x.size(0) != rnn_hxs.size(0): #add "batch size"
+            x = x.unsqueeze(0)
+            x_attn = x_attn.unsqueeze(0)
+        else:
+            x = x.unsqueeze(1)
+
+        x_attn = x_attn[:, :-1, :]
+        key = torch.matmul(torch.transpose(x_attn.unsqueeze(1), 3, 2), self.key_attention.unsqueeze(0)).squeeze(1)
+        query = torch.matmul(self.query_attention.unsqueeze(0).unsqueeze(0),x_attn).squeeze(0)
+        input_attention = (torch.sigmoid(torch.bmm(key, query) - 100).sum(1)).unsqueeze(1)
+        max_val = input_attention.max(2).values.unsqueeze(1)
+        if torch.count_nonzero(max_val) == max_val.size(0):
+            input_attention = input_attention / max_val
+        # x = (input_attention * x + (1-input_attention)*torch.rand(x.size(),device=x.device)).squeeze()
+        x = (input_attention * x ).squeeze()
+
+        # if x.size(0) == rnn_hxs.size(0):
+        #     x = x[:, 0, :]
+
+        out_1 = self.activation(self.layer_1(x))
+        out_2 = self.layer_2(out_1)
+
+        if self.is_recurrent:
+            out_2, rnn_hxs = self._forward_gru(out_2, rnn_hxs, masks)
+
+        out = self.layer_last(out_2)
+
+        return out, out_2, rnn_hxs
+
+
+class DQN_attention_ARNN(NNBase):
+    def __init__(self, input_shape, num_actions, zero_ind, recurrent=False, hidden_size=64, target=False):
+        super(DQN_attention_ARNN, self).__init__(recurrent, hidden_size, hidden_size)
+        self.input_shape = input_shape
+        self.num_actions = num_actions
+
+        num_inputs = input_shape[0]
+        self.zero_ind = zero_ind
+        self.target = target
+        # if recurrent:
+        #     num_inputs = hidden_size
+
+        # should be double precision for finite difference
+        # self.layers = nn.Sequential(
+        #     nn.Linear(num_inputs, hidden_size).double(), nn.ReLU(), nn.Linear(hidden_size, self.num_actions).double()
+        # )
+        # self.input_attention = nn.Parameter(torch.ones(input_shape).double(), requires_grad=True)
+        # self.gru.double()
+
+        self.layer_1 = nn.Linear(num_inputs, hidden_size)
+        nn.init.orthogonal_(self.layer_1.weight)
+        nn.init.zeros_(self.layer_1.bias)
+
+        self.activation = nn.ReLU()
+        self.layer_2 = nn.Linear(hidden_size, hidden_size)
+        nn.init.orthogonal_(self.layer_2.weight)
+        nn.init.zeros_(self.layer_2.bias)
+
+        self.layer_last = nn.Linear(hidden_size, self.num_actions)
+        nn.init.orthogonal_(self.layer_last.weight)
+        nn.init.zeros_(self.layer_last.bias)
+
+        # self.input_attention = nn.Parameter(torch.ones(input_shape[0],input_shape[0]), requires_grad=True)
+        self.input_attention = nn.Parameter(torch.ones(hidden_size), requires_grad=True)
+
+
+    def forward(self, x, rnn_hxs, masks):
+
+        out_1 = self.activation(self.layer_1(x))
+        out_2 = self.layer_2(out_1)
+
+        if self.is_recurrent:
+            out_2, rnn_hxs = self._forward_gru(out_2, rnn_hxs, masks)
+
+        # out_2 = torch.sigmoid(torch.transpose(torch.tensor(torch.sigmoid(self.input_attention) ).repeat(8,1),1,0).flatten()).unsqueeze(0)*out_2
+        out_2 = torch.sigmoid(self.input_attention)*out_2
         out = self.layer_last(out_2)
 
         return out, out_2, rnn_hxs
