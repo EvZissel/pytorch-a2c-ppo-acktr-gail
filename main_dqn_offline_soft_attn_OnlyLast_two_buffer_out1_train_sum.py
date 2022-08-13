@@ -288,7 +288,7 @@ def main_dqn(params):
     if USE_CUDA:
         device = "cuda"
     if not params.debug:
-        logdir_ = 'offline_soft_OL_out1_diffB' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+        logdir_ = 'offline_soft_OL_small_out1_diffB' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
         if params.rotate:
             logdir_ = logdir_ + '_rotate'
         if params.zero_ind:
@@ -464,7 +464,7 @@ def main_dqn(params):
     grad_out1_vec = deque(maxlen=int(params.mini_batch_size_val/params.mini_batch_size))
     grad_out1_val_vec = deque(maxlen=int(params.mini_batch_size_val/params.mini_batch_size))
     # atten_grad_Loss_val = deque(maxlen=int(params.mini_batch_size_val/params.mini_batch_size))
-    gama = 1000
+    gama = 100000
     compute_analytic = True
 
 
@@ -572,11 +572,11 @@ def main_dqn(params):
         total_num_steps = (ts + 1) * params.num_processes * params.task_steps * params.mini_batch_size
 
         if ts == 100:
-            gama = 100
+            gama = 10000
         if ts == 200:
-            gama = 10
+            gama = 1000
         if ts == 2000:
-            gama = 1
+            gama = 100
 
         if ts % params.target_network_update_f == 0:
             hard_update(agent.q_network, agent.target_q_network)
