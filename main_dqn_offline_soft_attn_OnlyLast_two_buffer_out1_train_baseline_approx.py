@@ -230,8 +230,10 @@ def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, 
     eval_envs = eval_envs_dic[env_name]
     locations = eval_locations_dic[env_name]
     eval_episode_rewards = []
+    num_uniform = 0
 
     for iter in range(0, num_tasks, num_processes):
+        eval_actions = []
         for i in range(num_processes):
             eval_envs.set_task_id(task_id=iter+i, task_location=locations[i], indices=i)
 
@@ -249,11 +251,17 @@ def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, 
             masks = torch.FloatTensor(
                 [[0.0] if done_ else [1.0] for done_ in done]).type(dtype)
 
+            eval_actions.append(actions)
             for info in infos:
                 if 'episode' in info.keys():
                     eval_episode_rewards.append(info['episode']['r'])
 
-    return eval_episode_rewards
+        eval_actions = torch.stack(eval_actions).squeeze()
+        for i in range(num_processes):
+            if len(torch.unique(eval_actions[:,i])) == len(eval_actions[:,i]):
+                num_uniform += 1
+
+    return eval_episode_rewards, eval_actions, num_uniform
 
 
 def get_epsilon(epsilon_start, epsilon_final, epsilon_decay, frame_idx):
@@ -332,10 +340,10 @@ def main_dqn(params):
                          free_exploration=params.free_exploration, recurrent=params.recurrent_policy,
                          obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate, obs_rand_loc=params.obs_rand_loc)
 
-    val_envs = make_vec_envs(params.val_env, params.seed, params.num_processes, eval_locations_dic['valid_eval'],
-                         params.gamma, None, device, False, steps=params.task_steps,
-                         free_exploration=params.free_exploration, recurrent=params.recurrent_policy,
-                         obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate, obs_rand_loc=params.obs_rand_loc)
+    # val_envs = make_vec_envs(params.val_env, params.seed, params.num_processes, eval_locations_dic['valid_eval'],
+    #                      params.gamma, None, device, False, steps=params.task_steps,
+    #                      free_exploration=params.free_exploration, recurrent=params.recurrent_policy,
+    #                      obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate, obs_rand_loc=params.obs_rand_loc)
 
     for eval_disp_name, eval_env_name in EVAL_ENVS.items():
         eval_envs_dic[eval_disp_name] = make_vec_envs(eval_env_name[0], params.seed, params.num_processes, eval_locations_dic[eval_disp_name],
@@ -367,7 +375,7 @@ def main_dqn(params):
 
     replay_buffer = ReplayBufferBandit(params.num_steps, params.num_processes, envs.observation_space.shape, envs.action_space)
     # grad_replay_buffer = ReplayBufferBandit(params.num_steps, params.num_processes, envs.observation_space.shape, envs.action_space)
-    val_replay_buffer = ReplayBufferBandit(params.num_steps, params.num_processes, envs.observation_space.shape, envs.action_space)
+    # val_replay_buffer = ReplayBufferBandit(params.num_steps, params.num_processes, envs.observation_space.shape, envs.action_space)
 
     # Load previous model
     if (params.continue_from_epoch > 0) and params.save_dir != "":
@@ -383,9 +391,9 @@ def main_dqn(params):
     replay_buffer.obs[0].copy_(obs)
     # replay_buffer.to(device)
 
-    val_obs = val_envs.reset()
-    val_replay_buffer.obs[0].copy_(val_obs)
-    # val_replay_buffer.to(device)
+    # val_obs = val_envs.reset()
+    # val_replay_buffer.obs[0].copy_(val_obs)
+    # # val_replay_buffer.to(device)
 
     episode_rewards = deque(maxlen=25)
     episode_len = deque(maxlen=25)
@@ -417,24 +425,24 @@ def main_dqn(params):
 
         replay_buffer.insert(next_obs, actions, reward, masks)
 
-    # Collect validation data
-    for step in range(params.num_steps):
-
-        val_actions = torch.tensor(np.random.randint(agent.num_actions, size=params.num_processes)).type(dtypelong).unsqueeze(-1)
-        # val_actions = torch.tensor(np.random.randint(agent.num_actions) * np.ones(params.num_processes)).type(dtypelong).unsqueeze(-1).cpu()
-
-        val_next_obs, val_reward, val_done, val_infos = val_envs.step(val_actions.cpu())
-
-
-        for info in val_infos:
-            if 'episode' in info.keys():
-                val_episode_rewards.append(info['episode']['r'])
-                val_episode_len.append(info['episode']['l'])
-
-        val_masks = torch.FloatTensor(
-            [[0.0] if val_done_ else [1.0] for val_done_ in val_done])
-
-        val_replay_buffer.insert(val_next_obs, val_actions, val_reward, val_masks)
+    # # Collect validation data
+    # for step in range(params.num_steps):
+    #
+    #     val_actions = torch.tensor(np.random.randint(agent.num_actions, size=params.num_processes)).type(dtypelong).unsqueeze(-1)
+    #     # val_actions = torch.tensor(np.random.randint(agent.num_actions) * np.ones(params.num_processes)).type(dtypelong).unsqueeze(-1).cpu()
+    #
+    #     val_next_obs, val_reward, val_done, val_infos = val_envs.step(val_actions.cpu())
+    #
+    #
+    #     for info in val_infos:
+    #         if 'episode' in info.keys():
+    #             val_episode_rewards.append(info['episode']['r'])
+    #             val_episode_len.append(info['episode']['l'])
+    #
+    #     val_masks = torch.FloatTensor(
+    #         [[0.0] if val_done_ else [1.0] for val_done_ in val_done])
+    #
+    #     val_replay_buffer.insert(val_next_obs, val_actions, val_reward, val_masks)
 
     # val_replay_buffer.copy(replay_buffer)
     # # replay_buffer.obs[:,:,:-2] = obs[:,:-2].repeat([replay_buffer.obs.size(0),1,1])
@@ -481,44 +489,44 @@ def main_dqn(params):
         )
         losses.append(loss.data)
 
-        val_loss, val_grads_L2, val_out1, _, val_out1_grad = compute_td_loss(
-            agent, params.num_mini_batch, params.mini_batch_size, val_replay_buffer, optimizer, params.gamma, params.loss_var_coeff, device, train=False, compute_analytic=compute_analytic,
-            same_ind=True, start_ind_array=start_ind_array
-        )
-        val_losses.append(val_loss.data)
+        # val_loss, val_grads_L2, val_out1, _, val_out1_grad = compute_td_loss(
+        #     agent, params.num_mini_batch, params.mini_batch_size, val_replay_buffer, optimizer, params.gamma, params.loss_var_coeff, device, train=False, compute_analytic=compute_analytic,
+        #     same_ind=True, start_ind_array=start_ind_array
+        # )
+        # val_losses.append(val_loss.data)
 
-        # Corr_dqn_L2_grad = 0
-        # for i in range(grads_L2.size(0)):
-        #     Corr_dqn_L2_grad += ((grads_L2[i] * val_grads_L2[i]).sum() / (grads_L2[i].norm(2) * val_grads_L2[i].norm(2)))/grads_L2.size(0)
-
-        # compute_analytic = False
-        train_grads_L2 = grads_L2.mean(0)
-        val_grads_L2 = val_grads_L2.mean(0)
-        L2_grad_vec.append(train_grads_L2)
-        L2_grad_val_vec.append(val_grads_L2)
-        L2_grad_vec_mean =  sum(L2_grad_vec)/len(L2_grad_vec)
-        L2_grad_val_vec_mean =  sum(L2_grad_val_vec)/len(L2_grad_val_vec)
-        Corr_dqn_L2_grad = (train_grads_L2 * val_grads_L2).sum() / (train_grads_L2.norm(2) * val_grads_L2.norm(2))
-        Corr_dqn_L2_grad_mean = (L2_grad_vec_mean * L2_grad_val_vec_mean).sum() / (L2_grad_vec_mean.norm(2) * L2_grad_val_vec_mean.norm(2))
-        print("correlation L2 grad: {}".format(Corr_dqn_L2_grad))
-        print("correlation L2 grad mean: {}".format(Corr_dqn_L2_grad_mean))
-
-        train_out1_Corr = out1.mean(0)
-        val_out1_Corr = val_out1.mean(0)
-        out1_vec_correlation.append(train_out1_Corr)
-        out1_val_vec_correlation.append(val_out1_Corr)
-        Corr_dqn_out1 = (train_out1_Corr * val_out1_Corr).sum() / (train_out1_Corr.norm(2) * val_out1_Corr.norm(2))
-        print("correlation out1: {}".format(Corr_dqn_out1))
-
-
-        out1_vec_mean =  sum(out1_vec_correlation)/len(out1_vec_correlation)
-        out1_val_vec_mean =  sum(out1_val_vec_correlation)/len(out1_val_vec_correlation)
-        Corr_dqn_out1_mean = (out1_vec_mean*out1_val_vec_mean).sum() / (out1_vec_mean.norm(2) * out1_val_vec_mean.norm(2))
-        print("correlation out1 mean: {}".format(Corr_dqn_out1_mean))
-        L2_dqn_out1 = ((train_out1_Corr - val_out1_Corr)**2).sum()
-        print("L2 out1: {}".format(L2_dqn_out1))
-        L2_dqn_out1_mean = ((out1_vec_mean - out1_val_vec_mean)**2).sum()
-        print("L2 out1 mean: {}".format(L2_dqn_out1_mean))
+        # # Corr_dqn_L2_grad = 0
+        # # for i in range(grads_L2.size(0)):
+        # #     Corr_dqn_L2_grad += ((grads_L2[i] * val_grads_L2[i]).sum() / (grads_L2[i].norm(2) * val_grads_L2[i].norm(2)))/grads_L2.size(0)
+        #
+        # # compute_analytic = False
+        # train_grads_L2 = grads_L2.mean(0)
+        # val_grads_L2 = val_grads_L2.mean(0)
+        # L2_grad_vec.append(train_grads_L2)
+        # L2_grad_val_vec.append(val_grads_L2)
+        # L2_grad_vec_mean =  sum(L2_grad_vec)/len(L2_grad_vec)
+        # L2_grad_val_vec_mean =  sum(L2_grad_val_vec)/len(L2_grad_val_vec)
+        # Corr_dqn_L2_grad = (train_grads_L2 * val_grads_L2).sum() / (train_grads_L2.norm(2) * val_grads_L2.norm(2))
+        # Corr_dqn_L2_grad_mean = (L2_grad_vec_mean * L2_grad_val_vec_mean).sum() / (L2_grad_vec_mean.norm(2) * L2_grad_val_vec_mean.norm(2))
+        # print("correlation L2 grad: {}".format(Corr_dqn_L2_grad))
+        # print("correlation L2 grad mean: {}".format(Corr_dqn_L2_grad_mean))
+        #
+        # train_out1_Corr = out1.mean(0)
+        # val_out1_Corr = val_out1.mean(0)
+        # out1_vec_correlation.append(train_out1_Corr)
+        # out1_val_vec_correlation.append(val_out1_Corr)
+        # Corr_dqn_out1 = (train_out1_Corr * val_out1_Corr).sum() / (train_out1_Corr.norm(2) * val_out1_Corr.norm(2))
+        # print("correlation out1: {}".format(Corr_dqn_out1))
+        #
+        #
+        # out1_vec_mean =  sum(out1_vec_correlation)/len(out1_vec_correlation)
+        # out1_val_vec_mean =  sum(out1_val_vec_correlation)/len(out1_val_vec_correlation)
+        # Corr_dqn_out1_mean = (out1_vec_mean*out1_val_vec_mean).sum() / (out1_vec_mean.norm(2) * out1_val_vec_mean.norm(2))
+        # print("correlation out1 mean: {}".format(Corr_dqn_out1_mean))
+        # L2_dqn_out1 = ((train_out1_Corr - val_out1_Corr)**2).sum()
+        # print("L2 out1: {}".format(L2_dqn_out1))
+        # L2_dqn_out1_mean = ((out1_vec_mean - out1_val_vec_mean)**2).sum()
+        # print("L2 out1 mean: {}".format(L2_dqn_out1_mean))
 
 
         # atten_grads_loss = torch.autograd.grad(loss,
@@ -574,7 +582,8 @@ def main_dqn(params):
         #     print("grad attention loss {}".format(atten_grad_Loss_mean))
         #     print("total grad attention {}".format(total_grad))
 
-        total_loss = loss + gama*L2_dqn_out1
+        # total_loss = loss + gama*L2_dqn_out1
+        total_loss = loss
         optimizer.zero_grad()
         total_loss.backward()
         optimizer.step()
@@ -607,41 +616,47 @@ def main_dqn(params):
 
                 eval_r = {}
                 for eval_disp_name, eval_env_name in EVAL_ENVS.items():
-                    eval_r[eval_disp_name] = evaluate(agent, eval_envs_dic, eval_disp_name, eval_locations_dic,
+                    eval_r[eval_disp_name], eval_actions, num_uniform = evaluate(agent, eval_envs_dic, eval_disp_name, eval_locations_dic,
                                                       params.num_processes,
                                                       eval_env_name[1],
                                                       steps=params.task_steps,
                                                       recurrent=params.recurrent_policy, obs_recurrent=params.obs_recurrent,
                                                       multi_task=True, free_exploration=params.free_exploration)
 
+                    if eval_disp_name == 'train_eval' and ts % 100 == 0:
+                        print(eval_actions.data)
+                    if ts == (params.continue_from_epoch + num_updates - 1):
+                        print(eval_disp_name + ": {}".format(eval_actions.data))
                     if not params.debug:
                         summary_writer.add_scalar(f'eval/{eval_disp_name}', np.mean(eval_r[eval_disp_name]), total_num_steps)
+                        summary_writer.add_scalar(f'entropy eval/{eval_disp_name}', num_uniform/eval_env_name[1], total_num_steps)
                         wandb.log({f'eval/{eval_disp_name}': np.mean(eval_r[eval_disp_name])}, step=total_num_steps)
+                        wandb.log({f'entropy eval/{eval_disp_name}': num_uniform/eval_env_name[1]}, step=total_num_steps)
             if not params.debug:
                 if len(losses) > 0:
                     out_str += ", TD Loss: {}".format(losses[-1])
                     summary_writer.add_scalar(f'losses/TD_loss', losses[-1], total_num_steps)
                     wandb.log({f'losses/TD_loss': losses[-1]}, step=total_num_steps)
-                    summary_writer.add_scalar(f'losses/val_TD_loss', val_losses[-1], total_num_steps)
-                    wandb.log({f'losses/val_TD_loss': val_losses[-1]}, step=total_num_steps)
+                    # summary_writer.add_scalar(f'losses/val_TD_loss', val_losses[-1], total_num_steps)
+                    # wandb.log({f'losses/val_TD_loss': val_losses[-1]}, step=total_num_steps)
 
                 print(out_str)
 
-                summary_writer.add_scalar(f'Correlation/Corr_dqn_L2_out1', Corr_dqn_out1, total_num_steps)
-                summary_writer.add_scalar(f'Correlation/Corr_dqn_L2_out1_mean', Corr_dqn_out1_mean, total_num_steps)
-                summary_writer.add_scalar(f'Correlation/Corr_dqn_L2_grad', Corr_dqn_L2_grad, total_num_steps)
-                summary_writer.add_scalar(f'Correlation/Corr_dqn_L2_grad_mean', Corr_dqn_L2_grad_mean, total_num_steps)
-
-                summary_writer.add_scalar(f'L2/L2_dqn_out1', L2_dqn_out1, total_num_steps)
-                summary_writer.add_scalar(f'L2/L2_dqn_out1_mean', L2_dqn_out1_mean, total_num_steps)
-
-                wandb.log({f'Correlation/Corr_dqn_L2_out1': Corr_dqn_out1}, step=total_num_steps)
-                wandb.log({f'Correlation/Corr_dqn_L2_out1_mean': Corr_dqn_out1_mean}, step=total_num_steps)
-                wandb.log({f'Correlation/Corr_dqn_L2_grad': Corr_dqn_L2_grad}, step=total_num_steps)
-                wandb.log({f'Correlation/Corr_dqn_L2_grad_mean': Corr_dqn_L2_grad_mean}, step=total_num_steps)
-
-                wandb.log({f'L2/L2_dqn_out1': L2_dqn_out1}, step=total_num_steps)
-                wandb.log({f'L2/L2_dqn_out1_mean': L2_dqn_out1_mean}, step=total_num_steps)
+                # summary_writer.add_scalar(f'Correlation/Corr_dqn_L2_out1', Corr_dqn_out1, total_num_steps)
+                # summary_writer.add_scalar(f'Correlation/Corr_dqn_L2_out1_mean', Corr_dqn_out1_mean, total_num_steps)
+                # summary_writer.add_scalar(f'Correlation/Corr_dqn_L2_grad', Corr_dqn_L2_grad, total_num_steps)
+                # summary_writer.add_scalar(f'Correlation/Corr_dqn_L2_grad_mean', Corr_dqn_L2_grad_mean, total_num_steps)
+                #
+                # summary_writer.add_scalar(f'L2/L2_dqn_out1', L2_dqn_out1, total_num_steps)
+                # summary_writer.add_scalar(f'L2/L2_dqn_out1_mean', L2_dqn_out1_mean, total_num_steps)
+                #
+                # wandb.log({f'Correlation/Corr_dqn_L2_out1': Corr_dqn_out1}, step=total_num_steps)
+                # wandb.log({f'Correlation/Corr_dqn_L2_out1_mean': Corr_dqn_out1_mean}, step=total_num_steps)
+                # wandb.log({f'Correlation/Corr_dqn_L2_grad': Corr_dqn_L2_grad}, step=total_num_steps)
+                # wandb.log({f'Correlation/Corr_dqn_L2_grad_mean': Corr_dqn_L2_grad_mean}, step=total_num_steps)
+                #
+                # wandb.log({f'L2/L2_dqn_out1': L2_dqn_out1}, step=total_num_steps)
+                # wandb.log({f'L2/L2_dqn_out1_mean': L2_dqn_out1_mean}, step=total_num_steps)
 
     if not params.debug:
         wandb.finish()

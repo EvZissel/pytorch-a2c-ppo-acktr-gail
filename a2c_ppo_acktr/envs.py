@@ -268,7 +268,7 @@ class VecRotate(VecEnvWrapper):
         # obs = torch.from_numpy(obs).float().to(self.device)
         for ind in range(obs.shape[0]):
             # obs[ind] = torch.matmul(self.matrix, obs[ind]) + self.bias
-            obs[ind] = torch.matmul(self.matrix, obs[ind])
+            # obs[ind] = torch.matmul(self.matrix, obs[ind])
             obs[ind] = torch.matmul(self.matrix1, obs[ind])
             obs[ind] = torch.matmul(self.matrix2, obs[ind])
             obs[ind] = torch.matmul(self.matrix3, obs[ind])
@@ -283,7 +283,7 @@ class VecRotate(VecEnvWrapper):
         # obs = torch.from_numpy(obs).float().to(self.device)
         for ind in range(obs.shape[0]):
             # obs[ind] = torch.matmul(self.matrix, obs[ind]) + self.bias
-            obs[ind] = torch.matmul(self.matrix, obs[ind])
+            # obs[ind] = torch.matmul(self.matrix, obs[ind])
             obs[ind] = torch.matmul(self.matrix1, obs[ind])
             obs[ind] = torch.matmul(self.matrix2, obs[ind])
             obs[ind] = torch.matmul(self.matrix3, obs[ind])

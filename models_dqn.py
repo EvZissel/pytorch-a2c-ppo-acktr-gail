@@ -205,13 +205,17 @@ class DQN_RNNLast(NNBase):
         nn.init.orthogonal_(self.layer_2.weight)
         nn.init.zeros_(self.layer_2.bias)
 
-        # self.pre_layer_last = nn.Linear(hidden_size, int(hidden_size/8))
+        # self.pre_layer_last = nn.Linear(hidden_size, int(hidden_size))
         # nn.init.orthogonal_(self.pre_layer_last.weight)
         # nn.init.zeros_(self.pre_layer_last.bias)
 
         self.layer_last = nn.Linear(int(hidden_size), self.num_actions)
         nn.init.orthogonal_(self.layer_last.weight)
         nn.init.zeros_(self.layer_last.bias)
+
+        # self.hidden_last = nn.Linear(int(hidden_size), hidden_size)
+        # nn.init.eye_(self.hidden_last.weight)
+        # nn.init.zeros_(self.hidden_last.bias)
 
         # self.input_attention = nn.Parameter(torch.ones(input_shape[0],input_shape[0]), requires_grad=True)
         # self.input_attention = nn.Parameter(torch.ones(input_shape[0]), requires_grad=True)
@@ -225,10 +229,9 @@ class DQN_RNNLast(NNBase):
         #     # x = self.activation(self.input_attention) * x
         #     x = torch.sigmoid(self.input_attention) * x
         #     # x = torch.transpose(torch.matmul(torch.sigmoid(self.input_attention), torch.transpose(x,1,0)),1,0)
-        # if self.zero_ind:
-        #     x = torch.cat((torch.zeros(x.size()[1] - 2), torch.ones(2)), 0).cuda() * x
-        x[:, 6] /= 10
-        x[:, :-2] *= 10
+        if self.zero_ind:
+            x = torch.cat((torch.zeros(x.size()[1] - 2), torch.ones(2)), 0).cuda() * x
+
         out_1 = self.activation(self.layer_1(x))
         out_2 = self.layer_2(out_1)
 
@@ -237,6 +240,7 @@ class DQN_RNNLast(NNBase):
 
         # out_3 = self.pre_layer_last(out_2)
         out = self.layer_last(out_2)
+        # rnn_hxs = self.hidden_last(rnn_hxs)
 
         return out, out_2, rnn_hxs
 
