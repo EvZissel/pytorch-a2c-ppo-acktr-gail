@@ -172,7 +172,7 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
             out1_states_all = torch.cat((out1_states_all, out1_states), dim=0)
             states_all_all = torch.cat((states_all_all, states_all), dim=0)
 
-    # all_losses = random.choices(all_losses, k=k)
+    all_losses = random.choices(all_losses, k=k)
     total_loss = torch.stack(all_losses).mean()
 
 
@@ -190,8 +190,8 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
 
     # total_loss = total_loss.mean() + loss_var_coeff * total_loss.var()
     optimizer.zero_grad()
-    grads, shapes = optimizer.plot_backward(all_losses)
-    # total_loss.backward()
+    # grads, shapes = optimizer.plot_backward(all_losses)
+    total_loss.backward()
     optimizer.step()
 
     # optimizer.zero_grad()
@@ -204,7 +204,7 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
     #     optimizer.step()
 
     # out_1_grad = torch.zeros((out1_states_all.size()[-1],agent.q_network.input_attention.size()[0])).type(dtype)
-    out_1_grad =0
+    out_1_grad = 0
     # if compute_analytic:
     #     out1_states_all_flat = torch.flatten(out1_states_all, start_dim=0, end_dim=1)
     #     out1_states = out1_states_all_flat.mean(0)
@@ -227,7 +227,8 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
     else:
         out1_states_all = out1_states_all[:,2,:]
 
-    return total_loss, grad_L2_states_all, out1_states_all, start_ind_array, out_1_grad, grads, shapes
+    # return total_loss, grad_L2_states_all, out1_states_all, start_ind_array, out_1_grad, grads, shapes
+    return total_loss, grad_L2_states_all, out1_states_all, start_ind_array, out_1_grad
 
 
 def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, num_tasks, **kwargs):
@@ -305,7 +306,7 @@ def main_dqn(params):
     if USE_CUDA:
         device = "cuda"
     if not params.debug:
-        logdir_ = 'offline_train_winsorized_' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+        logdir_ = 'offline_train_winsorized' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
         if params.rotate:
             logdir_ = logdir_ + '_rotate'
         if params.zero_ind:
@@ -396,7 +397,7 @@ def main_dqn(params):
 
 
     # optimizer = optim.Adam(non_attention_parameters, lr=params.learning_rate, weight_decay=params.weight_decay)
-    # optimizer = optim.Adam(last_layer_param, lr=params.learning_rate, weight_decay=params.weight_decay)
+    # optimizer = optim.Adam(train_param, lr=params.learning_rate, weight_decay=params.weight_decay)
     optimizer = optim.Adam(q_network.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
     optimizer = GradPlotDqn(optimizer)
     # optimizer_val = optim.Adam(attention_parameters, lr=params.learning_rate_val, weight_decay=params.weight_decay)
@@ -423,6 +424,22 @@ def main_dqn(params):
         agent.q_network.load_state_dict(q_network_weighs['state_dict'], strict=False)
         agent.target_q_network.load_state_dict(q_network_weighs['target_state_dict'], strict=False)
 
+    # if (params.saved_epoch > 0) and params.save_dir != "":
+    #     save_path = params.save_dir
+    #     q_network_weighs = torch.load(os.path.join(save_path, params.load_env + "-epoch-{}.pt".format(params.saved_epoch)), map_location=device)
+    #     q_network_weighs_state_dict = q_network_weighs['state_dict']
+    #     q_network_weighs_target_state_dict = q_network_weighs['target_state_dict']
+    #
+    #     for epoch in range (params.saved_epoch+1000,params.saved_epoch_end, 1000):
+    #         q_network_weighs_ephoc = torch.load(os.path.join(save_path, params.load_env + "-epoch-{}.pt".format(epoch)),map_location=device)
+    #         for state_dict_name, state_dict in q_network_weighs_ephoc['state_dict'].items():
+    #             q_network_weighs_state_dict[state_dict_name] += state_dict/10
+    #
+    #         for state_dict_name, state_dict in q_network_weighs_ephoc['target_state_dict'].items():
+    #             q_network_weighs_target_state_dict[state_dict_name] += state_dict/10
+    #
+    #     agent.q_network.load_state_dict(q_network_weighs_state_dict, strict=False)
+    #     agent.target_q_network.load_state_dict(q_network_weighs_target_state_dict, strict=False)
 
     obs = envs.reset()
     replay_buffer.obs[0].copy_(obs)
@@ -446,10 +463,10 @@ def main_dqn(params):
     for step in range(params.num_steps):
 
         # actions, recurrent_hidden_states = agent.act(replay_buffer.obs[step], recurrent_hidden_states, epsilon, replay_buffer.masks[step])
-        actions = torch.tensor(np.random.randint(agent.num_actions, size=params.num_processes)).type(dtypelong).unsqueeze(-1)
+        actions = torch.tensor(np.random.randint(agent.num_actions, size=params.num_processes)).unsqueeze(-1)
         # actions = torch.tensor(np.random.randint(agent.num_actions) * np.ones(params.num_processes)).type(dtypelong).unsqueeze(-1)
 
-        next_obs, reward, done, infos = envs.step(actions.cpu())
+        next_obs, reward, done, infos = envs.step(actions)
 
 
         for info in infos:
@@ -522,13 +539,15 @@ def main_dqn(params):
     for ts in range(params.continue_from_epoch, params.continue_from_epoch+num_updates):
         # Update the q-network & the target network
 
-        #### Update Theta #####
-        # loss, grads_L2, out1, start_ind_array, out1_grad = compute_td_loss(
-        #     agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, k=int(k%5), device=device, train=True, compute_analytic=compute_analytic,
-        # )
-        loss, grads_L2, out1, start_ind_array, out1_grad, grads, shapes  = compute_td_loss(
+        ### Update Theta #####
+        loss, grads_L2, out1, start_ind_array, out1_grad = compute_td_loss(
             agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, k=params.k, device=device, train=True, compute_analytic=compute_analytic,
         )
+
+        # loss, grads_L2, out1, start_ind_array, out1_grad, grads, shapes  = compute_td_loss(
+        #     agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, k=0, device=device, train=True, compute_analytic=compute_analytic,
+        # )
+
         losses.append(loss.data)
         # k += 1
 
@@ -649,10 +668,10 @@ def main_dqn(params):
                  'step': ts, 'obs_rms': getattr(utils.get_vec_normalize(envs), 'obs_rms', None)},
                 os.path.join(logdir, params.env + "-epoch-{}.pt".format(ts)))
 
-        if not params.debug and (ts % params.save_grad == 0) and (ts < 2667):
-            if ts==0:
-                torch.save({'shapes': shapes}, os.path.join(logdir_grad, params.env + "-epoch-{}-shapes.pt".format(ts)))
-            torch.save({'grad_ens': grads},os.path.join(logdir_grad, params.val_env + "-epoch-{}-optimizer_grad.pt".format(ts, params.max_grad_sum)))
+        # if not params.debug and (ts % params.save_grad == 0):
+        #     if ts==0:
+        #         torch.save({'shapes': shapes}, os.path.join(logdir_grad, params.env + "-epoch-{}-shapes.pt".format(ts)))
+        #     torch.save({'grad_ens': grads, 'ind_array': start_ind_array},os.path.join(logdir_grad, params.val_env + "-epoch-{}-optimizer_grad.pt".format(ts, params.max_grad_sum)))
 
         if ts % params.log_every == 0:
             out_str = "Iter {}, Timestep {}".format(ts, total_num_steps)
@@ -677,14 +696,18 @@ def main_dqn(params):
                         print(eval_disp_name + ": {}".format(eval_actions.data))
                     if not params.debug:
                         summary_writer.add_scalar(f'eval/{eval_disp_name}', np.mean(eval_r[eval_disp_name]), total_num_steps)
+                        summary_writer.add_scalar(f'eval_epoch/{eval_disp_name}', np.mean(eval_r[eval_disp_name]), ts)
                         summary_writer.add_scalar(f'entropy eval/{eval_disp_name}', num_uniform/eval_env_name[1], total_num_steps)
                         wandb.log({f'eval/{eval_disp_name}': np.mean(eval_r[eval_disp_name])}, step=total_num_steps)
+                        wandb.log({f'eval_epoch/{eval_disp_name}': np.mean(eval_r[eval_disp_name])}, step=ts)
                         wandb.log({f'entropy eval/{eval_disp_name}': num_uniform/eval_env_name[1]}, step=total_num_steps)
             if not params.debug:
                 if len(losses) > 0:
                     out_str += ", TD Loss: {}".format(losses[-1])
                     summary_writer.add_scalar(f'losses/TD_loss', losses[-1], total_num_steps)
+                    summary_writer.add_scalar(f'losses/TD_loss_epoch', losses[-1], ts)
                     wandb.log({f'losses/TD_loss': losses[-1]}, step=total_num_steps)
+                    wandb.log({f'losses/TD_loss_epoch': losses[-1]}, step=ts)
                     # summary_writer.add_scalar(f'losses/val_TD_loss', val_losses[-1], total_num_steps)
                     # wandb.log({f'losses/val_TD_loss': val_losses[-1]}, step=total_num_steps)
 
@@ -728,6 +751,7 @@ if __name__ == "__main__":
     parser.add_argument("--rotate", action='store_true', default=False, help='rotate observations')
     parser.add_argument("--continue_from_epoch", type=int, default=0, help='load previous training (from model save dir) and continue')
     parser.add_argument("--saved_epoch", type=int, default=0, help='load previous training (from model save dir) and continue')
+    parser.add_argument("--saved_epoch_end", type=int, default=0, help='load previous training (from model save dir) and continue')
     parser.add_argument("--log-dir", default='/tmp/gym/', help='directory to save agent logs (default: /tmp/gym)')
     parser.add_argument("--save-dir", default='./trained_models/', help='directory to save agent logs (default: ./trained_models/)')
     parser.add_argument("--num-mini-batch", type=int, default=32, help='number of mini-batches (default: 32)')

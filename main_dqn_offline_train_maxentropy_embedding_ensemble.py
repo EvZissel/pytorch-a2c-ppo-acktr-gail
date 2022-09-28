@@ -26,7 +26,7 @@ import torch
 import torch.optim as optim
 from torch.optim.lr_scheduler import MultiStepLR
 from helpers_dqn import ReplayBuffer, make_atari, make_gym_env, wrap_deepmind, wrap_pytorch, ReplayBufferBandit
-from models_dqn import DQN, CnnDQN, DQN_softAttn, DQN_softAttn_L2grad, DQN_RNNLast, DQN_RNNLast_analytic
+from models_dqn import DQN, CnnDQN, DQN_softAttn, DQN_softAttn_L2grad, DQN_RNNLast, DQN_RNNLast_analytic, DQN_Only_two
 from a2c_ppo_acktr.envs import make_vec_envs
 from torch.utils.tensorboard import SummaryWriter
 from a2c_ppo_acktr import utils
@@ -55,17 +55,23 @@ def _flatten_grad(grads):
     return flatten_grad
 
 class Agent:
-    def __init__(self, env, q_network, target_q_network):
+    def __init__(self, env, q_network, target_q_network, ensemble_networks, target_ensemble_networks):
         self.env = env
         self.q_network = q_network
         self.target_q_network = target_q_network
+        self.ensemble_networks = ensemble_networks
+        self.target_ensemble_networks = target_ensemble_networks
         self.num_actions = env.action_space.n
 
     def act(self, state, hidden_state, epsilon, masks):
         """DQN action - max q-value w/ epsilon greedy exploration."""
         # state = torch.tensor(np.float32(state)).type(dtype).unsqueeze(0)
 
-        q_value, _, rnn_hxs = self.q_network.forward(state, hidden_state, masks)
+        embedding = []
+        for i in range(10):
+            embedding.append(self.ensemble_networks[i](state))
+        state = sum(embedding) / 10
+        q_value, _, rnn_hxs = self.q_network.forward_last(state, hidden_state, masks)
         if random.random() > epsilon:
             return q_value.max(1)[1].unsqueeze(-1), rnn_hxs
         return torch.tensor(np.random.randint(self.env.action_space.n, size=q_value.size()[0])).type(dtypelong).unsqueeze(-1), rnn_hxs
@@ -84,8 +90,6 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
     all_losses = []
     # all_grad_W2 = []
     # all_grad_b2 = []
-    grads = []
-    shapes = []
     grad_L2_states_all = 0
     out1_states_all = 0
     states_all_all = 0
@@ -112,9 +116,17 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
             # double q-learning
             with torch.no_grad():
                     # recurrent_hidden.detach()
-                online_q_values, _, _ = agent.q_network(states.to(device), recurrent_hidden, done.to(device))
+                embedding = []
+                for i in range(10):
+                    embedding.append(agent.ensemble_networks[i](states.to(device)))
+                q_states = sum(embedding)/10
+                online_q_values, _, _ = agent.q_network.forward_last(q_states, recurrent_hidden, done.to(device))
                 _, max_indicies = torch.max(online_q_values, dim=1)
-                target_q_values, _, _ = agent.target_q_network(states.to(device), recurrent_hidden, done.to(device))
+                embedding = []
+                for i in range(10):
+                    embedding.append(agent.target_ensemble_networks[i](states.to(device)))
+                    target_states = sum(embedding) / 10
+                target_q_values, _, _ = agent.target_q_network.forward_last(target_states, recurrent_hidden, done.to(device))
                 next_q_value = target_q_values.gather(1, max_indicies.unsqueeze(1))
 
                 next_q_value = next_q_value * done.to(device)
@@ -122,7 +134,7 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
 
             # Normal DDQN update
             # with torch.backends.cudnn.flags(enabled=False):
-            q_values, out_1, _ = agent.q_network(states.to(device), recurrent_hidden, done.to(device))
+            q_values, out_1, _ = agent.q_network.forward_last(q_states, recurrent_hidden, done.to(device))
             q_value = q_values[:-1, :].gather(1, actions.to(device)).squeeze(1)
             out_1 = out_1[:-1, :].unsqueeze(1)
 
@@ -192,16 +204,9 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
 
     # total_loss = total_loss.mean() + loss_var_coeff * total_loss.var()
     optimizer.zero_grad()
-    # grads, shapes = optimizer.plot_backward(all_losses)
+    grads, shapes = optimizer.plot_backward(all_losses)
     # total_loss.backward()
-    grads, shapes, has_grads = optimizer._pack_grad([total_loss])
-    mean_flat_grad = optimizer._merge_grad(grads, has_grads)
-    mean_grad = optimizer._unflatten_grad(mean_flat_grad, shapes[0])
-    optimizer._set_grad(mean_grad)
-    # for i in
-    #     grads
     optimizer.step()
-
 
     # optimizer.zero_grad()
     # atten_grads_loss = torch.autograd.grad(total_loss,
@@ -236,8 +241,7 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
     else:
         out1_states_all = out1_states_all[:,2,:]
 
-    # return total_loss, grad_L2_states_all, out1_states_all, start_ind_array, out_1_grad, grads, shapes[0]
-    return total_loss, grad_L2_states_all, out1_states_all, start_ind_array, out_1_grad
+    return total_loss, grad_L2_states_all, out1_states_all, start_ind_array, out_1_grad, grads, shapes
 
 
 def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, num_tasks, **kwargs):
@@ -315,7 +319,7 @@ def main_dqn(params):
     if USE_CUDA:
         device = "cuda"
     if not params.debug:
-        logdir_ = 'offline_train_winsorized_400' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+        logdir_ = 'offline_train_winsorized_LastOnly_ensemble_embedding' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
         if params.rotate:
             logdir_ = logdir_ + '_rotate'
         if params.zero_ind:
@@ -376,7 +380,20 @@ def main_dqn(params):
     q_network = q_network.to(device)
     target_q_network = target_q_network.to(device)
 
-    agent = Agent(envs, q_network, target_q_network)
+    embedding_networks = []
+    for i in range(10):
+        embedding_networks.append(DQN_Only_two(envs.observation_space.shape, hidden_size=params.hidden_size))
+        embedding_networks[i].to(device)
+        embedding_networks[i].layer_1.requires_grad = False
+        embedding_networks[i].layer_2.requires_grad = False
+    target_embedding_networks = []
+    for i in range(10):
+        target_embedding_networks.append(DQN_Only_two(envs.observation_space.shape, hidden_size=params.hidden_size))
+        target_embedding_networks[i].to(device)
+        target_embedding_networks[i].layer_1.requires_grad = False
+        target_embedding_networks[i].layer_2.requires_grad = False
+
+    agent = Agent(envs, q_network, target_q_network, embedding_networks, target_embedding_networks)
 
     # attention_parameters = []
     # non_attention_parameters = []
@@ -395,19 +412,19 @@ def main_dqn(params):
     #     else:
     #         p.requires_grad = False
 
-    # train_param = []
-    # for name, p in q_network.named_parameters():
-    #     if 'layer_1' in name:
-    #         p.requires_grad = False
-    #     elif 'layer_2' in name:
-    #         p.requires_grad = False
-    #     else:
-    #         train_param.append(p)
+    train_param = []
+    for name, p in q_network.named_parameters():
+        if 'layer_1' in name:
+            p.requires_grad = False
+        elif 'layer_2' in name:
+            p.requires_grad = False
+        else:
+            train_param.append(p)
 
 
     # optimizer = optim.Adam(non_attention_parameters, lr=params.learning_rate, weight_decay=params.weight_decay)
-    # optimizer = optim.Adam(last_layer_param, lr=params.learning_rate, weight_decay=params.weight_decay)
-    optimizer = optim.Adam(q_network.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
+    optimizer = optim.Adam(train_param, lr=params.learning_rate, weight_decay=params.weight_decay)
+    # optimizer = optim.Adam(q_network.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
     optimizer = GradPlotDqn(optimizer)
     # optimizer_val = optim.Adam(attention_parameters, lr=params.learning_rate_val, weight_decay=params.weight_decay)
     # scheduler = MultiStepLR(optimizer, milestones=[30, 80], gamma=0.1)
@@ -426,12 +443,36 @@ def main_dqn(params):
         optimizer.load_state_dict(q_network_weighs['optimizer_state_dict']) #load weights only
 
 
-    # Load pretrained
+    # # Load pretrained
+    # if (params.saved_epoch > 0) and params.save_dir != "":
+    #     save_path = params.save_dir
+    #     q_network_weighs = torch.load(os.path.join(save_path, params.load_env + "-epoch-{}.pt".format(params.saved_epoch)), map_location=device)
+    #     agent.q_network.load_state_dict(q_network_weighs['state_dict'], strict=False)
+    #     agent.target_q_network.load_state_dict(q_network_weighs['target_state_dict'], strict=False)
+
+
     if (params.saved_epoch > 0) and params.save_dir != "":
         save_path = params.save_dir
         q_network_weighs = torch.load(os.path.join(save_path, params.load_env + "-epoch-{}.pt".format(params.saved_epoch)), map_location=device)
-        agent.q_network.load_state_dict(q_network_weighs['state_dict'], strict=False)
-        agent.target_q_network.load_state_dict(q_network_weighs['target_state_dict'], strict=False)
+        q_network_weighs_state_dict = q_network_weighs['state_dict']
+        q_network_weighs_target_state_dict = q_network_weighs['target_state_dict']
+
+        i=0
+        for epoch in range (params.saved_epoch+1000,params.saved_epoch_end, 1000):
+            q_network_weighs_ephoc = torch.load(os.path.join(save_path, params.load_env + "-epoch-{}.pt".format(epoch)),map_location=device)
+            for state_dict_name, state_dict in q_network_weighs_ephoc['state_dict'].items():
+                q_network_weighs_state_dict[state_dict_name] += state_dict/10
+
+            for state_dict_name, state_dict in q_network_weighs_ephoc['target_state_dict'].items():
+                q_network_weighs_target_state_dict[state_dict_name] += state_dict/10
+
+            embedding_networks[i].load_state_dict(q_network_weighs_ephoc['state_dict'], strict=False)
+            target_embedding_networks[i].load_state_dict(q_network_weighs_ephoc['target_state_dict'], strict=False)
+            i+=1
+
+
+        agent.q_network.load_state_dict(q_network_weighs_state_dict, strict=False)
+        agent.target_q_network.load_state_dict(q_network_weighs_target_state_dict, strict=False)
 
 
     obs = envs.reset()
@@ -536,14 +577,10 @@ def main_dqn(params):
         # loss, grads_L2, out1, start_ind_array, out1_grad = compute_td_loss(
         #     agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, k=int(k%5), device=device, train=True, compute_analytic=compute_analytic,
         # )
-        # loss, grads_L2, out1, start_ind_array, out1_grad, grads, shapes  = compute_td_loss(
-        #     agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, k=0, device=device, train=True, compute_analytic=compute_analytic,
-        # )
-        loss, grads_L2, out1, start_ind_array, out1_grad  = compute_td_loss(
+        loss, grads_L2, out1, start_ind_array, out1_grad, grads, shapes  = compute_td_loss(
             agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, k=0, device=device, train=True, compute_analytic=compute_analytic,
         )
         losses.append(loss.data)
-
         # k += 1
 
         # val_loss, val_grads_L2, val_out1, _, val_out1_grad = compute_td_loss(
@@ -663,10 +700,10 @@ def main_dqn(params):
                  'step': ts, 'obs_rms': getattr(utils.get_vec_normalize(envs), 'obs_rms', None)},
                 os.path.join(logdir, params.env + "-epoch-{}.pt".format(ts)))
 
-        # if not params.debug and (ts % params.save_grad == 0):
-        #     if ts==0:
-        #         torch.save({'shapes': shapes}, os.path.join(logdir_grad, params.env + "-epoch-{}-shapes.pt".format(ts)))
-        #     torch.save({'grad_ens': grads},os.path.join(logdir_grad, params.val_env + "-epoch-{}-optimizer_grad.pt".format(ts, params.max_grad_sum)))
+        if not params.debug and (ts % params.save_grad == 0):
+            if ts==0:
+                torch.save({'shapes': shapes}, os.path.join(logdir_grad, params.env + "-epoch-{}-shapes.pt".format(ts)))
+            torch.save({'grad_ens': grads},os.path.join(logdir_grad, params.val_env + "-epoch-{}-optimizer_grad.pt".format(ts, params.max_grad_sum)))
 
         if ts % params.log_every == 0:
             out_str = "Iter {}, Timestep {}".format(ts, total_num_steps)
@@ -695,7 +732,7 @@ def main_dqn(params):
                         summary_writer.add_scalar(f'entropy eval/{eval_disp_name}', num_uniform/eval_env_name[1], total_num_steps)
                         wandb.log({f'eval/{eval_disp_name}': np.mean(eval_r[eval_disp_name])}, step=total_num_steps)
                         wandb.log({f'eval_epoch/{eval_disp_name}': np.mean(eval_r[eval_disp_name])}, step=ts)
-                        wandb.log({f'entropy eval/{eval_disp_name}': num_uniform/max(eval_env_name[1],params.num_processes)}, step=total_num_steps)
+                        wandb.log({f'entropy eval/{eval_disp_name}': num_uniform/eval_env_name[1]}, step=total_num_steps)
             if not params.debug:
                 if len(losses) > 0:
                     out_str += ", TD Loss: {}".format(losses[-1])
@@ -746,6 +783,7 @@ if __name__ == "__main__":
     parser.add_argument("--rotate", action='store_true', default=False, help='rotate observations')
     parser.add_argument("--continue_from_epoch", type=int, default=0, help='load previous training (from model save dir) and continue')
     parser.add_argument("--saved_epoch", type=int, default=0, help='load previous training (from model save dir) and continue')
+    parser.add_argument("--saved_epoch_end", type=int, default=0, help='load previous training (from model save dir) and continue')
     parser.add_argument("--log-dir", default='/tmp/gym/', help='directory to save agent logs (default: /tmp/gym)')
     parser.add_argument("--save-dir", default='./trained_models/', help='directory to save agent logs (default: ./trained_models/)')
     parser.add_argument("--num-mini-batch", type=int, default=32, help='number of mini-batches (default: 32)')

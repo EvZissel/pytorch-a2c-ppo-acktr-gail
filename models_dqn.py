@@ -236,13 +236,57 @@ class DQN_RNNLast(NNBase):
         out_2 = self.layer_2(out_1)
 
         if self.is_recurrent:
-            out_2, rnn_hxs = self._forward_gru(out_2, rnn_hxs, masks)
+            out_3, rnn_hxs = self._forward_gru(out_2, rnn_hxs, masks)
+        else:
+            out_3 = out_2
 
         # out_3 = self.pre_layer_last(out_2)
-        out = self.layer_last(out_2)
+        out = self.layer_last(out_3)
         # rnn_hxs = self.hidden_last(rnn_hxs)
 
-        return out, out_2, rnn_hxs
+        return out, out_3, out_2, out_1, rnn_hxs
+        # return out, out_3, rnn_hxs
+
+    def forward_last(self, x, rnn_hxs, masks):
+
+        out_2 = x
+
+        if self.is_recurrent:
+            out_3, rnn_hxs = self._forward_gru(out_2, rnn_hxs, masks)
+        else:
+            out_3 = out_2
+
+        # out_3 = self.pre_layer_last(out_2)
+        out = self.layer_last(out_3)
+        # rnn_hxs = self.hidden_last(rnn_hxs)
+
+        # return out, out_3, out_2, out_1, rnn_hxs
+        return out, out_3, rnn_hxs
+
+
+class DQN_Only_two(nn.Module):
+    def __init__(self, input_shape, hidden_size=64):
+        super(DQN_Only_two, self).__init__()
+        self.input_shape = input_shape
+
+        num_inputs = input_shape[0]
+
+        self.layer_1 = nn.Linear(num_inputs, hidden_size)
+        nn.init.orthogonal_(self.layer_1.weight)
+        nn.init.zeros_(self.layer_1.bias)
+
+        self.activation = nn.ReLU()
+        self.layer_2 = nn.Linear(hidden_size, hidden_size)
+        nn.init.orthogonal_(self.layer_2.weight)
+        nn.init.zeros_(self.layer_2.bias)
+
+
+
+    def forward(self, x):
+        out_1 = self.activation(self.layer_1(x))
+        out_2 = self.layer_2(out_1)
+
+        return out_2
 
 
 class DQN_self_attention_oracel(NNBase):

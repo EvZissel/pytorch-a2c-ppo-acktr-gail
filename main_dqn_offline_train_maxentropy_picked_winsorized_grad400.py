@@ -65,13 +65,13 @@ class Agent:
         """DQN action - max q-value w/ epsilon greedy exploration."""
         # state = torch.tensor(np.float32(state)).type(dtype).unsqueeze(0)
 
-        q_value, _, rnn_hxs = self.q_network.forward(state, hidden_state, masks)
+        q_value, _, _, _, rnn_hxs = self.q_network.forward(state, hidden_state, masks)
         if random.random() > epsilon:
             return q_value.max(1)[1].unsqueeze(-1), rnn_hxs
         return torch.tensor(np.random.randint(self.env.action_space.n, size=q_value.size()[0])).type(dtypelong).unsqueeze(-1), rnn_hxs
 
 
-def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optimizer, gamma, loss_var_coeff, k=0, device = "CPU", train=True, compute_analytic=False, same_ind=False, start_ind_array=None):
+def compute_td_gard(agent, num_mini_batch, mini_batch_size, replay_buffer, optimizer, gamma, device = "CPU", same_ind=False, start_ind_array=None):
     num_processes = replay_buffer.rewards.size(1)
     num_steps = replay_buffer.rewards.size(0)
     num_steps_per_batch = int(num_steps/num_mini_batch)
@@ -82,12 +82,12 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
         start_ind_array = np.random.choice(start_ind_array, size=mini_batch_size, replace=False)
 
     all_losses = []
-    # all_grad_W2 = []
-    # all_grad_b2 = []
     grads = []
     shapes = []
     grad_L2_states_all = 0
     out1_states_all = 0
+    out2_states_all = 0
+    out3_states_all = 0
     states_all_all = 0
     # states_all = 0
     for i in range(num_processes):
@@ -97,13 +97,15 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
 
     recurrent_hidden = torch.zeros(1, agent.q_network.recurrent_hidden_state_size).type(dtype)
     for start_ind in start_ind_array:
-        data_sampler = replay_buffer.sampler(num_processes, start_ind, num_steps_per_batch)
+        data_sampler =  replay_buffer.sampler(num_processes, start_ind, num_steps_per_batch)
 
         losses = []
         # grad_W2 = []
         # grad_b2 = []
         grad_L2_states = 0
         out1_states = 0
+        out2_states = 0
+        out3_states = 0
         states_all = 0
         # states_all_b = 0
 
@@ -112,9 +114,9 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
             # double q-learning
             with torch.no_grad():
                     # recurrent_hidden.detach()
-                online_q_values, _, _ = agent.q_network(states.to(device), recurrent_hidden, done.to(device))
+                online_q_values, _, _, _, _ = agent.q_network(states.to(device), recurrent_hidden, done.to(device))
                 _, max_indicies = torch.max(online_q_values, dim=1)
-                target_q_values, _, _ = agent.target_q_network(states.to(device), recurrent_hidden, done.to(device))
+                target_q_values, _, _, _, _  = agent.target_q_network(states.to(device), recurrent_hidden, done.to(device))
                 next_q_value = target_q_values.gather(1, max_indicies.unsqueeze(1))
 
                 next_q_value = next_q_value * done.to(device)
@@ -122,9 +124,11 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
 
             # Normal DDQN update
             # with torch.backends.cudnn.flags(enabled=False):
-            q_values, out_1, _ = agent.q_network(states.to(device), recurrent_hidden, done.to(device))
+            q_values, out_3, out_2, out_1, _ = agent.q_network(states.to(device), recurrent_hidden, done.to(device))
             q_value = q_values[:-1, :].gather(1, actions.to(device)).squeeze(1)
             out_1 = out_1[:-1, :].unsqueeze(1)
+            out_2 = out_2[:-1, :].unsqueeze(1)
+            out_3 = out_3[:-1, :].unsqueeze(1)
 
             td_err = (q_value - expected_q_value.data).unsqueeze(1).unsqueeze(1)
             e = torch.zeros(num_steps_per_batch, actions.size(0), 1, device=device)
@@ -147,10 +151,14 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
             if (len(losses)==1):
                 grad_L2_states = grad_L2_states_b
                 out1_states = out_1
+                out2_states = out_2
+                out3_states = out_3
                 states_all = states[:-1, :].unsqueeze(1)
             else:
                 grad_L2_states = torch.cat((grad_L2_states, grad_L2_states_b), dim=1)
                 out1_states = torch.cat((out1_states, out_1), dim=1)
+                out2_states = torch.cat((out2_states, out_1), dim=1)
+                out3_states = torch.cat((out3_states, out_1), dim=1)
                 states_all = torch.cat((states_all, states[:-1, :].unsqueeze(1)), dim=1)
 
             # grads = torch.autograd.grad(one_loss,
@@ -168,10 +176,159 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
         if start_ind == start_ind_array[0] :
             grad_L2_states_all = grad_L2_states.mean(1)
             out1_states_all = out1_states
+            out2_states_all = out2_states
+            out3_states_all = out3_states
             states_all_all = states_all
         else:
             grad_L2_states_all = torch.cat((grad_L2_states_all, grad_L2_states.mean(1)), dim=0)
             out1_states_all = torch.cat((out1_states_all, out1_states), dim=0)
+            out2_states_all = torch.cat((out2_states_all, out1_states), dim=0)
+            out3_states_all = torch.cat((out3_states_all, out1_states), dim=0)
+            states_all_all = torch.cat((states_all_all, states_all), dim=0)
+
+    # all_losses = random.choices(all_losses, k=k)
+    total_loss = torch.stack(all_losses).mean()
+
+    # total_loss = total_loss.mean() + loss_var_coeff * total_loss.var()
+    optimizer.zero_grad()
+    # grads, shapes = optimizer.plot_backward(all_losses)
+    # total_loss.backward()
+    grads, shapes, has_grads = optimizer._pack_grad([total_loss])
+    mean_flat_grad = optimizer._merge_grad(grads, has_grads)
+    mean_grad = optimizer._unflatten_grad(mean_flat_grad, shapes[0])
+    # optimizer._set_grad(mean_grad)
+    # for i in
+    #     grads
+    # optimizer.step()
+
+    # out_1_grad =0
+
+    # if train:
+    #     out1_states_all = out1_states_all[:,0,:]
+    # else:
+    #     out1_states_all = out1_states_all[:,2,:]
+
+    # return total_loss, grad_L2_states_all, out1_states_all, start_ind_array, out_1_grad, grads, shapes[0]
+    return total_loss, grad_L2_states_all, out1_states_all, out2_states_all, out3_states_all, start_ind_array, mean_grad
+
+
+def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optimizer, gamma, loss_var_coeff, mean_grad_400, k=0, min_corr = -1.0, device = "CPU", train=True, compute_analytic=False, same_ind=False, start_ind_array=None):
+    num_processes = replay_buffer.rewards.size(1)
+    num_steps = replay_buffer.rewards.size(0)
+    num_steps_per_batch = int(num_steps/num_mini_batch)
+
+
+    if not same_ind:
+        start_ind_array = [i for i in range(0, num_steps, num_steps_per_batch)]
+        start_ind_array = np.random.choice(start_ind_array, size=mini_batch_size, replace=False)
+
+    all_losses = []
+    grads = []
+    shapes = []
+    grad_L2_states_all = 0
+    out1_states_all = 0
+    out2_states_all = 0
+    out3_states_all = 0
+    states_all_all = 0
+    # states_all = 0
+
+    cosine_grad = []
+    cosine_grad_layers = []
+    cosine_grad_activation = []
+
+    for i in range(len(mean_grad_400)):
+        cosine_grad_layers.append([])
+
+    for i in range(num_processes):
+        all_losses.append(0)
+
+    recurrent_hidden = torch.zeros(1, agent.q_network.recurrent_hidden_state_size).type(dtype)
+    for start_ind in start_ind_array:
+        data_sampler = replay_buffer.sampler(num_processes, start_ind, num_steps_per_batch)
+
+        losses = []
+        grad_L2_states = 0
+        out1_states = 0
+        out2_states = 0
+        out3_states = 0
+        states_all = 0
+        # states_all_b = 0
+
+        for states, actions, rewards, done in data_sampler:
+
+            # double q-learning
+            with torch.no_grad():
+                    # recurrent_hidden.detach()
+                online_q_values, _, _, _, _  = agent.q_network(states.to(device), recurrent_hidden, done.to(device))
+                _, max_indicies = torch.max(online_q_values, dim=1)
+                target_q_values, _, _, _, _ = agent.target_q_network(states.to(device), recurrent_hidden, done.to(device))
+                next_q_value = target_q_values.gather(1, max_indicies.unsqueeze(1))
+
+                next_q_value = next_q_value * done.to(device)
+                expected_q_value = (rewards.to(device) + gamma * next_q_value[1:, :]).squeeze(1)
+
+            # Normal DDQN update
+            # with torch.backends.cudnn.flags(enabled=False):
+            q_values, out_3, out_2, out_1, _ = agent.q_network(states.to(device), recurrent_hidden, done.to(device))
+            q_value = q_values[:-1, :].gather(1, actions.to(device)).squeeze(1)
+            out_1 = out_1[:-1, :].unsqueeze(1)
+            out_2 = out_2[:-1, :].unsqueeze(1)
+            out_3 = out_3[:-1, :].unsqueeze(1)
+
+            td_err = (q_value - expected_q_value.data).unsqueeze(1).unsqueeze(1)
+            e = torch.zeros(num_steps_per_batch, actions.size(0), 1, device=device)
+            e[torch.arange(e.size(0)).unsqueeze(1), actions.to(device)] = 1.
+            # grad_b2 = td_err*e
+            # e_actions = torch.sparse_coo_tensor(torch.cat((actions, torch.tensor([0, 1, 2, 3, 4, 5], device=actions.device).unsqueeze(1)), dim=1).t(),(q_value - expected_q_value.data), (6, 6)).to_dense().unsqueeze(2)
+            # batch_grad_b2 = e_actions.mean(1)
+            # e_actions = e_actions.t().unsqueeze(2)
+            # out_1 = out_1.unsqueeze(1)
+            # batch_grad_W2 = torch.matmul(e_actions, out_1).mean(0)
+            # grad_w2 = (e*out_1)
+            grad_L2_states_b = td_err*torch.cat(((e*out_1), e), dim=2)
+            grad_L2_states_b = torch.flatten(grad_L2_states_b, start_dim=1).unsqueeze(1)
+
+            one_loss = 0.5*(q_value - expected_q_value.data).pow(2).mean()
+            losses.append(one_loss)
+            # grad_W2.append(batch_grad_W2)
+            # grad_b2.append(batch_grad_b2)
+            # states_all_b += torch.sigmoid(agent.q_network.input_attention) *states
+            if (len(losses)==1):
+                grad_L2_states = grad_L2_states_b
+                out1_states = out_1
+                out2_states = out_2
+                out3_states = out_3
+                states_all = states[:-1, :].unsqueeze(1)
+            else:
+                grad_L2_states = torch.cat((grad_L2_states, grad_L2_states_b), dim=1)
+                out1_states = torch.cat((out1_states, out_1), dim=1)
+                out2_states = torch.cat((out2_states, out_2), dim=1)
+                out3_states = torch.cat((out3_states, out_3), dim=1)
+                states_all = torch.cat((states_all, states[:-1, :].unsqueeze(1)), dim=1)
+
+            # grads = torch.autograd.grad(one_loss,
+            #                             updated_train_params.values(),
+            #                             create_graph=create_graph)
+
+        # loss = torch.stack(losses)
+        # loss = losses.mean(0)
+        # all_losses.append(loss)
+        for i in range(num_processes):
+            all_losses[i] += losses[i]/mini_batch_size
+            # all_grad_W2[i] += grad_W2[i]/mini_batch_size
+            # all_grad_b2[i] += grad_b2[i]/mini_batch_size
+
+        if start_ind == start_ind_array[0] :
+            grad_L2_states_all = grad_L2_states.mean(1)
+            out1_states_all = out1_states
+            out2_states_all = out2_states
+            out3_states_all = out3_states
+            states_all_all = states_all
+        else:
+            grad_L2_states_all = torch.cat((grad_L2_states_all, grad_L2_states.mean(1)), dim=0)
+            out1_states_all = torch.cat((out1_states_all, out1_states), dim=0)
+            out2_states_all = torch.cat((out2_states_all, out1_states), dim=0)
+            out3_states_all = torch.cat((out3_states_all, out1_states), dim=0)
             states_all_all = torch.cat((states_all_all, states_all), dim=0)
 
     # all_losses = random.choices(all_losses, k=k)
@@ -192,16 +349,73 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
 
     # total_loss = total_loss.mean() + loss_var_coeff * total_loss.var()
     optimizer.zero_grad()
-    # grads, shapes = optimizer.plot_backward(all_losses)
+    grads, shapes = optimizer.plot_backward(all_losses)
     # total_loss.backward()
-    grads, shapes, has_grads = optimizer._pack_grad([total_loss])
-    mean_flat_grad = optimizer._merge_grad(grads, has_grads)
-    mean_grad = optimizer._unflatten_grad(mean_flat_grad, shapes[0])
-    optimizer._set_grad(mean_grad)
-    # for i in
-    #     grads
-    optimizer.step()
+    # grads, shapes, has_grads = optimizer._pack_grad([total_loss])
+    # mean_flat_grad = optimizer._merge_grad(grads, has_grads)
+    for grad in grads:
+        grad = optimizer._unflatten_grad(grad, shapes)
+        cosine_Wh1_i = (grad[0] * mean_grad_400[0]).sum() / (grad[0].norm(2) * mean_grad_400[0].norm(2))
+        cosine_Wh2_i = (grad[1] * mean_grad_400[1]).sum() / (grad[1].norm(2) * mean_grad_400[1].norm(2))
+        cosine_bh1_i = (grad[2] * mean_grad_400[2]).sum() / (grad[2].norm(2) * mean_grad_400[2].norm(2))
+        cosine_bh2_i = (grad[3] * mean_grad_400[3]).sum() / (grad[3].norm(2) * mean_grad_400[3].norm(2))
+        cosine_L1w_i = (grad[4] * mean_grad_400[4]).sum() / (grad[4].norm(2) * mean_grad_400[4].norm(2))
+        cosine_L1b_i = (grad[5] * mean_grad_400[5]).sum() / (grad[5].norm(2) * mean_grad_400[5].norm(2))
+        cosine_L2w_i = (grad[6] * mean_grad_400[6]).sum() / (grad[6].norm(2) * mean_grad_400[6].norm(2))
+        cosine_L2b_i = (grad[7] * mean_grad_400[7]).sum() / (grad[7].norm(2) * mean_grad_400[7].norm(2))
+        cosine_LLw_i = (grad[8] * mean_grad_400[8]).sum() / (grad[8].norm(2) * mean_grad_400[8].norm(2))
+        cosine_LLb_i = (grad[9] * mean_grad_400[9]).sum() / (grad[9].norm(2) * mean_grad_400[9].norm(2))
 
+        cosine_grad_layers[0].append(cosine_Wh1_i)
+        cosine_grad_layers[1].append(cosine_Wh2_i)
+        cosine_grad_layers[2].append(cosine_bh1_i)
+        cosine_grad_layers[3].append(cosine_bh2_i)
+        cosine_grad_layers[4].append(cosine_L1w_i)
+        cosine_grad_layers[5].append(cosine_L1b_i)
+        cosine_grad_layers[6].append(cosine_L2w_i)
+        cosine_grad_layers[7].append(cosine_L2b_i)
+        cosine_grad_layers[8].append(cosine_LLw_i)
+        cosine_grad_layers[9].append(cosine_LLb_i)
+
+        # cosine_grad.append(cosine_Wh1_i + cosine_Wh2_i + cosine_bh1_i + cosine_bh2_i + cosine_L1w_i + cosine_L1b_i + cosine_L2w_i + cosine_L2b_i + cosine_LLw_i + cosine_LLb_i)
+        cosine_grad.append(cosine_L1w_i)
+
+    # idx = torch.stack(cosine_grad).sort(descending=True)[1][:k]
+    # grads_5 = [grads[i] for i in idx]
+    # mean_grad = sum(grads_5) / len(grads_5)
+    # mean_grad = optimizer._unflatten_grad(mean_grad, shapes)
+    # print("top 5 cosine grade: {}".format(cosine_grad[:k]))
+
+    # mean_grad = optimizer._unflatten_grad(grads[0], shapes)
+    # for i in range(len(mean_grad)):
+    #     idx = torch.stack(cosine_grad_layers[i]).sort(descending=True)[1][:k]
+    #     grads_5 = [optimizer._unflatten_grad(grads[j], shapes)[i] for j in idx]
+    #     mean_grad[i] = sum(grads_5) / len(grads_5)
+    #     print([cosine_grad_layers[i][j].item() for j in idx])
+
+    mean_grad = optimizer._unflatten_grad(grads[0], shapes)
+    for grad in mean_grad:
+        grad.zero_()
+    idx = torch.nonzero(torch.stack(cosine_grad) > min_corr)
+    if len(idx) > 0:
+        grads_k = [grads[i] for i in idx]
+        mean_grad = sum(grads_k) / len(grads_k)
+        mean_grad = optimizer._unflatten_grad(mean_grad, shapes)
+        print("top {} cosine grade: {}".format(min_corr, [cosine_grad[i] for i in idx]))
+
+
+    # mean_grad = optimizer._unflatten_grad(grads[0], shapes)
+    # for grad in mean_grad:
+    #     grad.zero_()
+    # for i in range(len(mean_grad)):
+    #     idx = torch.nonzero(torch.stack(cosine_grad_layers[i]) > min_corr)
+    #     if len(idx) > 0:
+    #         grads_k = [optimizer._unflatten_grad(grads[j], shapes)[i] for j in idx]
+    #         mean_grad[i] = sum(grads_k) / len(grads_k)
+    #         print("Layer {}: {}".format(i,[cosine_grad_layers[i][j].item() for j in idx]))
+
+    optimizer._set_grad(mean_grad)
+    optimizer.step()
 
     # optimizer.zero_grad()
     # atten_grads_loss = torch.autograd.grad(total_loss,
@@ -214,6 +428,7 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
 
     # out_1_grad = torch.zeros((out1_states_all.size()[-1],agent.q_network.input_attention.size()[0])).type(dtype)
     out_1_grad =0
+
     # if compute_analytic:
     #     out1_states_all_flat = torch.flatten(out1_states_all, start_dim=0, end_dim=1)
     #     out1_states = out1_states_all_flat.mean(0)
@@ -315,7 +530,7 @@ def main_dqn(params):
     if USE_CUDA:
         device = "cuda"
     if not params.debug:
-        logdir_ = 'offline_train_winsorized_400' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+        logdir_ = 'offline_train_picked_winsorized_400_cosineLayer1' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
         if params.rotate:
             logdir_ = logdir_ + '_rotate'
         if params.zero_ind:
@@ -352,6 +567,11 @@ def main_dqn(params):
         eval_locations_dic[eval_disp_name] = np.random.randint(0, 6, size=params.num_processes)
 
     envs = make_vec_envs(params.env, params.seed, params.num_processes, eval_locations_dic['train_eval'],
+                         params.gamma, None, device, False, steps=params.task_steps,
+                         free_exploration=params.free_exploration, recurrent=params.recurrent_policy,
+                         obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate, obs_rand_loc=params.obs_rand_loc)
+
+    envs_400 = make_vec_envs(params.env_400, params.seed, 416,  np.random.randint(0, 6, size=416),
                          params.gamma, None, device, False, steps=params.task_steps,
                          free_exploration=params.free_exploration, recurrent=params.recurrent_policy,
                          obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate, obs_rand_loc=params.obs_rand_loc)
@@ -415,6 +635,7 @@ def main_dqn(params):
     replay_buffer = ReplayBufferBandit(params.num_steps, params.num_processes, envs.observation_space.shape, envs.action_space)
     # grad_replay_buffer = ReplayBufferBandit(params.num_steps, params.num_processes, envs.observation_space.shape, envs.action_space)
     # val_replay_buffer = ReplayBufferBandit(params.num_steps, params.num_processes, envs.observation_space.shape, envs.action_space)
+    replay_buffer_400 = ReplayBufferBandit(params.num_steps, 416, envs.observation_space.shape, envs.action_space)
 
     # Load previous model
     if (params.continue_from_epoch > 0) and params.save_dir != "":
@@ -472,6 +693,29 @@ def main_dqn(params):
 
         replay_buffer.insert(next_obs, actions, reward, masks)
 
+
+    obs_400 = envs_400.reset()
+    replay_buffer_400.obs[0].copy_(obs_400)
+
+    for step in range(params.num_steps):
+
+        # actions, recurrent_hidden_states = agent.act(replay_buffer.obs[step], recurrent_hidden_states, epsilon, replay_buffer.masks[step])
+        actions = torch.tensor(np.random.randint(agent.num_actions, size=416)).type(dtypelong).unsqueeze(-1)
+        # actions = torch.tensor(np.random.randint(agent.num_actions) * np.ones(params.num_processes)).type(dtypelong).unsqueeze(-1)
+
+        next_obs, reward, done, infos = envs_400.step(actions.cpu())
+
+
+        for info in infos:
+            if 'episode' in info.keys():
+                episode_rewards.append(info['episode']['r'])
+                episode_len.append(info['episode']['l'])
+
+        masks = torch.FloatTensor(
+            [[0.0] if done_ else [1.0] for done_ in done])
+
+        replay_buffer_400.insert(next_obs, actions, reward, masks)
+
     # # Collect validation data
     # for step in range(params.num_steps):
     #
@@ -500,7 +744,7 @@ def main_dqn(params):
     num_updates = int(
         params.max_ts  // params.num_processes // params.task_steps // params.mini_batch_size)
 
-    min_corr = torch.tensor(params.min_corr)
+    # min_corr = torch.tensor(params.min_corr)
 
     # alpha = params.loss_corr_coeff_update
     # loss_corr_coeff = params.loss_corr_coeff
@@ -512,6 +756,7 @@ def main_dqn(params):
 
     # out1_vec = deque(maxlen=10)
     # out1_val_vec = deque(maxlen=10)
+
     L2_grad_vec = deque(maxlen=10)
     L2_grad_val_vec = deque(maxlen=10)
     out1_vec_correlation = deque(maxlen=10)
@@ -539,8 +784,11 @@ def main_dqn(params):
         # loss, grads_L2, out1, start_ind_array, out1_grad, grads, shapes  = compute_td_loss(
         #     agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, k=0, device=device, train=True, compute_analytic=compute_analytic,
         # )
+
+        loss, grads_L2, out1, out2, out3, _, mean_grad_400 = compute_td_gard(agent, params.num_mini_batch, 1, replay_buffer_400, optimizer, params.gamma, device=device)
+
         loss, grads_L2, out1, start_ind_array, out1_grad  = compute_td_loss(
-            agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, k=0, device=device, train=True, compute_analytic=compute_analytic,
+            agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, mean_grad_400, k=params.k, min_corr=params.min_corr, device=device, train=True, compute_analytic=compute_analytic,
         )
         losses.append(loss.data)
 
@@ -732,6 +980,7 @@ def main_dqn(params):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default=None)
+    parser.add_argument("--env_400", type=str, default=None)
     parser.add_argument("--load_env", type=str, default=None)
     parser.add_argument('--val-env', type=str, default=None)
     parser.add_argument("--num-processes", type=int, default=25, help='how many envs to use (default: 25)')
@@ -778,5 +1027,5 @@ if __name__ == "__main__":
     parser.add_argument("--min_corr", type=float, default=0.9995)
     parser.add_argument('--debug', action='store_true', default=False)
     parser.add_argument('--analytic', type=int, default=100)
-    # parser.add_argument('--k', type=int, default=0)
+    parser.add_argument('--k', type=int, default=0)
     main_dqn(parser.parse_args())
