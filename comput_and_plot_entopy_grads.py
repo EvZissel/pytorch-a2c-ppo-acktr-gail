@@ -176,20 +176,25 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
 
     # all_losses = random.choices(all_losses, k=k)
     total_loss = torch.stack(all_losses).mean()
+    mean_grad = 0
+    if num_processes == 416:
+        # total_loss = total_loss.mean() + loss_var_coeff * total_loss.var()
+        optimizer.zero_grad()
+        # grads, shapes = optimizer.plot_backward(all_losses)
+        # total_loss.backward()
+        grads, shapes, has_grads = optimizer._pack_grad([total_loss])
+        mean_flat_grad = optimizer._merge_grad(grads, has_grads)
+        mean_grad = optimizer._unflatten_grad(mean_flat_grad, shapes[0])
+        # optimizer._set_grad(mean_grad)
+        # for i in
+        #     grads
+        # optimizer.step()
+    else:
+        grads, shapes = optimizer.plot_backward(all_losses)
 
-    # total_loss = total_loss.mean() + loss_var_coeff * total_loss.var()
-    optimizer.zero_grad()
-    # grads, shapes = optimizer.plot_backward(all_losses)
-    # total_loss.backward()
-    grads, shapes, has_grads = optimizer._pack_grad([total_loss])
-    mean_flat_grad = optimizer._merge_grad(grads, has_grads)
-    mean_grad = optimizer._unflatten_grad(mean_flat_grad, shapes[0])
-    # optimizer._set_grad(mean_grad)
-    # for i in
-    #     grads
-    # optimizer.step()
 
-    out_1_grad =0
+
+    # out_1_grad =0
 
     # if train:
     #     out1_states_all = out1_states_all[:,0,:]
@@ -197,7 +202,7 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
     #     out1_states_all = out1_states_all[:,2,:]
 
     # return total_loss, grad_L2_states_all, out1_states_all, start_ind_array, out_1_grad, grads, shapes[0]
-    return total_loss, grad_L2_states_all, out1_states_all, out2_states_all, out3_states_all, start_ind_array, mean_grad
+    return total_loss, grad_L2_states_all, out1_states_all, out2_states_all, out3_states_all, start_ind_array, mean_grad, grads
 
 
 def compute_activation_only(agent, num_mini_batch, mini_batch_size, replay_buffer, optimizer, gamma,  device = "CPU", start_ind_array=None):
@@ -464,6 +469,31 @@ cosine_L2b_25 = []
 cosine_LLw_25 = []
 cosine_LLb_25 = []
 
+cosine_Wh1_WOi = []
+cosine_Wh2_WOi = []
+cosine_bh1_WOi = []
+cosine_bh2_WOi = []
+cosine_L1w_WOi = []
+cosine_L1b_WOi = []
+cosine_L2w_WOi = []
+cosine_L2b_WOi = []
+cosine_LLw_WOi = []
+cosine_LLb_WOi = []
+
+
+cosine_Wh1 = []
+cosine_Wh2 = []
+cosine_bh1 = []
+cosine_bh2 = []
+cosine_L1w = []
+cosine_L1b = []
+cosine_L2w = []
+cosine_L2b = []
+cosine_LLw = []
+cosine_LLb = []
+
+
+
 cosine_h1_i_act = []
 cosine_h2_i_act = []
 cosine_L1_i_act = []
@@ -513,16 +543,16 @@ for i in range(25):
     cosine_LLw_i.append([])
     cosine_LLb_i.append([])
 
-    cosine_Wh1_25.append([])
-    cosine_Wh2_25.append([])
-    cosine_bh1_25.append([])
-    cosine_bh2_25.append([])
-    cosine_L1w_25.append([])
-    cosine_L1b_25.append([])
-    cosine_L2w_25.append([])
-    cosine_L2b_25.append([])
-    cosine_LLw_25.append([])
-    cosine_LLb_25.append([])
+    cosine_Wh1_WOi.append([])
+    cosine_Wh2_WOi.append([])
+    cosine_bh1_WOi.append([])
+    cosine_bh2_WOi.append([])
+    cosine_L1w_WOi.append([])
+    cosine_L1b_WOi.append([])
+    cosine_L2w_WOi.append([])
+    cosine_L2b_WOi.append([])
+    cosine_LLw_WOi.append([])
+    cosine_LLb_WOi.append([])
 
     cosine_h1_i_act.append([])
     cosine_h2_i_act.append([])
@@ -565,7 +595,7 @@ for epoch in range(0, 9999, 43):
     agent.q_network.load_state_dict(q_network_weighs['state_dict'])
     agent.target_q_network.load_state_dict(q_network_weighs['target_state_dict'])
 
-    loss, grads_L2, out1, out2, out3, _, mean_grad_400 = compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer_400, optimizer, gamma, 0, k=0, device=device, train=True, compute_analytic=False)
+    loss, grads_L2, out1, out2, out3, _, mean_grad_400, grads_400 = compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer_400, optimizer, gamma, 0, k=0, device=device, train=True, compute_analytic=False)
 
         # eval_r = {}
         # for eval_disp_name, eval_env_name in EVAL_ENVS.items():
@@ -760,27 +790,6 @@ for epoch in range(0, 9999, 43):
 
 
 
-        cosine_Wh1_25[i].append((Wh1_25 * Wh1_i_400).sum() / (Wh1_25.norm(2) * Wh1_i_400.norm(2)))
-
-        cosine_Wh2_25[i].append((Wh2_25 * Wh2_i_400).sum() / (Wh2_25.norm(2) * Wh2_i_400.norm(2)))
-
-        cosine_bh1_25[i].append((bh1_25 * bh1_i_400).sum() / (bh1_25.norm(2) * bh1_i_400.norm(2)))
-
-        cosine_bh2_25[i].append((bh2_25 * bh2_i_400).sum() / (bh2_25.norm(2) * bh2_i_400.norm(2)))
-
-        cosine_L1w_25[i].append((L1w_25 * L1w_i_400).sum() / (L1w_25.norm(2) * L1w_i_400.norm(2)))
-
-        cosine_L1b_25[i].append((L1b_25 * L1b_i_400).sum() / (L1b_25.norm(2) * L1b_i_400.norm(2)))
-
-        cosine_L2w_25[i].append((L2w_25 * L2w_i_400).sum() / (L2w_25.norm(2) * L2w_i_400.norm(2)))
-
-        cosine_L2b_25[i].append((L2b_25 * L2b_i_400).sum() / (L2b_25.norm(2) * L2b_i_400.norm(2)))
-
-        cosine_LLw_25[i].append((LLw_25 * LLw_i_400).sum() / (LLw_25.norm(2) * LLw_i_400.norm(2)))
-
-        cosine_LLb_25[i].append((LLb_25 * LLb_i_400).sum() / (LLb_25.norm(2) * LLb_i_400.norm(2)))
-
-
         cosine_h1_i_act[i].append((h1_activation * h1_activation_400).sum() / (h1_activation.norm(2) * h1_activation_400.norm(2)))
         cosine_h2_i_act[i].append((h2_activation * h2_activation_400).sum() / (h2_activation.norm(2) * h2_activation_400.norm(2)))
         cosine_L1_i_act[i].append((L1_activation * L1_activation_400).sum() / (L1_activation.norm(2) * L1_activation_400.norm(2)))
@@ -826,6 +835,229 @@ for epoch in range(0, 9999, 43):
 
         LLb_i_vec[i].append(LLb_i.norm(2))
 
+    # print("debug")
+    Wh1 = []
+    Wh2 = []
+
+    bh1 = []
+    bh2 = []
+
+    L1w = []
+    L1b = []
+
+    L2w = []
+    L2b = []
+
+    LLw = []
+    LLb = []
+
+    for i in range (25):
+        grads_i = _unflatten_grad(grads[i], shapes)
+        Wh1.append(grads_i[0])
+        Wh2.append(grads_i[1])
+
+        bh1.append(grads_i[2])
+        bh2.append(grads_i[3])
+
+        L1w.append(grads_i[4])
+        L1b.append(grads_i[5])
+
+        L2w.append(grads_i[6])
+        L2b.append(grads_i[7])
+
+        LLw.append(grads_i[8])
+        LLb.append(grads_i[9])
+
+    min_corr = 0.999
+    for i in range (24):
+        cosine_Wh1_WOi = []
+        mean_Wh1 = sum(Wh1) / len(Wh1)
+        for j in range(len(Wh1)):
+
+            mean_Wh1_WOi = Wh1[:j] + Wh1[j+1:]
+            mean_grad_WOi = sum(mean_Wh1_WOi) / len(mean_Wh1_WOi)
+
+            cosine_Wh1_WOi.append((mean_grad_WOi * mean_Wh1).sum() / (mean_grad_WOi.norm(2) * mean_Wh1.norm(2)))
+
+        smallest_val = torch.sort(torch.tensor(cosine_Wh1_WOi))[0][0]
+        smallest_ind = torch.sort(torch.tensor(cosine_Wh1_WOi))[1][0]
+        if smallest_val < min_corr:
+            Wh1 = Wh1[:smallest_ind] + Wh1[smallest_ind + 1:]
+
+        cosine_Wh2_WOi = []
+        mean_Wh2 = sum(Wh2) / len(Wh2)
+        for j in range(len(Wh2)):
+            mean_Wh2_WOi = Wh2[:j] + Wh2[j + 1:]
+            mean_grad_WOi = sum(mean_Wh2_WOi) / len(mean_Wh2_WOi)
+
+            cosine_Wh2_WOi.append((mean_grad_WOi * mean_Wh2).sum() / (mean_grad_WOi.norm(2) * mean_Wh2.norm(2)))
+
+        smallest_val = torch.sort(torch.tensor(cosine_Wh2_WOi))[0][0]
+        smallest_ind = torch.sort(torch.tensor(cosine_Wh2_WOi))[1][0]
+        if smallest_val < min_corr:
+            Wh2 = Wh2[:smallest_ind] + Wh2[smallest_ind + 1:]
+
+        cosine_bh1_WOi = []
+        mean_bh1 = sum(bh1) / len(bh1)
+        for j in range(len(bh1)):
+            mean_bh1_WOi = bh1[:j] + bh1[j + 1:]
+            mean_grad_WOi = sum(mean_bh1_WOi) / len(mean_bh1_WOi)
+
+            cosine_bh1_WOi.append((mean_grad_WOi * mean_bh1).sum() / (mean_grad_WOi.norm(2) * mean_bh1.norm(2)))
+
+        smallest_val = torch.sort(torch.tensor(cosine_bh1_WOi))[0][0]
+        smallest_ind = torch.sort(torch.tensor(cosine_bh1_WOi))[1][0]
+        if smallest_val < min_corr:
+            bh1 = bh1[:smallest_ind] + bh1[smallest_ind + 1:]
+
+        cosine_bh2_WOi = []
+        mean_bh2 = sum(bh2) / len(bh2)
+        for j in range(len(bh2)):
+            mean_bh2_WOi = bh2[:j] + bh2[j + 1:]
+            mean_grad_WOi = sum(mean_bh2_WOi) / len(mean_bh2_WOi)
+
+            cosine_bh2_WOi.append((mean_grad_WOi * mean_bh2).sum() / (mean_grad_WOi.norm(2) * mean_bh2.norm(2)))
+
+        smallest_val = torch.sort(torch.tensor(cosine_bh2_WOi))[0][0]
+        smallest_ind = torch.sort(torch.tensor(cosine_bh2_WOi))[1][0]
+        if smallest_val < min_corr:
+            bh2 = bh2[:smallest_ind] + bh2[smallest_ind + 1:]
+
+        cosine_L1w_WOi = []
+        mean_L1w = sum(L1w) / len(L1w)
+        for j in range(len(L1w)):
+            mean_L1w_WOi = L1w[:j] + L1w[j + 1:]
+            mean_grad_WOi = sum(mean_L1w_WOi) / len(mean_L1w_WOi)
+
+            cosine_L1w_WOi.append((mean_grad_WOi * mean_L1w).sum() / (mean_grad_WOi.norm(2) * mean_L1w.norm(2)))
+
+        smallest_val = torch.sort(torch.tensor(cosine_L1w_WOi))[0][0]
+        smallest_ind = torch.sort(torch.tensor(cosine_L1w_WOi))[1][0]
+        if smallest_val < min_corr:
+            L1w = L1w[:smallest_ind] + L1w[smallest_ind + 1:]
+
+        cosine_L1b_WOi = []
+        mean_L1b = sum(L1b) / len(L1b)
+        for j in range(len(L1b)):
+            mean_L1b_WOi = L1b[:j] + L1b[j + 1:]
+            mean_grad_WOi = sum(mean_L1b_WOi) / len(mean_L1b_WOi)
+
+            cosine_L1b_WOi.append((mean_grad_WOi * mean_L1b).sum() / (mean_grad_WOi.norm(2) * mean_L1b.norm(2)))
+
+        smallest_val = torch.sort(torch.tensor(cosine_L1b_WOi))[0][0]
+        smallest_ind = torch.sort(torch.tensor(cosine_L1b_WOi))[1][0]
+        if smallest_val < min_corr:
+            L1b = L1b[:smallest_ind] + L1b[smallest_ind + 1:]
+
+        cosine_L2w_WOi = []
+        mean_L2w = sum(L2w) / len(L2w)
+        for j in range(len(L2w)):
+            mean_L2w_WOi = L2w[:j] + L2w[j + 1:]
+            mean_grad_WOi = sum(mean_L2w_WOi) / len(mean_L2w_WOi)
+
+            cosine_L2w_WOi.append((mean_grad_WOi * mean_L2w).sum() / (mean_grad_WOi.norm(2) * mean_L2w.norm(2)))
+
+        smallest_val = torch.sort(torch.tensor(cosine_L2w_WOi))[0][0]
+        smallest_ind = torch.sort(torch.tensor(cosine_L2w_WOi))[1][0]
+        if smallest_val < min_corr:
+            L2w = L2w[:smallest_ind] + L2w[smallest_ind + 1:]
+
+        cosine_L2b_WOi = []
+        mean_L2b = sum(L2b) / len(L2b)
+        for j in range(len(L2b)):
+            mean_L2b_WOi = L2b[:j] + L2b[j + 1:]
+            mean_grad_WOi = sum(mean_L2b_WOi) / len(mean_L2b_WOi)
+
+            cosine_L2b_WOi.append((mean_grad_WOi * mean_L2b).sum() / (mean_grad_WOi.norm(2) * mean_L2b.norm(2)))
+
+        smallest_val = torch.sort(torch.tensor(cosine_L2b_WOi))[0][0]
+        smallest_ind = torch.sort(torch.tensor(cosine_L2b_WOi))[1][0]
+        if smallest_val < min_corr:
+            L2b = L2b[:smallest_ind] + L2b[smallest_ind + 1:]
+
+        cosine_LLw_WOi = []
+        mean_LLw = sum(LLw) / len(LLw)
+        for j in range(len(LLw)):
+            mean_LLw_WOi = LLw[:j] + LLw[j + 1:]
+            mean_grad_WOi = sum(mean_LLw_WOi) / len(mean_LLw_WOi)
+
+            cosine_LLw_WOi.append((mean_grad_WOi * mean_LLw).sum() / (mean_grad_WOi.norm(2) * mean_LLw.norm(2)))
+
+        smallest_val = torch.sort(torch.tensor(cosine_LLw_WOi))[0][0]
+        smallest_ind = torch.sort(torch.tensor(cosine_LLw_WOi))[1][0]
+        if smallest_val < min_corr:
+            LLw = LLw[:smallest_ind] + LLw[smallest_ind + 1:]
+
+        cosine_LLb_WOi = []
+        mean_LLb = sum(LLb) / len(LLb)
+        for j in range(len(LLb)):
+            mean_LLb_WOi = LLb[:j] + LLb[j + 1:]
+            mean_grad_WOi = sum(mean_LLb_WOi) / len(mean_LLb_WOi)
+
+            cosine_LLb_WOi.append((mean_grad_WOi * mean_LLb).sum() / (mean_grad_WOi.norm(2) * mean_LLb.norm(2)))
+
+        smallest_val = torch.sort(torch.tensor(cosine_LLb_WOi))[0][0]
+        smallest_ind = torch.sort(torch.tensor(cosine_LLb_WOi))[1][0]
+        if smallest_val < min_corr:
+            LLb = LLb[:smallest_ind] + LLb[smallest_ind + 1:]
+
+
+
+        # # ind = torch.nonzero(torch.tensor(cosine_Wh1_WOi).squeeze() > 0.5).squeeze()
+        # smallest_val = torch.sort(torch.tensor(cosine_Wh1_WOi)[:,len(cosine_LLw_WOi[0])-1])[0][0]
+        # smallest_ind = torch.sort(torch.tensor(cosine_Wh1_WOi)[:,len(cosine_LLw_WOi[0])-1])[1][0]
+        # if smallest_val < 0.5:
+        #     grads =  grads[:smallest_ind] + grads[smallest_ind+1:]
+
+    cosine_Wh1_25.append((Wh1_25 * Wh1_i_400).sum() / (Wh1_25.norm(2) * Wh1_i_400.norm(2)))
+
+    cosine_Wh2_25.append((Wh2_25 * Wh2_i_400).sum() / (Wh2_25.norm(2) * Wh2_i_400.norm(2)))
+
+    cosine_bh1_25.append((bh1_25 * bh1_i_400).sum() / (bh1_25.norm(2) * bh1_i_400.norm(2)))
+
+    cosine_bh2_25.append((bh2_25 * bh2_i_400).sum() / (bh2_25.norm(2) * bh2_i_400.norm(2)))
+
+    cosine_L1w_25.append((L1w_25 * L1w_i_400).sum() / (L1w_25.norm(2) * L1w_i_400.norm(2)))
+
+    cosine_L1b_25.append((L1b_25 * L1b_i_400).sum() / (L1b_25.norm(2) * L1b_i_400.norm(2)))
+
+    cosine_L2w_25.append((L2w_25 * L2w_i_400).sum() / (L2w_25.norm(2) * L2w_i_400.norm(2)))
+
+    cosine_L2b_25.append((L2b_25 * L2b_i_400).sum() / (L2b_25.norm(2) * L2b_i_400.norm(2)))
+
+    cosine_LLw_25.append((LLw_25 * LLw_i_400).sum() / (LLw_25.norm(2) * LLw_i_400.norm(2)))
+
+    cosine_LLb_25.append((LLb_25 * LLb_i_400).sum() / (LLb_25.norm(2) * LLb_i_400.norm(2)))
+
+    mean_Wh1 = sum(Wh1) / len(Wh1)
+    cosine_Wh1.append((mean_Wh1 * Wh1_i_400).sum() / (mean_Wh1.norm(2) * Wh1_i_400.norm(2)))
+
+    mean_Wh2 = sum(Wh2) / len(Wh2)
+    cosine_Wh2.append((mean_Wh2 * Wh2_i_400).sum() / (mean_Wh2.norm(2) * Wh2_i_400.norm(2)))
+
+    mean_bh1 = sum(bh1) / len(bh1)
+    cosine_bh1.append((mean_bh1 * bh1_i_400).sum() / (mean_bh1.norm(2) * bh1_i_400.norm(2)))
+
+    mean_bh2 = sum(bh2) / len(bh2)
+    cosine_bh2.append((mean_bh2 * bh2_i_400).sum() / (mean_bh2.norm(2) * bh2_i_400.norm(2)))
+
+    mean_L1w = sum(L1w) / len(L1w)
+    cosine_L1w.append((mean_L1w * L1w_i_400).sum() / (mean_L1w.norm(2) * L1w_i_400.norm(2)))
+
+    mean_L1b = sum(L1b) / len(L1b)
+    cosine_L1b.append((mean_L1b * L1b_i_400).sum() / (mean_L1b.norm(2) * L1b_i_400.norm(2)))
+
+    mean_L2w = sum(L2w) / len(L2w)
+    cosine_L2w.append((mean_L2w * L2w_i_400).sum() / (mean_L2w.norm(2) * L2w_i_400.norm(2)))
+
+    mean_L2b = sum(L2b) / len(L2b)
+    cosine_L2b.append((mean_L2b * L2b_i_400).sum() / (mean_L2b.norm(2) * L2b_i_400.norm(2)))
+
+    mean_LLw = sum(LLw) / len(LLw)
+    cosine_LLw.append((mean_LLw * LLw_i_400).sum() / (mean_LLw.norm(2) * LLw_i_400.norm(2)))
+
+    mean_LLb = sum(LLb) / len(LLb)
+    cosine_LLb.append((mean_LLb * LLb_i_400).sum() / (mean_LLb.norm(2) * LLb_i_400.norm(2)))
 
 
 
@@ -857,25 +1089,70 @@ for i in range(25):
 
 
 
-        wandb.log({f'eval/eval_Wh1_25': cosine_Wh1_25[i][j]}, step=epoch)
+        wandb.log({f'eval_25/eval_Wh1_25': cosine_Wh1_25[j]}, step=epoch)
 
-        wandb.log({f'eval/eval_Wh2_25': cosine_Wh2_25[i][j]}, step=epoch)
+        wandb.log({f'eval_25/eval_Wh2_25': cosine_Wh2_25[j]}, step=epoch)
 
-        wandb.log({f'eval/eval_bh1_25': cosine_bh1_25[i][j]}, step=epoch)
+        wandb.log({f'eval_25/eval_bh1_25': cosine_bh1_25[j]}, step=epoch)
 
-        wandb.log({f'eval/eval_bh2_25': cosine_bh2_25[i][j]}, step=epoch)
+        wandb.log({f'eval_25/eval_bh2_25': cosine_bh2_25[j]}, step=epoch)
 
-        wandb.log({f'eval/eval_L1w_25': cosine_L1w_25[i][j]}, step=epoch)
+        wandb.log({f'eval_25/eval_L1w_25': cosine_L1w_25[j]}, step=epoch)
 
-        wandb.log({f'eval/eval_L1b_25': cosine_L1b_25[i][j]}, step=epoch)
+        wandb.log({f'eval_25/eval_L1b_25': cosine_L1b_25[j]}, step=epoch)
 
-        wandb.log({f'eval/eval_L2w_25': cosine_L2w_25[i][j]}, step=epoch)
+        wandb.log({f'eval_25/eval_L2w_25': cosine_L2w_25[j]}, step=epoch)
 
-        wandb.log({f'eval/eval_L2b_25': cosine_L2b_25[i][j]}, step=epoch)
+        wandb.log({f'eval_25/eval_L2b_25': cosine_L2b_25[j]}, step=epoch)
 
-        wandb.log({f'eval/eval_LLw_25': cosine_LLw_25[i][j]}, step=epoch)
+        wandb.log({f'eval_25/eval_LLw_25': cosine_LLw_25[j]}, step=epoch)
 
-        wandb.log({f'eval/eval_LLb_25': cosine_LLb_25[i][j]}, step=epoch)
+        wandb.log({f'eval_25/eval_LLb_25': cosine_LLb_25[j]}, step=epoch)
+
+
+
+        # wandb.log({f'eval_WOi/eval_Wh1_WOi': cosine_Wh1_WOi[i][j]}, step=epoch)
+        #
+        # wandb.log({f'eval_WOi/eval_Wh2_WOi': cosine_Wh2_WOi[i][j]}, step=epoch)
+        #
+        # wandb.log({f'eval_WOi/eval_bh1_WOi': cosine_bh1_WOi[i][j]}, step=epoch)
+        #
+        # wandb.log({f'eval_WOi/eval_bh2_WOi': cosine_bh2_WOi[i][j]}, step=epoch)
+        #
+        # wandb.log({f'eval_WOi/eval_L1w_WOi': cosine_L1w_WOi[i][j]}, step=epoch)
+        #
+        # wandb.log({f'eval_WOi/eval_L1b_WOi': cosine_L1b_WOi[i][j]}, step=epoch)
+        #
+        # wandb.log({f'eval_WOi/eval_L2w_WOi': cosine_L2w_WOi[i][j]}, step=epoch)
+        #
+        # wandb.log({f'eval_WOi/eval_L2b_WOi': cosine_L2b_WOi[i][j]}, step=epoch)
+        #
+        # wandb.log({f'eval_WOi/eval_LLw_WOi': cosine_LLw_WOi[i][j]}, step=epoch)
+        #
+        # wandb.log({f'eval_WOi/eval_LLb_WOi': cosine_LLb_WOi[i][j]}, step=epoch)
+
+
+
+
+        wandb.log({f'eval_WOi_mean/eval_Wh1_WOi_mean': cosine_Wh1[j]}, step=epoch)
+
+        wandb.log({f'eval_WOi_mean/eval_Wh2_WOi_mean': cosine_Wh2[j]}, step=epoch)
+
+        wandb.log({f'eval_WOi_mean/eval_bh1_WOi_mean': cosine_bh1[j]}, step=epoch)
+
+        wandb.log({f'eval_WOi_mean/eval_bh2_WOi_mean': cosine_bh2[j]}, step=epoch)
+
+        wandb.log({f'eval_WOi_mean/eval_L1w_WOi_mean': cosine_L1w[j]}, step=epoch)
+
+        wandb.log({f'eval_WOi_mean/eval_L1b_WOi_mean': cosine_L1b[j]}, step=epoch)
+
+        wandb.log({f'eval_WOi_mean/eval_L2w_WOi_mean': cosine_L2w[j]}, step=epoch)
+
+        wandb.log({f'eval_WOi_mean/eval_L2b_WOi_mean': cosine_L2b[j]}, step=epoch)
+
+        wandb.log({f'eval_WOi_mean/eval_LLw_WOi_mean': cosine_LLw[j]}, step=epoch)
+
+        wandb.log({f'eval_WOi_mean/eval_LLb_WOi_mean': cosine_LLb[j]}, step=epoch)
 
 
 
