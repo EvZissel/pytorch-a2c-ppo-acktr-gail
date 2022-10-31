@@ -24,6 +24,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from a2c_ppo_acktr.utils import init
+import wandb
 
 EVAL_ENVS = ['train_eval','test_eval']
 
@@ -42,18 +43,20 @@ def main():
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
-    logdir = args.env_name + '_seed_' + str(args.seed) + '_num_env_' + str(args.num_level) + '_entro_' + str(args.entropy_coef) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    logdir_ = args.env_name + '_seed_' + str(args.seed) + '_num_env_' + str(args.num_level) + '_entro_' + str(args.entropy_coef) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
     if args.normalize_rew:
-        logdir = logdir + '_normalize_rew'
+        logdir_ = logdir_ + '_normalize_rew'
     if not args.recurrent_policy:
-        logdir = logdir + '_noRNN'
+        logdir_ = logdir_ + '_noRNN'
     if args.mask_all:
-        logdir = logdir + '_mask_all'
+        logdir_ = logdir_ + '_mask_all'
     if args.mask_size > 0:
-        logdir = logdir + '_mask_' + str(args.mask_size)
+        logdir_ = logdir_ + '_mask_' + str(args.mask_size)
 
-    logdir = os.path.join(os.path.expanduser(args.log_dir), logdir)
+    logdir = os.path.join(os.path.expanduser(args.log_dir), logdir_)
     utils.cleanup_log_dir(logdir)
+
+    wandb.init(project="maze_PPO_maximum_entropy", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
 
     # Ugly but simple logging
     log_dict = {
@@ -179,20 +182,20 @@ def main():
         actor_critic_weighs = torch.load(os.path.join(save_path, args.env_name + "-epoch-{}.pt".format(args.continue_from_epoch)), map_location=device)
         actor_critic.load_state_dict(actor_critic_weighs['state_dict'])
         agent.optimizer.load_state_dict(actor_critic_weighs['optimizer_state_dict'])
-        rollouts.obs                            = actor_critic_weighs['buffer_obs']
-        rollouts.recurrent_hidden_states = actor_critic_weighs['buffer_recurrent_hidden_states']
-        rollouts.rewards                 = actor_critic_weighs['buffer_rewards']
-        rollouts.seeds                   = actor_critic_weighs['buffer_seeds']
-        rollouts.value_preds             = actor_critic_weighs['buffer_value_preds']
-        rollouts.returns                 = actor_critic_weighs['buffer_returns']
-        rollouts.action_log_probs        = actor_critic_weighs['buffer_action_log_probs']
-        rollouts.actions                 = actor_critic_weighs['buffer_actions']
-        rollouts.masks                   = actor_critic_weighs['buffer_masks']
-        rollouts.bad_masks               = actor_critic_weighs['buffer_bad_masks']
-        rollouts.info_batch              = actor_critic_weighs['buffer_info_batch']
-        rollouts.num_steps               = actor_critic_weighs['buffer_num_steps']
-        rollouts.step                    = actor_critic_weighs['buffer_step']
-        rollouts.num_processes           = actor_critic_weighs['buffer_num_processes']
+        # rollouts.obs                            = actor_critic_weighs['buffer_obs']
+        # rollouts.recurrent_hidden_states = actor_critic_weighs['buffer_recurrent_hidden_states']
+        # rollouts.rewards                 = actor_critic_weighs['buffer_rewards']
+        # rollouts.seeds                   = actor_critic_weighs['buffer_seeds']
+        # rollouts.value_preds             = actor_critic_weighs['buffer_value_preds']
+        # rollouts.returns                 = actor_critic_weighs['buffer_returns']
+        # rollouts.action_log_probs        = actor_critic_weighs['buffer_action_log_probs']
+        # rollouts.actions                 = actor_critic_weighs['buffer_actions']
+        # rollouts.masks                   = actor_critic_weighs['buffer_masks']
+        # rollouts.bad_masks               = actor_critic_weighs['buffer_bad_masks']
+        # rollouts.info_batch              = actor_critic_weighs['buffer_info_batch']
+        # rollouts.num_steps               = actor_critic_weighs['buffer_num_steps']
+        # rollouts.step                    = actor_critic_weighs['buffer_step']
+        # rollouts.num_processes           = actor_critic_weighs['buffer_num_processes']
 
 
     logger = Logger(args.num_processes)
@@ -217,16 +220,16 @@ def main():
 
     for j in range(args.continue_from_epoch, args.continue_from_epoch+num_updates):
 
-        # plot mazes
-        if j % save_image_every == 0:
-            fig = plt.figure(figsize=(20, 20))
-            columns = 5
-            rows = 5
-            for i in range(1, columns * rows + 1):
-                fig.add_subplot(rows, columns, i)
-                plt.imshow(rollouts.obs[0][i].transpose(0,2))
-            summary_writer.add_images('samples_step_{}'.format(j), rollouts.obs[0][0:25], global_step=(j) * args.num_processes * args.num_steps)
-            plt.show()
+        # # plot mazes
+        # if j % save_image_every == 0:
+        #     fig = plt.figure(figsize=(20, 20))
+        #     columns = 5
+        #     rows = 5
+        #     for i in range(1, columns * rows + 1):
+        #         fig.add_subplot(rows, columns, i)
+        #         plt.imshow(rollouts.obs[0][i].transpose(0,2))
+        #     summary_writer.add_images('samples_step_{}'.format(j), rollouts.obs[0][0:25], global_step=(j) * args.num_processes * args.num_steps)
+        #     plt.show()
 
         # policy rollouts
         actor_critic.eval()
@@ -283,21 +286,21 @@ def main():
         # save for every interval-th episode or for the last epoch
         if (j % args.save_interval == 0 or j == args.continue_from_epoch + num_updates - 1):
             torch.save({'state_dict': actor_critic.state_dict(), 'optimizer_state_dict': agent.optimizer.state_dict(),
-                        'step': j,
-                        'buffer_obs': rollouts.obs,
-                        'buffer_recurrent_hidden_states': rollouts.recurrent_hidden_states,
-                        'buffer_rewards': rollouts.rewards,
-                        'buffer_seeds': rollouts.seeds,
-                        'buffer_value_preds': rollouts.value_preds,
-                        'buffer_returns': rollouts.returns,
-                        'buffer_action_log_probs': rollouts.action_log_probs,
-                        'buffer_actions': rollouts.actions,
-                        'buffer_masks': rollouts.masks,
-                        'buffer_bad_masks': rollouts.bad_masks,
-                        'buffer_info_batch': rollouts.info_batch,
-                        'buffer_num_steps': rollouts.num_steps,
-                        'buffer_step': rollouts.step,
-                        'buffer_num_processes': rollouts.num_processes}, os.path.join(logdir, args.env_name + "-epoch-{}.pt".format(j)))
+                        'step': j}, os.path.join(logdir, args.env_name + "-epoch-{}.pt".format(j)))
+                        # 'buffer_obs': rollouts.obs,
+                        # 'buffer_recurrent_hidden_states': rollouts.recurrent_hidden_states,
+                        # 'buffer_rewards': rollouts.rewards,
+                        # 'buffer_seeds': rollouts.seeds,
+                        # 'buffer_value_preds': rollouts.value_preds,
+                        # 'buffer_returns': rollouts.returns,
+                        # 'buffer_action_log_probs': rollouts.action_log_probs,
+                        # 'buffer_actions': rollouts.actions,
+                        # 'buffer_masks': rollouts.masks,
+                        # 'buffer_bad_masks': rollouts.bad_masks,
+                        # 'buffer_info_batch': rollouts.info_batch,
+                        # 'buffer_num_steps': rollouts.num_steps,
+                        # 'buffer_step': rollouts.step,
+                        # 'buffer_num_processes': rollouts.num_processes}, os.path.join(logdir, args.env_name + "-epoch-{}.pt".format(j)))
 
         # print some stats
         if j % args.log_interval == 0:
@@ -379,14 +382,19 @@ def main():
             for key, value in episode_statistics.items():
                 if isinstance(value, dict):
                     summary_writer.add_scalars(key, value,(j + 1) * args.num_processes * args.num_steps)
+                    for key_v, value_v in value.items():
+                        wandb.log({key + "/" + key_v: value_v}, step=(j + 1) * args.num_processes * args.num_steps)
+
                 else:
                     summary_writer.add_scalar(key, value, (j + 1) * args.num_processes * args.num_steps)
+                # wandb.log({f'eval/{eval_disp_name}': np.mean(eval_r[eval_disp_name])}, step=total_num_steps)
 
             summary ={'Loss/pi': action_loss,
                       'Loss/v': value_loss,
                       'Loss/entropy': dist_entropy}
             for key, value in summary.items():
                 summary_writer.add_scalar(key, value, (j + 1) * args.num_processes * args.num_steps)
+                wandb.log({key: value}, step=(j + 1) * args.num_processes * args.num_steps)
 
 
     # training done. Save and clean up
