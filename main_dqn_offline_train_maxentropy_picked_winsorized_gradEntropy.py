@@ -71,7 +71,7 @@ class Agent:
         return torch.tensor(np.random.randint(self.env.action_space.n, size=q_value.size()[0])).type(dtypelong).unsqueeze(-1), rnn_hxs
 
 
-def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optimizer, gamma, loss_var_coeff, k=0, device = "CPU", train=True, compute_analytic=False, same_ind=False, start_ind_array=None):
+def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optimizer, gamma, mean_grad_maxEnt, k=0, min_corr=-1, device = "CPU", maxEnt_reward=False, same_ind=False, start_ind_array=None):
     num_processes = replay_buffer.rewards.size(1)
     num_steps = replay_buffer.rewards.size(0)
     num_steps_per_batch = int(num_steps/num_mini_batch)
@@ -82,26 +82,35 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
         start_ind_array = np.random.choice(start_ind_array, size=mini_batch_size, replace=False)
 
     all_losses = []
-    # all_grad_W2 = []
-    # all_grad_b2 = []
+    grads = []
+    shapes = []
     grad_L2_states_all = 0
     out1_states_all = 0
+    out2_states_all = 0
+    out3_states_all = 0
     states_all_all = 0
     # states_all = 0
+
+    cosine_grad = []
+    cosine_grad_layers = []
+    cosine_grad_activation = []
+
+    if not maxEnt_reward:
+        for i in range(len(mean_grad_maxEnt)):
+            cosine_grad_layers.append([])
+
     for i in range(num_processes):
         all_losses.append(0)
-        # all_grad_W2.append(0)
-        # all_grad_b2.append(0)
 
     recurrent_hidden = torch.zeros(1, agent.q_network.recurrent_hidden_state_size).type(dtype)
     for start_ind in start_ind_array:
         data_sampler = replay_buffer.sampler(num_processes, start_ind, num_steps_per_batch)
 
         losses = []
-        # grad_W2 = []
-        # grad_b2 = []
         grad_L2_states = 0
         out1_states = 0
+        out2_states = 0
+        out3_states = 0
         states_all = 0
         # states_all_b = 0
 
@@ -110,19 +119,36 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
             # double q-learning
             with torch.no_grad():
                     # recurrent_hidden.detach()
-                online_q_values, _, _, _, _ = agent.q_network(states.to(device), recurrent_hidden, done.to(device))
+                online_q_values, _, _, _, _  = agent.q_network(states.to(device), recurrent_hidden, done.to(device))
                 _, max_indicies = torch.max(online_q_values, dim=1)
                 target_q_values, _, _, _, _ = agent.target_q_network(states.to(device), recurrent_hidden, done.to(device))
                 next_q_value = target_q_values.gather(1, max_indicies.unsqueeze(1))
 
                 next_q_value = next_q_value * done.to(device)
-                expected_q_value = (rewards.to(device) + gamma * next_q_value[1:, :]).squeeze(1)
+                if maxEnt_reward:
+                    normalized_states = torch.clone(states)
+                    normalized_states[-1, 6] = actions[-1] / 10
+                    normalized_states[-1, 7] = rewards[-1]
+
+                    int_rewards = torch.zeros(rewards.size())
+
+                    for i in range(1, normalized_states.size(0) - 1):
+                        norm_distance = torch.norm(normalized_states[i + 1] - normalized_states[1:i + 1], dim=1)
+                        norm_distance = torch.sort(norm_distance)[0]
+                        if (len(norm_distance) > 0):
+                            int_rewards[i] = (norm_distance[0] > 0.01) * 1.0  # 1st nearest neighbor
+                    expected_q_value = (int_rewards.to(device) + next_q_value[1:, :]).squeeze(1)
+
+                else:
+                    expected_q_value = (rewards.to(device) + gamma * next_q_value[1:, :]).squeeze(1)
 
             # Normal DDQN update
             # with torch.backends.cudnn.flags(enabled=False):
-            q_values, out_1, _ , _ , _ = agent.q_network(states.to(device), recurrent_hidden, done.to(device))
+            q_values, out_3, out_2, out_1, _ = agent.q_network(states.to(device), recurrent_hidden, done.to(device))
             q_value = q_values[:-1, :].gather(1, actions.to(device)).squeeze(1)
             out_1 = out_1[:-1, :].unsqueeze(1)
+            out_2 = out_2[:-1, :].unsqueeze(1)
+            out_3 = out_3[:-1, :].unsqueeze(1)
 
             td_err = (q_value - expected_q_value.data).unsqueeze(1).unsqueeze(1)
             e = torch.zeros(num_steps_per_batch, actions.size(0), 1, device=device)
@@ -145,10 +171,14 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
             if (len(losses)==1):
                 grad_L2_states = grad_L2_states_b
                 out1_states = out_1
+                out2_states = out_2
+                out3_states = out_3
                 states_all = states[:-1, :].unsqueeze(1)
             else:
                 grad_L2_states = torch.cat((grad_L2_states, grad_L2_states_b), dim=1)
                 out1_states = torch.cat((out1_states, out_1), dim=1)
+                out2_states = torch.cat((out2_states, out_2), dim=1)
+                out3_states = torch.cat((out3_states, out_3), dim=1)
                 states_all = torch.cat((states_all, states[:-1, :].unsqueeze(1)), dim=1)
 
             # grads = torch.autograd.grad(one_loss,
@@ -166,13 +196,17 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
         if start_ind == start_ind_array[0] :
             grad_L2_states_all = grad_L2_states.mean(1)
             out1_states_all = out1_states
+            out2_states_all = out2_states
+            out3_states_all = out3_states
             states_all_all = states_all
         else:
             grad_L2_states_all = torch.cat((grad_L2_states_all, grad_L2_states.mean(1)), dim=0)
             out1_states_all = torch.cat((out1_states_all, out1_states), dim=0)
+            out2_states_all = torch.cat((out2_states_all, out1_states), dim=0)
+            out3_states_all = torch.cat((out3_states_all, out1_states), dim=0)
             states_all_all = torch.cat((states_all_all, states_all), dim=0)
 
-    all_losses = random.choices(all_losses, k=k)
+    # all_losses = random.choices(all_losses, k=k)
     total_loss = torch.stack(all_losses).mean()
 
 
@@ -190,9 +224,77 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
 
     # total_loss = total_loss.mean() + loss_var_coeff * total_loss.var()
     optimizer.zero_grad()
-    # grads, shapes = optimizer.plot_backward(all_losses)
-    total_loss.backward()
-    optimizer.step()
+    grads, shapes = optimizer.plot_backward(all_losses)
+    # total_loss.backward()
+    # grads, shapes, has_grads = optimizer._pack_grad([total_loss])
+    # mean_flat_grad = optimizer._merge_grad(grads, has_grads)
+    if not maxEnt_reward:
+        for grad in grads:
+            grad = optimizer._unflatten_grad(grad, shapes)
+            cosine_Wh1_i = (grad[0] * mean_grad_maxEnt[0]).sum() / (grad[0].norm(2) * mean_grad_maxEnt[0].norm(2))
+            cosine_Wh2_i = (grad[1] * mean_grad_maxEnt[1]).sum() / (grad[1].norm(2) * mean_grad_maxEnt[1].norm(2))
+            cosine_bh1_i = (grad[2] * mean_grad_maxEnt[2]).sum() / (grad[2].norm(2) * mean_grad_maxEnt[2].norm(2))
+            cosine_bh2_i = (grad[3] * mean_grad_maxEnt[3]).sum() / (grad[3].norm(2) * mean_grad_maxEnt[3].norm(2))
+            cosine_L1w_i = (grad[4] * mean_grad_maxEnt[4]).sum() / (grad[4].norm(2) * mean_grad_maxEnt[4].norm(2))
+            cosine_L1b_i = (grad[5] * mean_grad_maxEnt[5]).sum() / (grad[5].norm(2) * mean_grad_maxEnt[5].norm(2))
+            cosine_L2w_i = (grad[6] * mean_grad_maxEnt[6]).sum() / (grad[6].norm(2) * mean_grad_maxEnt[6].norm(2))
+            cosine_L2b_i = (grad[7] * mean_grad_maxEnt[7]).sum() / (grad[7].norm(2) * mean_grad_maxEnt[7].norm(2))
+            cosine_LLw_i = (grad[8] * mean_grad_maxEnt[8]).sum() / (grad[8].norm(2) * mean_grad_maxEnt[8].norm(2))
+            cosine_LLb_i = (grad[9] * mean_grad_maxEnt[9]).sum() / (grad[9].norm(2) * mean_grad_maxEnt[9].norm(2))
+
+            cosine_grad_layers[0].append(cosine_Wh1_i)
+            cosine_grad_layers[1].append(cosine_Wh2_i)
+            cosine_grad_layers[2].append(cosine_bh1_i)
+            cosine_grad_layers[3].append(cosine_bh2_i)
+            cosine_grad_layers[4].append(cosine_L1w_i)
+            cosine_grad_layers[5].append(cosine_L1b_i)
+            cosine_grad_layers[6].append(cosine_L2w_i)
+            cosine_grad_layers[7].append(cosine_L2b_i)
+            cosine_grad_layers[8].append(cosine_LLw_i)
+            cosine_grad_layers[9].append(cosine_LLb_i)
+
+            # cosine_grad.append(cosine_Wh1_i + cosine_Wh2_i + cosine_bh1_i + cosine_bh2_i + cosine_L1w_i + cosine_L1b_i + cosine_L2w_i + cosine_L2b_i + cosine_LLw_i + cosine_LLb_i)
+            # cosine_grad.append(cosine_L1w_i)
+
+        # idx = torch.stack(cosine_grad).sort(descending=True)[1][:k]
+        # grads_5 = [grads[i] for i in idx]
+        # mean_grad = sum(grads_5) / len(grads_5)
+        # mean_grad = optimizer._unflatten_grad(mean_grad, shapes)
+        # print("top {} cosine grade: {}".format(k, cosine_grad[:k]))
+
+        mean_grad = optimizer._unflatten_grad(grads[0], shapes)
+        for grad in mean_grad:
+            grad.zero_()
+        for i in range(len(mean_grad)):
+            idx = torch.stack(cosine_grad_layers[i]).sort(descending=True)[1][:k]
+            grads_5 = [optimizer._unflatten_grad(grads[j], shapes)[i] for j in idx]
+            mean_grad[i] = sum(grads_5) / len(grads_5)
+            print([cosine_grad_layers[i][j].item() for j in idx])
+
+        # mean_grad = optimizer._unflatten_grad(grads[0], shapes)
+        # for grad in mean_grad:
+        #     grad.zero_()
+        # idx = torch.nonzero(torch.stack(cosine_grad) > min_corr)
+        # if len(idx) > 0:
+        #     grads_k = [grads[i] for i in idx]
+        #     mean_grad = sum(grads_k) / len(grads_k)
+        #     mean_grad = optimizer._unflatten_grad(mean_grad, shapes)
+        #     print("top {} cosine grade: {}".format(min_corr, [cosine_grad[i] for i in idx]))
+
+
+        # mean_grad = optimizer._unflatten_grad(grads[0], shapes)
+        # for grad in mean_grad:
+        #     grad.zero_()
+        # for i in range(len(mean_grad)):
+        #     idx = torch.nonzero(torch.stack(cosine_grad_layers[i]) > min_corr)
+        #     if len(idx) > 0:
+        #         grads_k = [optimizer._unflatten_grad(grads[j], shapes)[i] for j in idx]
+        #         mean_grad[i] = sum(grads_k) / len(grads_k)
+        #         # print("Layer {}: {}".format(i,[cosine_grad_layers[i][j].item() for j in idx]))
+        #         print("Layer {} Len: {}".format(i,len(grads_k)))
+
+        optimizer._set_grad(mean_grad)
+        optimizer.step()
 
     # optimizer.zero_grad()
     # atten_grads_loss = torch.autograd.grad(total_loss,
@@ -204,31 +306,32 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
     #     optimizer.step()
 
     # out_1_grad = torch.zeros((out1_states_all.size()[-1],agent.q_network.input_attention.size()[0])).type(dtype)
-    out_1_grad = 0
-    # if compute_analytic:
-    #     out1_states_all_flat = torch.flatten(out1_states_all, start_dim=0, end_dim=1)
-    #     out1_states = out1_states_all_flat.mean(0)
-    #     # states_all_all_flat = torch.flatten(states_all_all, start_dim=0, end_dim=1)
-    #     for i in range(out1_states.size()[0]):
-    #         loss_i = out1_states[i]
-    #         # loss_i.backward()
-    #         loss_i_grads = torch.autograd.grad(loss_i,
-    #                                             agent.q_network.input_attention,
-    #                                             retain_graph=True)
-    #         out_1_grad[i,:] = loss_i_grads[0]
-
-    # grads = None
+    # out_1_grad =0
+    #
+    # # if compute_analytic:
+    # #     out1_states_all_flat = torch.flatten(out1_states_all, start_dim=0, end_dim=1)
+    # #     out1_states = out1_states_all_flat.mean(0)
+    # #     # states_all_all_flat = torch.flatten(states_all_all, start_dim=0, end_dim=1)
+    # #     for i in range(out1_states.size()[0]):
+    # #         loss_i = out1_states[i]
+    # #         # loss_i.backward()
+    # #         loss_i_grads = torch.autograd.grad(loss_i,
+    # #                                             agent.q_network.input_attention,
+    # #                                             retain_graph=True)
+    # #         out_1_grad[i,:] = loss_i_grads[0]
+    #
+    # # grads = None
+    # # else:
+    # #     grads = torch.autograd.grad(total_loss,
+    # #                                 updated_train_params.values(),
+    # #                                 create_graph=create_graph)
+    # if train:
+    #     out1_states_all = out1_states_all[:,0,:]
     # else:
-    #     grads = torch.autograd.grad(total_loss,
-    #                                 updated_train_params.values(),
-    #                                 create_graph=create_graph)
-    if train:
-        out1_states_all = out1_states_all[:,0,:]
-    else:
-        out1_states_all = out1_states_all[:,2,:]
+    #     out1_states_all = out1_states_all[:,2,:]
 
-    # return total_loss, grad_L2_states_all, out1_states_all, start_ind_array, out_1_grad, grads, shapes
-    return total_loss, grad_L2_states_all, out1_states_all, start_ind_array, out_1_grad
+    return total_loss, grad_L2_states_all, start_ind_array, grads, shapes
+    # return total_loss, grad_L2_states_all, out1_states_all, start_ind_array, out_1_grad
 
 
 def evaluate(agent, eval_envs_dic ,env_name, eval_locations_dic, num_processes, num_tasks, **kwargs):
@@ -306,7 +409,7 @@ def main_dqn(params):
     if USE_CUDA:
         device = "cuda"
     if not params.debug:
-        logdir_ = 'offline_train_winsorized' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+        logdir_ = 'offline_train_picked_winsorized_gradEntropy' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
         if params.rotate:
             logdir_ = logdir_ + '_rotate'
         if params.zero_ind:
@@ -318,7 +421,7 @@ def main_dqn(params):
         summary_writer = SummaryWriter(log_dir=logdir)
         summary_writer.add_hparams(vars(params), {})
 
-        wandb.init(project="main_dqn_offline_maximum_entropy_train", entity="ev_zisselman", config=params, name=logdir_, id=logdir_)
+        wandb.init(project="main_dqn_offline_maximum_entropy_train_saveGrad", entity="ev_zisselman", config=params, name=logdir_, id=logdir_)
 
         print("logdir: " + logdir)
         for key in vars(params):
@@ -346,6 +449,11 @@ def main_dqn(params):
                          params.gamma, None, device, False, steps=params.task_steps,
                          free_exploration=params.free_exploration, recurrent=params.recurrent_policy,
                          obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate, obs_rand_loc=params.obs_rand_loc)
+
+    # envs_400 = make_vec_envs(params.env_400, params.seed, 416,  np.random.randint(0, 6, size=416),
+    #                      params.gamma, None, device, False, steps=params.task_steps,
+    #                      free_exploration=params.free_exploration, recurrent=params.recurrent_policy,
+    #                      obs_recurrent=params.obs_recurrent, multi_task=True, normalize=not params.no_normalize, rotate=params.rotate, obs_rand_loc=params.obs_rand_loc)
 
     # val_envs = make_vec_envs(params.val_env, params.seed, params.num_processes, eval_locations_dic['valid_eval'],
     #                      params.gamma, None, device, False, steps=params.task_steps,
@@ -397,7 +505,7 @@ def main_dqn(params):
 
 
     # optimizer = optim.Adam(non_attention_parameters, lr=params.learning_rate, weight_decay=params.weight_decay)
-    # optimizer = optim.Adam(train_param, lr=params.learning_rate, weight_decay=params.weight_decay)
+    # optimizer = optim.Adam(last_layer_param, lr=params.learning_rate, weight_decay=params.weight_decay)
     optimizer = optim.Adam(q_network.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
     optimizer = GradPlotDqn(optimizer)
     # optimizer_val = optim.Adam(attention_parameters, lr=params.learning_rate_val, weight_decay=params.weight_decay)
@@ -406,6 +514,7 @@ def main_dqn(params):
     replay_buffer = ReplayBufferBandit(params.num_steps, params.num_processes, envs.observation_space.shape, envs.action_space)
     # grad_replay_buffer = ReplayBufferBandit(params.num_steps, params.num_processes, envs.observation_space.shape, envs.action_space)
     # val_replay_buffer = ReplayBufferBandit(params.num_steps, params.num_processes, envs.observation_space.shape, envs.action_space)
+    # replay_buffer_400 = ReplayBufferBandit(params.num_steps, 416, envs.observation_space.shape, envs.action_space)
 
     # Load previous model
     if (params.continue_from_epoch > 0) and params.save_dir != "":
@@ -424,22 +533,6 @@ def main_dqn(params):
         agent.q_network.load_state_dict(q_network_weighs['state_dict'], strict=False)
         agent.target_q_network.load_state_dict(q_network_weighs['target_state_dict'], strict=False)
 
-    # if (params.saved_epoch > 0) and params.save_dir != "":
-    #     save_path = params.save_dir
-    #     q_network_weighs = torch.load(os.path.join(save_path, params.load_env + "-epoch-{}.pt".format(params.saved_epoch)), map_location=device)
-    #     q_network_weighs_state_dict = q_network_weighs['state_dict']
-    #     q_network_weighs_target_state_dict = q_network_weighs['target_state_dict']
-    #
-    #     for epoch in range (params.saved_epoch+1000,params.saved_epoch_end, 1000):
-    #         q_network_weighs_ephoc = torch.load(os.path.join(save_path, params.load_env + "-epoch-{}.pt".format(epoch)),map_location=device)
-    #         for state_dict_name, state_dict in q_network_weighs_ephoc['state_dict'].items():
-    #             q_network_weighs_state_dict[state_dict_name] += state_dict/10
-    #
-    #         for state_dict_name, state_dict in q_network_weighs_ephoc['target_state_dict'].items():
-    #             q_network_weighs_target_state_dict[state_dict_name] += state_dict/10
-    #
-    #     agent.q_network.load_state_dict(q_network_weighs_state_dict, strict=False)
-    #     agent.target_q_network.load_state_dict(q_network_weighs_target_state_dict, strict=False)
 
     obs = envs.reset()
     replay_buffer.obs[0].copy_(obs)
@@ -463,10 +556,10 @@ def main_dqn(params):
     for step in range(params.num_steps):
 
         # actions, recurrent_hidden_states = agent.act(replay_buffer.obs[step], recurrent_hidden_states, epsilon, replay_buffer.masks[step])
-        actions = torch.tensor(np.random.randint(agent.num_actions, size=params.num_processes)).unsqueeze(-1)
+        actions = torch.tensor(np.random.randint(agent.num_actions, size=params.num_processes)).type(dtypelong).unsqueeze(-1)
         # actions = torch.tensor(np.random.randint(agent.num_actions) * np.ones(params.num_processes)).type(dtypelong).unsqueeze(-1)
 
-        next_obs, reward, done, infos = envs.step(actions)
+        next_obs, reward, done, infos = envs.step(actions.cpu())
 
 
         for info in infos:
@@ -478,6 +571,29 @@ def main_dqn(params):
             [[0.0] if done_ else [1.0] for done_ in done])
 
         replay_buffer.insert(next_obs, actions, reward, masks)
+
+
+    # obs_400 = envs_400.reset()
+    # replay_buffer_400.obs[0].copy_(obs_400)
+    #
+    # for step in range(params.num_steps):
+    #
+    #     # actions, recurrent_hidden_states = agent.act(replay_buffer.obs[step], recurrent_hidden_states, epsilon, replay_buffer.masks[step])
+    #     actions = torch.tensor(np.random.randint(agent.num_actions, size=416)).type(dtypelong).unsqueeze(-1)
+    #     # actions = torch.tensor(np.random.randint(agent.num_actions) * np.ones(params.num_processes)).type(dtypelong).unsqueeze(-1)
+    #
+    #     next_obs, reward, done, infos = envs_400.step(actions.cpu())
+    #
+    #
+    #     for info in infos:
+    #         if 'episode' in info.keys():
+    #             episode_rewards.append(info['episode']['r'])
+    #             episode_len.append(info['episode']['l'])
+    #
+    #     masks = torch.FloatTensor(
+    #         [[0.0] if done_ else [1.0] for done_ in done])
+    #
+    #     replay_buffer_400.insert(next_obs, actions, reward, masks)
 
     # # Collect validation data
     # for step in range(params.num_steps):
@@ -507,7 +623,7 @@ def main_dqn(params):
     num_updates = int(
         params.max_ts  // params.num_processes // params.task_steps // params.mini_batch_size)
 
-    min_corr = torch.tensor(params.min_corr)
+    # min_corr = torch.tensor(params.min_corr)
 
     # alpha = params.loss_corr_coeff_update
     # loss_corr_coeff = params.loss_corr_coeff
@@ -519,6 +635,7 @@ def main_dqn(params):
 
     # out1_vec = deque(maxlen=10)
     # out1_val_vec = deque(maxlen=10)
+
     L2_grad_vec = deque(maxlen=10)
     L2_grad_val_vec = deque(maxlen=10)
     out1_vec_correlation = deque(maxlen=10)
@@ -539,16 +656,26 @@ def main_dqn(params):
     for ts in range(params.continue_from_epoch, params.continue_from_epoch+num_updates):
         # Update the q-network & the target network
 
-        ### Update Theta #####
-        loss, grads_L2, out1, start_ind_array, out1_grad = compute_td_loss(
-            agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, k=params.k, device=device, train=True, compute_analytic=compute_analytic,
-        )
-
+        #### Update Theta #####
+        # loss, grads_L2, out1, start_ind_array, out1_grad = compute_td_loss(
+        #     agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, k=int(k%5), device=device, train=True, compute_analytic=compute_analytic,
+        # )
         # loss, grads_L2, out1, start_ind_array, out1_grad, grads, shapes  = compute_td_loss(
         #     agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, k=0, device=device, train=True, compute_analytic=compute_analytic,
         # )
 
+        # loss, grads_L2, out1, out2, out3, _, mean_grad_400 = compute_td_gard(agent, params.num_mini_batch, 1, replay_buffer_400, optimizer, params.gamma, device=device)
+
+        Ent_loss, Ent_grads_L2, Ent_start_ind_array, Ent_grads, shapes  = compute_td_loss(
+            agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, None, k=params.k, min_corr=params.min_corr, device=device, maxEnt_reward = True)
+
+        mean_grad_maxEnt = sum(Ent_grads)/len(Ent_grads)
+        mean_grad_maxEnt = optimizer._unflatten_grad(mean_grad_maxEnt, shapes)
+        loss, grads_L2, start_ind_array, grads, shapes   = compute_td_loss(
+            agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, mean_grad_maxEnt , k=params.k, min_corr=params.min_corr, device=device, maxEnt_reward=False)
+
         losses.append(loss.data)
+
         # k += 1
 
         # val_loss, val_grads_L2, val_out1, _, val_out1_grad = compute_td_loss(
@@ -671,7 +798,7 @@ def main_dqn(params):
         # if not params.debug and (ts % params.save_grad == 0):
         #     if ts==0:
         #         torch.save({'shapes': shapes}, os.path.join(logdir_grad, params.env + "-epoch-{}-shapes.pt".format(ts)))
-        #     torch.save({'grad_ens': grads, 'ind_array': start_ind_array},os.path.join(logdir_grad, params.val_env + "-epoch-{}-optimizer_grad.pt".format(ts, params.max_grad_sum)))
+        #     torch.save({'grad_ens': grads},os.path.join(logdir_grad, params.val_env + "-epoch-{}-optimizer_grad.pt".format(ts, params.max_grad_sum)))
 
         if ts % params.log_every == 0:
             out_str = "Iter {}, Timestep {}".format(ts, total_num_steps)
@@ -700,7 +827,7 @@ def main_dqn(params):
                         summary_writer.add_scalar(f'entropy eval/{eval_disp_name}', num_uniform/eval_env_name[1], total_num_steps)
                         wandb.log({f'eval/{eval_disp_name}': np.mean(eval_r[eval_disp_name])}, step=total_num_steps)
                         wandb.log({f'eval_epoch/{eval_disp_name}': np.mean(eval_r[eval_disp_name])}, step=ts)
-                        wandb.log({f'entropy eval/{eval_disp_name}': num_uniform/eval_env_name[1]}, step=total_num_steps)
+                        wandb.log({f'entropy eval/{eval_disp_name}': num_uniform/max(eval_env_name[1],params.num_processes)}, step=total_num_steps)
             if not params.debug:
                 if len(losses) > 0:
                     out_str += ", TD Loss: {}".format(losses[-1])
@@ -729,34 +856,6 @@ def main_dqn(params):
                 # wandb.log({f'L2/L2_dqn_out1': L2_dqn_out1}, step=total_num_steps)
                 # wandb.log({f'L2/L2_dqn_out1_mean': L2_dqn_out1_mean}, step=total_num_steps)
 
-        # if params.reinitialization_Last and (ts > 0) and (ts == 1333):
-        #     q_network_weighs = torch.load(os.path.join(params.save_dir, params.load_env + "-epoch-{}.pt".format(params.continue_from_epoch)), map_location=device)
-        #     q_network_weighs['state_dict']['gru.weight_ih_l0'].copy_(agent.q_network.gru.weight_ih_l0)
-        #     q_network_weighs['state_dict']['gru.weight_hh_l0'].copy_(agent.q_network.gru.weight_hh_l0)
-        #     q_network_weighs['state_dict']['gru.bias_ih_l0'].copy_(agent.q_network.gru.bias_ih_l0)
-        #     q_network_weighs['state_dict']['gru.bias_hh_l0'].copy_(agent.q_network.gru.bias_hh_l0)
-        #
-        #     q_network_weighs['state_dict']['layer_1.weight'].copy_(agent.q_network.layer_1.weight)
-        #     q_network_weighs['state_dict']['layer_1.bias'].copy_(agent.q_network.layer_1.bias)
-        #     q_network_weighs['state_dict']['layer_2.weight'].copy_(agent.q_network.layer_2.weight)
-        #     q_network_weighs['state_dict']['layer_2.bias'].copy_(agent.q_network.layer_2.bias)
-        #
-        #
-        #
-        #     q_network_weighs['target_state_dict']['gru.weight_ih_l0'].copy_(agent.target_q_network.gru.weight_ih_l0)
-        #     q_network_weighs['target_state_dict']['gru.weight_hh_l0'].copy_(agent.target_q_network.gru.weight_hh_l0)
-        #     q_network_weighs['target_state_dict']['gru.bias_ih_l0'].copy_(agent.target_q_network.gru.bias_ih_l0)
-        #     q_network_weighs['target_state_dict']['gru.bias_hh_l0'].copy_(agent.target_q_network.gru.bias_hh_l0)
-        #
-        #     q_network_weighs['target_state_dict']['layer_1.weight'].copy_(agent.target_q_network.layer_1.weight)
-        #     q_network_weighs['target_state_dict']['layer_1.bias'].copy_(agent.target_q_network.layer_1.bias)
-        #     q_network_weighs['target_state_dict']['layer_2.weight'].copy_(agent.target_q_network.layer_2.weight)
-        #     q_network_weighs['target_state_dict']['layer_2.bias'].copy_(agent.target_q_network.layer_2.bias)
-        #
-        #     agent.q_network.load_state_dict(q_network_weighs['state_dict'], strict=False)
-        #     agent.target_q_network.load_state_dict(q_network_weighs['target_state_dict'], strict=False)
-        #     print("re-initialize step {}".format(total_num_steps))
-
     if not params.debug:
         wandb.finish()
 
@@ -765,6 +864,7 @@ def main_dqn(params):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default=None)
+    # parser.add_argument("--env_400", type=str, default=None)
     parser.add_argument("--load_env", type=str, default=None)
     parser.add_argument('--val-env', type=str, default=None)
     parser.add_argument("--num-processes", type=int, default=25, help='how many envs to use (default: 25)')
@@ -779,7 +879,6 @@ if __name__ == "__main__":
     parser.add_argument("--rotate", action='store_true', default=False, help='rotate observations')
     parser.add_argument("--continue_from_epoch", type=int, default=0, help='load previous training (from model save dir) and continue')
     parser.add_argument("--saved_epoch", type=int, default=0, help='load previous training (from model save dir) and continue')
-    parser.add_argument("--saved_epoch_end", type=int, default=0, help='load previous training (from model save dir) and continue')
     parser.add_argument("--log-dir", default='/tmp/gym/', help='directory to save agent logs (default: /tmp/gym)')
     parser.add_argument("--save-dir", default='./trained_models/', help='directory to save agent logs (default: ./trained_models/)')
     parser.add_argument("--num-mini-batch", type=int, default=32, help='number of mini-batches (default: 32)')
@@ -809,9 +908,8 @@ if __name__ == "__main__":
     parser.add_argument("--update_target", action='store_true', default=False)
     parser.add_argument("--hidden_size", type=int, default=64)
     parser.add_argument("--max_attn_grad_norm", type=float, default=20.0)
-    parser.add_argument("--min_corr", type=float, default=0.9995)
+    parser.add_argument("--min_corr", type=float, default=0.9)
     parser.add_argument('--debug', action='store_true', default=False)
     parser.add_argument('--analytic', type=int, default=100)
     parser.add_argument('--k', type=int, default=0)
-    parser.add_argument('--reinitialization_Last', action='store_true', default=False)
     main_dqn(parser.parse_args())

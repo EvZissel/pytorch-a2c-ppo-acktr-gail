@@ -53,11 +53,11 @@ def main():
         torch.backends.cudnn.deterministic = True
 
     EVAL_ENVS = {'train_eval': [args.env_name, args.num_processes],
-                 'valid_eval': [args.val_env_name, args.num_processes],
                  'test_eval': ['h_bandit-obs-randchoose-v1', 100]}
 
     logdir_ = args.env_name + '_' + args.algo + '_seed_' + str(args.seed) + '_num_arms_' + str(args.num_processes) + '_entro_' + str(args.entropy_coef) \
              + '_l2_' + str(args.l2_coef) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    logdir_ = logdir_ + '_entropyOnly'
     if args.rotate:
         logdir_ = logdir_ + '_rotate'
 
@@ -208,12 +208,6 @@ def main():
         agent.optimizer.load_state_dict(actor_critic_weighs['optimizer_state_dict'])
 
 
-    if (args.saved_epoch > 0) and args.save_dir != "":
-        save_path = args.save_dir
-        actor_critic_weighs = torch.load(os.path.join(save_path, args.env_name + "-epoch-{}.pt".format(args.saved_epoch)), map_location=device)
-        actor_critic.load_state_dict(actor_critic_weighs['state_dict'])
-
-
     rollouts = RolloutStorage(args.num_steps, args.num_processes,
                               envs.observation_space.shape, envs.action_space,
                               actor_critic.recurrent_hidden_state_size)
@@ -228,6 +222,10 @@ def main():
     start = time.time()
     num_updates = int(
         args.num_env_steps) // args.num_steps // args.num_processes
+
+    obs_int_reward = torch.zeros(args.task_steps, args.num_processes, *envs.observation_space.shape)
+    ind_reward = 0
+    int_reward = torch.zeros(args.num_processes, 1)
 
     save_copy = True
     for j in range(args.continue_from_epoch, args.continue_from_epoch+num_updates):
@@ -245,6 +243,16 @@ def main():
             # Observe reward and next obs
 
             obs, reward, done, infos = envs.step(action.cpu())
+            obs_int_reward[ind_reward].copy_(obs)
+            if done[0]:
+                obs_int_reward[ind_reward][:, 6] = action.squeeze()/10
+                obs_int_reward[ind_reward][:, 7] = reward.squeeze()
+
+            norm_distance = torch.norm(obs_int_reward[ind_reward] - obs_int_reward[:ind_reward], dim=2)
+            if len(norm_distance)>0:
+                norm_distance = torch.sort(norm_distance,dim=0)[0][0,:] # 1st nearest neighbor
+                for i in range(len(norm_distance)):
+                    int_reward[i] = (norm_distance[i] > 0.01) * 1.0
 
             for info in infos:
                 if 'episode' in info.keys():
@@ -260,7 +268,13 @@ def main():
                 [[0.0] if 'bad_transition' in info.keys() else [1.0]
                  for info in infos])
             rollouts.insert(obs, recurrent_hidden_states, action,
-                            action_log_prob, value, reward, masks, bad_masks, attn_masks)
+                            action_log_prob, value, int_reward, masks, bad_masks, attn_masks)
+
+            ind_reward += 1
+            if done[0]:
+                obs_int_reward = torch.zeros(args.task_steps, args.num_processes, *envs.observation_space.shape)
+                ind_reward = 0
+                int_reward = torch.zeros(args.num_processes, 1)
 
         actor_critic.eval()
         with torch.no_grad():
@@ -280,7 +294,6 @@ def main():
         value_loss, action_loss, dist_entropy, dist_l2 = agent.update(rollouts)
 
         rollouts.after_update()
-        # agent.scheduler.step()
 
         # save for every interval-th episode or for the last epoch
         # if (j % args.save_interval == 0
@@ -343,7 +356,7 @@ def main():
                 summary_writer.add_scalar(f'eval/{eval_disp_name}', np.mean(eval_r[eval_disp_name]),
                                           (j+1) * args.num_processes * args.num_steps)
                 wandb.log({f'eval/{eval_disp_name}': np.mean(eval_r[eval_disp_name])}, step=(j+1) * args.num_processes * args.num_steps)
-                wandb.log({f'entropy eval/{eval_disp_name}': num_uniform / eval_env_name[1]},step=(j + 1) * args.num_processes * args.num_steps)
+                wandb.log({f'entropy eval/{eval_disp_name}': num_uniform / eval_env_name[1]}, step=(j+1) * args.num_processes * args.num_steps)
 
                 log_dict[eval_disp_name].append([(j+1) * args.num_processes * args.num_steps, eval_r[eval_disp_name]])
                 printout += eval_disp_name + ' ' + str(np.mean(eval_r[eval_disp_name])) + ' '
@@ -387,59 +400,32 @@ def main():
             # save_copy = True
 
 
-            if args.reinitialization_last and (j > 0) and (j % 2000) == 0:
+            if args.reinitialization_last and (j % 2400) == 0:
                 init_categorical(actor_critic.dist.linear)
                 init_actor_critic(actor_critic.base.critic_linear)
                 init_actor_critic(actor_critic.base.actor[2])
                 init_actor_critic(actor_critic.base.critic[2])
 
-            if args.reinitialization_all and (j > 0) and (j == 2000) == 0:
-                # init_categorical(actor_critic.dist.linear)
-                # init_actor_critic(actor_critic.base.critic_linear)
-                # init_actor_critic(actor_critic.base.actor[0])
-                # init_actor_critic(actor_critic.base.critic[0])
-                # init_actor_critic(actor_critic.base.actor[2])
-                # init_actor_critic(actor_critic.base.critic[2])
+            if args.reinitialization_all and (j % 2400) == 0:
+                init_categorical(actor_critic.dist.linear)
+                init_actor_critic(actor_critic.base.critic_linear)
+                init_actor_critic(actor_critic.base.actor[0])
+                init_actor_critic(actor_critic.base.critic[0])
+                init_actor_critic(actor_critic.base.actor[2])
+                init_actor_critic(actor_critic.base.critic[2])
 
-                actor_critic_weighs = torch.load(os.path.join(args.save_dir, args.env_name + "-epoch-{}.pt".format(args.saved_epoch)),map_location=device)
-                actor_critic_weighs['state_dict']['base.gru.weight_ih_l0'].copy_(actor_critic.base.gru.weight_ih_l0)
-                actor_critic_weighs['state_dict']['base.gru.bias_ih_l0'].copy_(actor_critic.base.gru.bias_ih_l0)
-                actor_critic_weighs['state_dict']['base.gru.weight_hh_l0'].copy_(actor_critic.base.gru.weight_hh_l0)
-                actor_critic_weighs['state_dict']['base.gru.bias_hh_l0'].copy_(actor_critic.base.gru.bias_hh_l0)
-
-                actor_critic.load_state_dict(actor_critic_weighs['state_dict'])
-
-                # actor_critic.base.actor[0].weight.copy_(actor_critic_weighs['state_dict']['base.actor.0.weight'])
-                # actor_critic.base.actor[0].bias.copy_(actor_critic_weighs['state_dict']['base.actor.0.bias'])
-                # actor_critic.base.actor[2].weight.copy_(actor_critic_weighs['state_dict']['base.actor.0.weight'])
-                # actor_critic.base.actor[2].bias.copy_(actor_critic_weighs['state_dict']['base.actor.0.bias'])
-                #
-                # actor_critic.base.critic[0].weight.copy_(actor_critic_weighs['state_dict']['base.critic.0.weight'])
-                # actor_critic.base.critic[0].bias.copy_(actor_critic_weighs['state_dict']['base.critic.0.bias'])
-                # actor_critic.base.critic[2].weight.copy_(actor_critic_weighs['state_dict']['base.critic.0.weight'])
-                # actor_critic.base.critic[2].bias.copy_(actor_critic_weighs['state_dict']['base.critic.0.bias'])
-                #
-                # actor_critic.base.critic_linear.weight.copy_(actor_critic_weighs['state_dict']['base.critic_linear.weight'])
-                # actor_critic.base.critic_linear.bias.copy_(actor_critic_weighs['state_dict']['base.critic_linear.bias'])
-                #
-                # actor_critic.dist.linear.weight.copy_(actor_critic_weighs['state_dict']['dist.linear.weight'])
-                # actor_critic.dist.linear.bias.copy_(actor_critic_weighs['state_dict']['dist.linear.bias'])
-
-            if args.reinitialization_all_GRU and (j > 0) and (j % 2000) == 0:
-                # init_categorical(actor_critic.dist.linear)
-                # init_actor_critic(actor_critic.base.critic_linear)
-                # init_actor_critic(actor_critic.base.actor[0])
-                # init_actor_critic(actor_critic.base.critic[0])
-                # init_actor_critic(actor_critic.base.actor[2])
-                # init_actor_critic(actor_critic.base.critic[2])
-                # for name, param in actor_critic.base.gru.named_parameters():
-                #     if 'bias' in name:
-                #         nn.init.constant_(param, 0)
-                #     elif 'weight' in name:
-                #         nn.init.orthogonal_(param)
-
-                actor_critic_weighs = torch.load(os.path.join(args.save_dir, args.env_name + "-epoch-{}.pt".format(args.saved_epoch)),map_location=device)
-                actor_critic.load_state_dict(actor_critic_weighs['state_dict'])
+            if args.reinitialization_all_GRU and (j % 2400) == 0:
+                init_categorical(actor_critic.dist.linear)
+                init_actor_critic(actor_critic.base.critic_linear)
+                init_actor_critic(actor_critic.base.actor[0])
+                init_actor_critic(actor_critic.base.critic[0])
+                init_actor_critic(actor_critic.base.actor[2])
+                init_actor_critic(actor_critic.base.critic[2])
+                for name, param in actor_critic.base.gru.named_parameters():
+                    if 'bias' in name:
+                        nn.init.constant_(param, 0)
+                    elif 'weight' in name:
+                        nn.init.orthogonal_(param)
 
 
             print(printout)

@@ -11,8 +11,10 @@ def evaluate(actor_critic, obs_rms, eval_envs_dic, eval_locations_dic ,env_name,
     eval_envs = eval_envs_dic[env_name]
     locations = eval_locations_dic[env_name]
     eval_episode_rewards = []
+    num_uniform = 0
 
     for iter in range(0, num_tasks, num_processes):
+        eval_actions = []
         for i in range(num_processes):
             eval_envs.set_task_id(task_id=iter+i, task_location=locations[i], indices=i)
         vec_norm = utils.get_vec_normalize(eval_envs)
@@ -40,6 +42,7 @@ def evaluate(actor_critic, obs_rms, eval_envs_dic, eval_locations_dic ,env_name,
 
             # Obser reward and next obs
             obs, _, done, infos = eval_envs.step(action.cpu())
+            eval_actions.append(action)
             # if len(eval_episode_rewards) > 98:
             #     print(action)
             eval_masks = torch.tensor(
@@ -51,8 +54,13 @@ def evaluate(actor_critic, obs_rms, eval_envs_dic, eval_locations_dic ,env_name,
                 if 'episode' in info.keys():
                     eval_episode_rewards.append(info['episode']['r'])
     # eval_envs.close()
+        eval_actions = torch.stack(eval_actions).squeeze()
+        for i in range(num_processes):
+            if len(torch.unique(eval_actions[:, i])) == len(eval_actions[:, i]):
+                # if torch.equal(torch.sort(eval_actions[:,i])[0], torch.tensor([0,0,0,1,1,1,2,2,2,3,3,3,4,4,4,5,5,5], device=eval_actions.device)):
+                num_uniform += 1
 
 
     # print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
     #     len(eval_episode_rewards), np.mean(eval_episode_rewards)))
-    return eval_episode_rewards
+    return eval_episode_rewards, eval_actions, num_uniform

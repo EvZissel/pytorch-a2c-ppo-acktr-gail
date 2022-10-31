@@ -71,7 +71,7 @@ class Agent:
         return torch.tensor(np.random.randint(self.env.action_space.n, size=q_value.size()[0])).type(dtypelong).unsqueeze(-1), rnn_hxs
 
 
-def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optimizer, gamma, loss_var_coeff, k=0, device = "CPU", train=True, compute_analytic=False, same_ind=False, start_ind_array=None):
+def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optimizer, gamma, loss_var_coeff, k=0, device = "CPU", train=True, maxEnt_reward=False, same_ind=False, start_ind_array=None):
     num_processes = replay_buffer.rewards.size(1)
     num_steps = replay_buffer.rewards.size(0)
     num_steps_per_batch = int(num_steps/num_mini_batch)
@@ -116,7 +116,22 @@ def compute_td_loss(agent, num_mini_batch, mini_batch_size, replay_buffer, optim
                 next_q_value = target_q_values.gather(1, max_indicies.unsqueeze(1))
 
                 next_q_value = next_q_value * done.to(device)
-                expected_q_value = (rewards.to(device) + gamma * next_q_value[1:, :]).squeeze(1)
+                if maxEnt_reward:
+                    normalized_states = torch.clone(states)
+                    normalized_states[-1, 6] = actions[-1] / 10
+                    normalized_states[-1, 7] = rewards[-1]
+
+                    int_rewards = torch.zeros(rewards.size())
+
+                    for i in range(1, normalized_states.size(0) - 1):
+                        norm_distance = torch.norm(normalized_states[i + 1] - normalized_states[1:i + 1], dim=1)
+                        norm_distance = torch.sort(norm_distance)[0]
+                        if (len(norm_distance) > 0):
+                            int_rewards[i] = (norm_distance[0] > 0.01) * 1.0  # 1st nearest neighbor
+                    expected_q_value = (int_rewards.to(device) + next_q_value[1:, :]).squeeze(1)
+
+                else:
+                    expected_q_value = (rewards.to(device) + gamma * next_q_value[1:, :]).squeeze(1)
 
             # Normal DDQN update
             # with torch.backends.cudnn.flags(enabled=False):
@@ -306,7 +321,7 @@ def main_dqn(params):
     if USE_CUDA:
         device = "cuda"
     if not params.debug:
-        logdir_ = 'offline_train_winsorized' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+        logdir_ = 'offline_train_MaxEntReint' +  params.env + '_' + str(params.seed) + '_num_arms_' + str(params.num_processes) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
         if params.rotate:
             logdir_ = logdir_ + '_rotate'
         if params.zero_ind:
@@ -318,7 +333,7 @@ def main_dqn(params):
         summary_writer = SummaryWriter(log_dir=logdir)
         summary_writer.add_hparams(vars(params), {})
 
-        wandb.init(project="main_dqn_offline_maximum_entropy_train", entity="ev_zisselman", config=params, name=logdir_, id=logdir_)
+        wandb.init(project="main_dqn_offline_maximum_entropy_train_reinit", entity="ev_zisselman", config=params, name=logdir_, id=logdir_)
 
         print("logdir: " + logdir)
         for key in vars(params):
@@ -540,9 +555,24 @@ def main_dqn(params):
         # Update the q-network & the target network
 
         ### Update Theta #####
+        if ((ts > 666) and (ts < 3333)) or ((ts > 5333) and (ts < 8000)):
+            maxEnt_reward = True
+            for name, p in q_network.named_parameters():
+                if 'layer_1' in name:
+                    p.requires_grad = False
+                elif 'layer_2' in name:
+                    p.requires_grad = False
+
+        else:
+            maxEnt_reward = False
+            for name, p in q_network.named_parameters():
+                if 'layer_1' in name:
+                    p.requires_grad = True
+                elif 'layer_2' in name:
+                    p.requires_grad = True
+
         loss, grads_L2, out1, start_ind_array, out1_grad = compute_td_loss(
-            agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, k=params.k, device=device, train=True, compute_analytic=compute_analytic,
-        )
+                agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, k=params.k, device=device, train=True, maxEnt_reward=maxEnt_reward)
 
         # loss, grads_L2, out1, start_ind_array, out1_grad, grads, shapes  = compute_td_loss(
         #     agent, params.num_mini_batch, params.mini_batch_size, replay_buffer, optimizer, params.gamma, params.loss_var_coeff, k=0, device=device, train=True, compute_analytic=compute_analytic,
@@ -650,14 +680,9 @@ def main_dqn(params):
         # total_loss.backward()
         # optimizer.step()
 
+
         total_num_steps = (ts + 1) * params.num_processes * params.task_steps * params.mini_batch_size
 
-        # if ts == 100:
-        #     gama = 100
-        # if ts == 200:
-        #     gama = 10
-        # if ts == 2000:
-        #     gama = 1
 
         if ts % params.target_network_update_f == 0:
             hard_update(agent.q_network, agent.target_q_network)
@@ -729,33 +754,33 @@ def main_dqn(params):
                 # wandb.log({f'L2/L2_dqn_out1': L2_dqn_out1}, step=total_num_steps)
                 # wandb.log({f'L2/L2_dqn_out1_mean': L2_dqn_out1_mean}, step=total_num_steps)
 
-        # if params.reinitialization_Last and (ts > 0) and (ts == 1333):
-        #     q_network_weighs = torch.load(os.path.join(params.save_dir, params.load_env + "-epoch-{}.pt".format(params.continue_from_epoch)), map_location=device)
-        #     q_network_weighs['state_dict']['gru.weight_ih_l0'].copy_(agent.q_network.gru.weight_ih_l0)
-        #     q_network_weighs['state_dict']['gru.weight_hh_l0'].copy_(agent.q_network.gru.weight_hh_l0)
-        #     q_network_weighs['state_dict']['gru.bias_ih_l0'].copy_(agent.q_network.gru.bias_ih_l0)
-        #     q_network_weighs['state_dict']['gru.bias_hh_l0'].copy_(agent.q_network.gru.bias_hh_l0)
-        #
-        #     q_network_weighs['state_dict']['layer_1.weight'].copy_(agent.q_network.layer_1.weight)
-        #     q_network_weighs['state_dict']['layer_1.bias'].copy_(agent.q_network.layer_1.bias)
-        #     q_network_weighs['state_dict']['layer_2.weight'].copy_(agent.q_network.layer_2.weight)
-        #     q_network_weighs['state_dict']['layer_2.bias'].copy_(agent.q_network.layer_2.bias)
-        #
-        #
-        #
-        #     q_network_weighs['target_state_dict']['gru.weight_ih_l0'].copy_(agent.target_q_network.gru.weight_ih_l0)
-        #     q_network_weighs['target_state_dict']['gru.weight_hh_l0'].copy_(agent.target_q_network.gru.weight_hh_l0)
-        #     q_network_weighs['target_state_dict']['gru.bias_ih_l0'].copy_(agent.target_q_network.gru.bias_ih_l0)
-        #     q_network_weighs['target_state_dict']['gru.bias_hh_l0'].copy_(agent.target_q_network.gru.bias_hh_l0)
-        #
-        #     q_network_weighs['target_state_dict']['layer_1.weight'].copy_(agent.target_q_network.layer_1.weight)
-        #     q_network_weighs['target_state_dict']['layer_1.bias'].copy_(agent.target_q_network.layer_1.bias)
-        #     q_network_weighs['target_state_dict']['layer_2.weight'].copy_(agent.target_q_network.layer_2.weight)
-        #     q_network_weighs['target_state_dict']['layer_2.bias'].copy_(agent.target_q_network.layer_2.bias)
-        #
-        #     agent.q_network.load_state_dict(q_network_weighs['state_dict'], strict=False)
-        #     agent.target_q_network.load_state_dict(q_network_weighs['target_state_dict'], strict=False)
-        #     print("re-initialize step {}".format(total_num_steps))
+        if params.reinitialization_Last and ((ts == 665) or (ts == 5333)):
+            q_network_weighs = torch.load(os.path.join(params.save_dir, params.load_env + "-epoch-{}.pt".format(params.continue_from_epoch)), map_location=device)
+            # q_network_weighs['state_dict']['gru.weight_ih_l0'].copy_(agent.q_network.gru.weight_ih_l0)
+            # q_network_weighs['state_dict']['gru.weight_hh_l0'].copy_(agent.q_network.gru.weight_hh_l0)
+            # q_network_weighs['state_dict']['gru.bias_ih_l0'].copy_(agent.q_network.gru.bias_ih_l0)
+            # q_network_weighs['state_dict']['gru.bias_hh_l0'].copy_(agent.q_network.gru.bias_hh_l0)
+
+            q_network_weighs['state_dict']['layer_1.weight'].copy_(agent.q_network.layer_1.weight)
+            q_network_weighs['state_dict']['layer_1.bias'].copy_(agent.q_network.layer_1.bias)
+            q_network_weighs['state_dict']['layer_2.weight'].copy_(agent.q_network.layer_2.weight)
+            q_network_weighs['state_dict']['layer_2.bias'].copy_(agent.q_network.layer_2.bias)
+
+
+
+            # q_network_weighs['target_state_dict']['gru.weight_ih_l0'].copy_(agent.target_q_network.gru.weight_ih_l0)
+            # q_network_weighs['target_state_dict']['gru.weight_hh_l0'].copy_(agent.target_q_network.gru.weight_hh_l0)
+            # q_network_weighs['target_state_dict']['gru.bias_ih_l0'].copy_(agent.target_q_network.gru.bias_ih_l0)
+            # q_network_weighs['target_state_dict']['gru.bias_hh_l0'].copy_(agent.target_q_network.gru.bias_hh_l0)
+
+            q_network_weighs['target_state_dict']['layer_1.weight'].copy_(agent.target_q_network.layer_1.weight)
+            q_network_weighs['target_state_dict']['layer_1.bias'].copy_(agent.target_q_network.layer_1.bias)
+            q_network_weighs['target_state_dict']['layer_2.weight'].copy_(agent.target_q_network.layer_2.weight)
+            q_network_weighs['target_state_dict']['layer_2.bias'].copy_(agent.target_q_network.layer_2.bias)
+
+            agent.q_network.load_state_dict(q_network_weighs['state_dict'], strict=False)
+            agent.target_q_network.load_state_dict(q_network_weighs['target_state_dict'], strict=False)
+            print("re-initialize step {}".format(total_num_steps))
 
     if not params.debug:
         wandb.finish()

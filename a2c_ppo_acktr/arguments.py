@@ -237,6 +237,11 @@ def get_args():
         default=0,
         help='load previous training (from model save dir) and continue')
     parser.add_argument(
+        '--saved_epoch',
+        type=int,
+        default=0,
+        help='load previous training (from model save dir) and continue')
+    parser.add_argument(
         '--max_task_grad_norm',
         type=float,
         default=1000.0,

@@ -88,7 +88,7 @@ class PPO():
             else:
                 self.optimizer = optim.Adam(self.non_attention_parameters, lr=lr, eps=eps, weight_decay=weight_decay)
         self.attention_policy = attention_policy
-
+        # self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=4000, gamma=0.1)
         # self.optimizer = GradPlot(self.optimizer)
         # self.max_task_grad_norm = max_task_grad_norm
         # self.use_pcgrad = use_pcgrad
