@@ -47,6 +47,7 @@ class RolloutStorage(object):
         self.step = 0
         self.num_processes = num_processes
         self.device = device
+        self.obs_sum = torch.zeros(num_processes, *obs_shape)
 
     def to(self, device):
         self.obs = self.obs.to(device)
@@ -59,6 +60,7 @@ class RolloutStorage(object):
         self.actions = self.actions.to(device)
         self.masks = self.masks.to(device)
         self.bad_masks = self.bad_masks.to(device)
+        self.obs_sum = self.obs_sum.to(device)
 
     def insert(self, obs, recurrent_hidden_states, actions, action_log_probs,
                value_preds, rewards, masks, bad_masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, info):
@@ -78,11 +80,13 @@ class RolloutStorage(object):
         self.attn_masks2[self.step + 1].copy_(attn_masks2)
         self.attn_masks3[self.step + 1].copy_(attn_masks3)
         self.info_batch.append(info)
+        self.obs_sum += obs.cpu()
 
         self.step = (self.step + 1) % self.num_steps
 
     def after_update(self):
         self.obs[0].copy_(self.obs[-1])
+        self.obs_sum.copy_(self.obs[-1])
         self.recurrent_hidden_states[0].copy_(self.recurrent_hidden_states[-1])
         self.masks[0].copy_(self.masks[-1])
         self.bad_masks[0].copy_(self.bad_masks[-1])

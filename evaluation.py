@@ -138,3 +138,98 @@ def evaluate_procgen(actor_critic, eval_envs_dic, env_name, num_processes,
     done_batch = np.array(done_batch)
 
     return rew_batch, done_batch
+
+def evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, env_name, num_processes,
+                     device, steps, attention_features=False, det_masks=False, deterministic=True):
+
+    eval_envs = eval_envs_dic[env_name]
+    rew_batch = []
+    done_batch = []
+    # eval_episode_len = []
+    # eval_episode_len_buffer = []
+    # for _ in range(num_processes):
+    #     eval_episode_len_buffer.append(0)
+
+    obs = eval_envs.reset()
+    obs_sum = obs
+    eval_recurrent_hidden_states = torch.zeros(
+        num_processes, actor_critic.recurrent_hidden_state_size, device=device)
+    eval_masks = torch.zeros(num_processes, 1, device=device)
+    if attention_features:
+        # eval_attn_masks = torch.zeros(num_processes, actor_critic.attention_size, device=device)
+        # eval_attn_masks1 = torch.zeros(num_processes, 16, device=device)
+        # eval_attn_masks2 = torch.zeros(num_processes, 32, device=device)
+        # eval_attn_masks3 = torch.zeros(num_processes, 32, device=device)
+
+        eval_attn_masks = (torch.sigmoid(actor_critic.base.linear_attention) > 0.5).float()
+        eval_attn_masks1 = (torch.sigmoid(actor_critic.base.block1.attention) > 0.5).float()
+        eval_attn_masks2 = (torch.sigmoid(actor_critic.base.block2.attention) > 0.5).float()
+        eval_attn_masks3 = (torch.sigmoid(actor_critic.base.block3.attention) > 0.5).float()
+    elif actor_critic.attention_size == 1:
+        eval_attn_masks = torch.zeros(num_processes, actor_critic.attention_size, device=device)
+        eval_attn_masks1 = torch.zeros(num_processes,  16 , device=device)
+        eval_attn_masks2 = torch.zeros(num_processes,  32 , device=device)
+        eval_attn_masks3 = torch.zeros(num_processes,  32 , device=device)
+
+    else:
+        eval_attn_masks = torch.zeros(num_processes, *actor_critic.attention_size, device=device)
+        eval_attn_masks1 = torch.zeros(num_processes,  16 , device=device)
+        eval_attn_masks2 = torch.zeros(num_processes,  32 , device=device)
+        eval_attn_masks3 = torch.zeros(num_processes,  32 , device=device)
+
+
+    # fig = plt.figure(figsize=(20, 20))
+    # columns = 5
+    # rows = 5
+    # for i in range(1, columns * rows + 1):
+    #     fig.add_subplot(rows, columns, i)
+    #     plt.imshow(obs[i].transpose())
+    # plt.show()
+
+    for t in range(steps):
+        with torch.no_grad():
+            _, action, _, eval_recurrent_hidden_states, _, _, _, _ = actor_critic.act(
+                obs.float().to(device),
+                eval_recurrent_hidden_states,
+                eval_masks,
+                attn_masks=eval_attn_masks,
+                attn_masks1=eval_attn_masks1,
+                attn_masks2=eval_attn_masks2,
+                attn_masks3=eval_attn_masks3,
+                deterministic=deterministic,
+                reuse_masks=det_masks)
+
+            # Observe reward and next obs
+            next_obs, reward, done, infos = eval_envs.step(action.squeeze().cpu().numpy())
+            eval_masks = torch.tensor(
+                [[0.0] if done_ else [1.0] for done_ in done],
+                dtype=torch.float32,
+                device=device)
+
+            # if 'env_reward' in infos[0]:
+            #     rew_batch.append([info['env_reward'] for info in infos])
+            # else:
+            #     rew_batch.append(reward)
+
+            next_obs_sum = obs_sum + next_obs
+            if t < steps-1:
+                for i in range(len(reward)):
+                    num_zero_obs_sum = (obs_sum[i][0] == 0).sum()
+                    num_zero_next_obs_sum = (next_obs_sum[i][0] == 0).sum()
+                    if num_zero_next_obs_sum < num_zero_obs_sum:
+                        reward[i] = 1
+
+            rew_batch.append(reward)
+            done_batch.append(done)
+
+            obs = next_obs
+            obs_sum = next_obs_sum
+
+    rew_batch = np.array(rew_batch)
+    done_batch = np.array(done_batch)
+    num_zero_obs_end = np.zeros_like(reward)
+    for i in range(len(reward)):
+        if (obs_sum[i][0] == 0).sum() == 0:
+            num_zero_obs_end[i]= 1
+
+    return rew_batch, done_batch, num_zero_obs_end
