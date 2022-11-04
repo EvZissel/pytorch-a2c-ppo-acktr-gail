@@ -351,13 +351,12 @@ def main():
                 # log_dict[eval_disp_name].append([(j+1) * args.num_processes * args.num_steps, eval_dic_rew[eval_disp_name]])
                 # printout += eval_disp_name + ' ' + str(np.mean(eval_dic_rew[eval_disp_name])) + ' '
                 # print(printout)
-                wandb.log({"mun_naxEnt/"+eval_disp_name: np.mean(num_zero_obs_end[eval_disp_name])}, step=(j + 1) * args.num_processes * args.num_steps)
+                wandb.log({"mun_maxEnt/"+eval_disp_name: np.mean(num_zero_obs_end[eval_disp_name])}, step=(j + 1) * args.num_processes * args.num_steps)
 
             if ((args.eval_nondet_interval is not None and j % args.eval_nondet_interval == 0) or j == args.continue_from_epoch):
                 eval_test_nondet_rew, eval_test_nondet_done, num_zero_obs_end_nondet = evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, 'test_eval',
                                                   args.num_processes, device, args.num_steps, deterministic=False)
-                wandb.log({"mun_maxEnt/nondet": np.mean(num_zero_obs_end_nondet)},
-                          step=(j + 1) * args.num_processes * args.num_steps)
+                wandb.log({"mun_maxEnt/nondet": np.mean(num_zero_obs_end_nondet)}, step=(j + 1) * args.num_processes * args.num_steps)
 
             logger.feed_eval(eval_dic_rew['train_eval'], eval_dic_done['train_eval'],eval_dic_rew['test_eval'], eval_dic_done['test_eval'],
                              eval_dic_rew['test_eval'], eval_dic_done['test_eval'], eval_test_nondet_rew, eval_test_nondet_done)
