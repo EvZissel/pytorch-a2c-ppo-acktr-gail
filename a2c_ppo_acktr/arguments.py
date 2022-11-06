@@ -139,6 +139,10 @@ def get_args():
         default='maze',
         help='environment to train on (default: maze)')
     parser.add_argument(
+        '--load_env_name',
+        default='maze',
+        help='environment to train on (default: maze)')
+    parser.add_argument(
         '--val_agent_steps',
         type=int,
         default=1,
@@ -238,6 +242,11 @@ def get_args():
         type=int,
         default=0,
         help='load previous training (from model save dir) and continue')
+    parser.add_argument(
+        '--saved_epoch',
+        type=int,
+        default=0,
+        help='load previous training (from model save dir)')
     parser.add_argument(
         '--max_task_grad_norm',
         type=float,

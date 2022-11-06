@@ -198,6 +198,12 @@ def main():
         # rollouts.num_processes           = actor_critic_weighs['buffer_num_processes']
 
 
+    # Load previous model
+    if (args.saved_epoch > 0) and args.save_dir != "":
+        save_path = args.save_dir
+        actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch)), map_location=device)
+        actor_critic.load_state_dict(actor_critic_weighs['state_dict'])
+
     logger = Logger(args.num_processes)
 
     obs = envs.reset()
