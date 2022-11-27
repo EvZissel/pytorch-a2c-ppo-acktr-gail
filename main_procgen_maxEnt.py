@@ -259,9 +259,14 @@ def main():
             obs, reward, done, infos = envs.step(action.squeeze().cpu().numpy())
             # if max(reward) < 10 and max(reward) >0:
             #     print(reward)
+            for i in range(len(done)):
+                if done[i] == 1:
+                    rollouts.obs_sum[i] = torch.zeros_like(rollouts.obs_sum[i])
+
             next_obs_sum =  rollouts.obs_sum + obs.cpu()
-            if (step < args.num_steps-1):
-                for i in range(len(reward)):
+            reward = np.zeros_like(reward)
+            for i in range(len(reward)):
+                if done[i] == 0:
                     num_zero_obs_sum = (rollouts.obs_sum[i][0] == 0).sum()
                     num_zero_next_obs_sum = (next_obs_sum[i][0] == 0).sum()
                     if num_zero_next_obs_sum < num_zero_obs_sum:

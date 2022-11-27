@@ -211,13 +211,17 @@ def evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, env_name, num_processes
             # else:
             #     rew_batch.append(reward)
 
+            for i in range(len(done)):
+                if done[i] == 1:
+                    obs_sum[i] = torch.zeros_like(obs_sum[i])
+
+            reward = np.zeros_like(reward)
             next_obs_sum = obs_sum + next_obs
-            if t < steps-1:
-                for i in range(len(reward)):
-                    num_zero_obs_sum = (obs_sum[i][0] == 0).sum()
-                    num_zero_next_obs_sum = (next_obs_sum[i][0] == 0).sum()
-                    if num_zero_next_obs_sum < num_zero_obs_sum:
-                        reward[i] = 1
+            for i in range(len(reward)):
+                num_zero_obs_sum = (obs_sum[i][0] == 0).sum()
+                num_zero_next_obs_sum = (next_obs_sum[i][0] == 0).sum()
+                if num_zero_next_obs_sum < num_zero_obs_sum:
+                    reward[i] = 1
 
             rew_batch.append(reward)
             done_batch.append(done)

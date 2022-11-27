@@ -25,7 +25,7 @@ from gym import spaces
 EVAL_ENVS = ['train_eval','test_eval']
 
 # num_processes = 600
-env_name = "maze_WOr"
+env_name = "maze"
 start_level = 0
 num_level = 1
 distribution_mode = "easy"
@@ -57,7 +57,7 @@ class VideoRecorderprocess(VideoRecorderWrapper):
 
         return obs
 
-test_start_level = 10000
+test_start_level = 4965
 # test_env  = ProcgenConatEnvs(env_name=env_name,
 #                              num_envs=num_level,
 #                              start_level=test_start_level,
@@ -98,7 +98,7 @@ test_env = ProcgenGym3Env(num=1,
 #                           render_mode="rgb_array"
 #                           )
 
-test_env = VideoRecorderWrapper(env=test_env, directory="./videos", info_key="rgb", prefix=str(test_start_level), fps=5)
+test_env = VideoRecorderWrapper(env=test_env, directory="./videos", info_key="rgb", prefix=str(test_start_level), fps=5, render=True)
 
 actor_critic = Policy(
     (3,64,64),
@@ -123,8 +123,8 @@ actor_critic.to(device)
 #     weight_decay=0)
 
 # Load previous model
-saved_epoch = 3124
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_WOr_seed_0_num_env_5000_entro_0.01_04-11-2022_17-35-17"
+saved_epoch = 9372
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_0_num_env_1000_entro_0.01_15-11-2022_09-52-09"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(
@@ -166,7 +166,7 @@ step = 0
 # myobj = plt.imshow(obs[0].transpose(1, 2, 0))
 # plt.show()
 iter = 0
-while not done[0] and iter<100:
+while not done[0] and iter<500:
     iter +=1
     with torch.no_grad():
         # obs = torch.FloatTensor(obs).to(device=device)
