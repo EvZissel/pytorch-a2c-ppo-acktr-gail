@@ -56,7 +56,7 @@ def main():
     logdir = os.path.join(os.path.expanduser(args.log_dir), logdir_)
     utils.cleanup_log_dir(logdir)
 
-    wandb.init(project="maze_PPO_maximum_entropy", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
+    wandb.init(project=args.env_name + "_PPO_maximum_entropy", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
 
     # Ugly but simple logging
     log_dict = {
@@ -94,12 +94,27 @@ def main():
 
     print('making envs...')
     # Training envs
+    # envs = make_ProcgenEnvs(num_envs=args.num_processes,
+    #                   env_name=args.env_name,
+    #                   start_level=args.start_level,
+    #                   num_levels=args.num_level,
+    #                   distribution_mode=args.distribution_mode,
+    #                   use_generated_assets=True,
+    #                   use_backgrounds=False,
+    #                   restrict_themes=True,
+    #                   use_monochrome_assets=True,
+    #                   rand_seed=args.seed,
+    #                   mask_size=args.mask_size,
+    #                   normalize_rew=args.normalize_rew,
+    #                   mask_all=args.mask_all,
+    #                   device=device)
+
     envs = make_ProcgenEnvs(num_envs=args.num_processes,
                       env_name=args.env_name,
                       start_level=args.start_level,
                       num_levels=args.num_level,
                       distribution_mode=args.distribution_mode,
-                      use_generated_assets=True,
+                      use_generated_assets=False,
                       use_backgrounds=False,
                       restrict_themes=True,
                       use_monochrome_assets=True,
@@ -108,39 +123,38 @@ def main():
                       normalize_rew=args.normalize_rew,
                       mask_all=args.mask_all,
                       device=device)
-
     # Test envs
     eval_envs_dic = {}
     eval_envs_dic['train_eval'] = make_ProcgenEnvs(num_envs=args.num_processes,
-                                                      env_name=args.env_name,
-                                                      start_level=args.start_level,
-                                                      num_levels=args.num_level,
-                                                      distribution_mode=args.distribution_mode,
-                                                      use_generated_assets=True,
-                                                      use_backgrounds=False,
-                                                      restrict_themes=True,
-                                                      use_monochrome_assets=True,
-                                                      rand_seed=args.seed,
-                                                      mask_size=args.mask_size,
-                                                      normalize_rew= args.normalize_rew,
-                                                      mask_all=args.mask_all,
-                                                      device=device)
+                                                   env_name=args.env_name,
+                                                   start_level=args.start_level,
+                                                   num_levels=args.num_level,
+                                                   distribution_mode=args.distribution_mode,
+                                                   use_generated_assets=False,
+                                                   use_backgrounds=False,
+                                                   restrict_themes=True,
+                                                   use_monochrome_assets=True,
+                                                   rand_seed=args.seed,
+                                                   mask_size=args.mask_size,
+                                                   normalize_rew= args.normalize_rew,
+                                                   mask_all=args.mask_all,
+                                                   device=device)
 
     test_start_level = args.start_level + args.num_level + 1
     eval_envs_dic['test_eval'] = make_ProcgenEnvs(num_envs=args.num_processes,
-                                                     env_name=args.env_name,
-                                                     start_level=test_start_level,
-                                                     num_levels=args.num_level,
-                                                     distribution_mode=args.distribution_mode,
-                                                     use_generated_assets=True,
-                                                     use_backgrounds=False,
-                                                     restrict_themes=True,
-                                                     use_monochrome_assets=True,
-                                                     rand_seed=args.seed,
-                                                     mask_size=args.mask_size,
-                                                     normalize_rew=args.normalize_rew,
-                                                     mask_all=args.mask_all,
-                                                     device=device)
+                                                  env_name=args.env_name,
+                                                  start_level=test_start_level,
+                                                  num_levels=args.num_level,
+                                                  distribution_mode=args.distribution_mode,
+                                                  use_generated_assets=False,
+                                                  use_backgrounds=False,
+                                                  restrict_themes=True,
+                                                  use_monochrome_assets=True,
+                                                  rand_seed=args.seed,
+                                                  mask_size=args.mask_size,
+                                                  normalize_rew=args.normalize_rew,
+                                                  mask_all=args.mask_all,
+                                                  device=device)
     print('done')
 
     actor_critic = Policy(
@@ -348,22 +362,32 @@ def main():
             eval_dic_rew = {}
             eval_dic_done = {}
             num_zero_obs_end = {}
+            eval_dic_rew_oracle = {}
+            eval_dic_done_oracle = {}
+            num_zero_obs_end_oracle = {}
             for eval_disp_name in EVAL_ENVS:
                 eval_dic_rew[eval_disp_name], eval_dic_done[eval_disp_name], num_zero_obs_end[eval_disp_name] = evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, eval_disp_name,
                                                   args.num_processes, device, args.num_steps)
+
+                eval_dic_rew_oracle[eval_disp_name], eval_dic_done_oracle[eval_disp_name], num_zero_obs_end_oracle[eval_disp_name] = evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, eval_disp_name,
+                                                  args.num_processes, device, args.num_steps, attention_features=False, det_masks=False, deterministic=True, oracle = True)
 
 
                 # log_dict[eval_disp_name].append([(j+1) * args.num_processes * args.num_steps, eval_dic_rew[eval_disp_name]])
                 # printout += eval_disp_name + ' ' + str(np.mean(eval_dic_rew[eval_disp_name])) + ' '
                 # print(printout)
                 wandb.log({"mun_maxEnt/"+eval_disp_name: np.mean(num_zero_obs_end[eval_disp_name])}, step=(j + 1) * args.num_processes * args.num_steps)
+                wandb.log({"mun_maxEnt_oracle/"+eval_disp_name: np.mean(num_zero_obs_end_oracle[eval_disp_name])}, step=(j + 1) * args.num_processes * args.num_steps)
+                wandb.log({"mun_maxEnt_vs_oracle/"+eval_disp_name: np.mean(num_zero_obs_end[eval_disp_name])/np.mean(num_zero_obs_end_oracle[eval_disp_name])}, step=(j + 1) * args.num_processes * args.num_steps)
 
             if ((args.eval_nondet_interval is not None and j % args.eval_nondet_interval == 0) or j == args.continue_from_epoch):
                 eval_test_nondet_rew, eval_test_nondet_done, num_zero_obs_end_nondet = evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, 'test_eval',
                                                   args.num_processes, device, args.num_steps, deterministic=False)
                 wandb.log({"mun_maxEnt/nondet": np.mean(num_zero_obs_end_nondet)}, step=(j + 1) * args.num_processes * args.num_steps)
 
+
             logger.feed_eval(eval_dic_rew['train_eval'], eval_dic_done['train_eval'],eval_dic_rew['test_eval'], eval_dic_done['test_eval'],
+                             eval_dic_rew_oracle['train_eval'], eval_dic_done_oracle['train_eval'], eval_dic_rew_oracle['test_eval'],eval_dic_done_oracle['test_eval'],
                              eval_dic_rew['test_eval'], eval_dic_done['test_eval'], eval_test_nondet_rew, eval_test_nondet_done)
             episode_statistics = logger.get_episode_statistics()
             print(printout)

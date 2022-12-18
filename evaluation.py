@@ -140,7 +140,7 @@ def evaluate_procgen(actor_critic, eval_envs_dic, env_name, num_processes,
     return rew_batch, done_batch
 
 def evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, env_name, num_processes,
-                     device, steps, attention_features=False, det_masks=False, deterministic=True):
+                     device, steps, attention_features=False, det_masks=False, deterministic=True, oracle = False):
 
     eval_envs = eval_envs_dic[env_name]
     rew_batch = []
@@ -185,19 +185,22 @@ def evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, env_name, num_processes
     #     fig.add_subplot(rows, columns, i)
     #     plt.imshow(obs[i].transpose())
     # plt.show()
-
+    action = torch.full((num_processes, 1), 5)
     for t in range(steps):
         with torch.no_grad():
-            _, action, _, eval_recurrent_hidden_states, _, _, _, _ = actor_critic.act(
-                obs.float().to(device),
-                eval_recurrent_hidden_states,
-                eval_masks,
-                attn_masks=eval_attn_masks,
-                attn_masks1=eval_attn_masks1,
-                attn_masks2=eval_attn_masks2,
-                attn_masks3=eval_attn_masks3,
-                deterministic=deterministic,
-                reuse_masks=det_masks)
+            if oracle:
+                action = maxEnt_oracle(obs, action)
+            else:
+                _, action, _, eval_recurrent_hidden_states, _, _, _, _ = actor_critic.act(
+                    obs.float().to(device),
+                    eval_recurrent_hidden_states,
+                    eval_masks,
+                    attn_masks=eval_attn_masks,
+                    attn_masks1=eval_attn_masks1,
+                    attn_masks2=eval_attn_masks2,
+                    attn_masks3=eval_attn_masks3,
+                    deterministic=deterministic,
+                    reuse_masks=det_masks)
 
             # Observe reward and next obs
             next_obs, reward, done, infos = eval_envs.step(action.squeeze().cpu().numpy())
@@ -237,3 +240,58 @@ def evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, env_name, num_processes
             num_zero_obs_end[i]= 1
 
     return rew_batch, done_batch, num_zero_obs_end
+
+
+def maxEnt_oracle(obs_all, action):
+    next_action = torch.tensor(action)
+    for i in range(len(action)):
+        obs =  obs_all[i].cpu().numpy()
+        action_i = action[i]
+
+
+        min_r = np.nonzero((obs[1] == 1))[0].min()
+        max_r = np.nonzero((obs[1] == 1))[0].max()
+
+        min_c = np.nonzero((obs[1] == 1))[1].min()
+        max_c = np.nonzero((obs[1] == 1))[1].max()
+
+        if action_i == 7:
+            if (max_r + 1 < 64) and obs[0][max_r + 1, min_c] == 0:
+                new_action_i = np.array([3])
+            elif (max_c + 1 < 64) and obs[0][min_r, max_c + 1] == 0:
+                new_action_i = np.array([7])
+            elif (min_r - 1 > 0) and obs[0][min_r - 1, min_c] == 0:
+                new_action_i = np.array([5])
+            else:
+                new_action_i = np.array([1])
+        elif action_i == 5:
+            if (max_c + 1 < 64) and obs[0][max_r, max_c + 1] == 0:
+                new_action_i = np.array([7])
+            elif (min_r - 1 > 0) and obs[0][min_r - 1, min_c] == 0:
+                new_action_i = np.array([5])
+            elif (min_c - 1 > 0) and obs[0][min_r, min_c - 1] == 0:
+                new_action_i = np.array([1])
+            else:
+                new_action_i = np.array([3])
+        elif action_i == 3:
+            if (min_c - 1 > 0) and obs[0][min_r, min_c - 1] == 0:
+                new_action_i = np.array([1])
+            elif (max_r + 1 < 64) and obs[0][max_r + 1, min_c] == 0:
+                new_action_i = np.array([3])
+            elif (max_c + 1 < 64) and obs[0][max_r, max_c + 1] == 0:
+                new_action_i = np.array([7])
+            else:
+                new_action_i = np.array([5])
+        elif action_i == 1:
+            if (min_r - 1 > 0) and obs[0][min_r - 1, min_c] == 0:
+                new_action_i = np.array([5])
+            elif (min_c - 1 > 0) and obs[0][min_r, min_c - 1] == 0:
+                new_action_i = np.array([1])
+            elif (max_r + 1 < 64) and obs[0][max_r + 1, min_c] == 0:
+                new_action_i = np.array([3])
+            else:
+                new_action_i = np.array([7])
+
+        next_action[i] = torch.tensor(new_action_i)
+
+    return next_action

@@ -2,8 +2,8 @@
 from a2c_ppo_acktr.procgen_wrappers import *
 # from a2c_ppo_acktr.envs import make_vec_envs, make_ProcgenEnvs
 import matplotlib.pyplot as plt
-# from procgen import ProcgenEnv
-from a2c_ppo_acktr.envs import make_ProcgenEnvs
+from procgen import ProcgenEnv
+# from a2c_ppo_acktr.envs import make_ProcgenEnvs
 from a2c_ppo_acktr.const_env import ProcgenConatEnvs
 import random
 random.seed(0)
@@ -20,8 +20,8 @@ EVAL_ENVS = ['train_eval','test_eval']
 
 # num_processes = 600
 env_name = "maze"
-start_level = 0
-num_level = 1000
+start_level = 3562
+num_level = 1
 num_level_test = 128
 distribution_mode = "easy"
 seed = 0
@@ -32,20 +32,37 @@ n_steps = 1
 device = torch.device("cuda:{}".format(0))
 
 eval_envs_dic = {}
-eval_envs_dic['train_eval'] = ProcgenConatEnvs(env_name=env_name,
-                                               num_envs=num_level,
-                                               start_level=start_level,
-                                               distribution_mode=distribution_mode,
-                                               use_generated_assets=True,
-                                               use_backgrounds=False,
-                                               restrict_themes=True,
-                                               use_monochrome_assets=True,
-                                               normalize_rew=normalize_rew,
-                                               num_stack=1,
-                                               seed=0,
-                                               device=device,
-                                               mask_size=0,
-                                               mask_all=False)
+# eval_envs_dic['train_eval'] = ProcgenConatEnvs(env_name=env_name,
+#                                                num_envs=num_level,
+#                                                start_level=start_level,
+#                                                distribution_mode=distribution_mode,
+#                                                use_generated_assets=True,
+#                                                use_backgrounds=False,
+#                                                restrict_themes=True,
+#                                                use_monochrome_assets=True,
+#                                                normalize_rew=normalize_rew,
+#                                                num_stack=1,
+#                                                seed=0,
+#                                                device=device,
+#                                                mask_size=0,
+#                                                mask_all=False)
+
+eval_envs_dic['train_eval'] = ProcgenEnv(num_envs=1,
+                                          env_name=env_name,
+                                          start_level=start_level,
+                                          num_levels=1,
+                                          distribution_mode=distribution_mode,
+                                         use_generated_assets=False,
+                                         use_backgrounds=False,
+                                         restrict_themes=True,
+                                         use_monochrome_assets=True,
+                                          rand_seed=seed)
+
+obs = eval_envs_dic['train_eval'].reset()
+myobj = plt.imshow(obs['rgb'][0])
+plt.show()
+
+print("something")
 # eval_envs_dic['train_eval'] = []
 # for i in range(num_level):
 #     eval_envs_dic['train_eval'].append(make_ProcgenEnvs(num_envs=1,
@@ -68,7 +85,7 @@ eval_envs_dic['test_eval']  = ProcgenConatEnvs(env_name=env_name,
                                                num_envs=num_level_test,
                                                start_level=test_start_level,
                                                distribution_mode=distribution_mode,
-                                               use_generated_assets=True,
+                                               use_generated_assets=False,
                                                use_backgrounds=False,
                                                restrict_themes=True,
                                                use_monochrome_assets=True,

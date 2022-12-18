@@ -57,7 +57,7 @@ class VideoRecorderprocess(VideoRecorderWrapper):
 
         return obs
 
-test_start_level = 4965
+test_start_level = 1
 # test_env  = ProcgenConatEnvs(env_name=env_name,
 #                              num_envs=num_level,
 #                              start_level=test_start_level,
@@ -123,8 +123,8 @@ actor_critic.to(device)
 #     weight_decay=0)
 
 # Load previous model
-saved_epoch = 9372
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_0_num_env_1000_entro_0.01_15-11-2022_09-52-09"
+saved_epoch = 12496
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_0_num_env_1000_entro_0.01_26-11-2022_12-37-55"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(

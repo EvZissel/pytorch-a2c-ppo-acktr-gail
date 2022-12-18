@@ -56,7 +56,7 @@ def main():
     logdir = os.path.join(os.path.expanduser(args.log_dir), logdir_)
     utils.cleanup_log_dir(logdir)
 
-    wandb.init(project="maze_PPO_maximum_entropy", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
+    wandb.init(project=args.env_name + "_PPO_maximum_entropy", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
 
     # Ugly but simple logging
     log_dict = {
@@ -210,6 +210,14 @@ def main():
     # rollouts.obs[0].copy_(torch.FloatTensor(obs))
     rollouts.obs[0].copy_(obs)
     # rollouts.to(device)
+
+    fig = plt.figure(figsize=(20, 20))
+    columns = 5
+    rows = 5
+    for i in range(1, columns * rows + 1):
+        fig.add_subplot(rows, columns, i)
+        plt.imshow(rollouts.obs[0][i].transpose(0,2))
+        plt.savefig(logdir + '/fig.png')
 
     seeds = torch.zeros(args.num_processes, 1)
     start = time.time()
