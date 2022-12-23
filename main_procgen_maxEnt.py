@@ -17,7 +17,7 @@ from a2c_ppo_acktr.storage import RolloutStorage
 from evaluation import evaluate_procgen, evaluate_procgen_maxEnt
 from a2c_ppo_acktr.utils import save_obj, load_obj
 from a2c_ppo_acktr.procgen_wrappers import *
-from a2c_ppo_acktr.logger import Logger
+from a2c_ppo_acktr.logger import Logger, maxEnt_Logger
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -274,7 +274,7 @@ def main():
         # rollouts.num_processes           = actor_critic_weighs['buffer_num_processes']
 
 
-    logger = Logger(args.num_processes, max_reward_seeds, start_train_test, envs.observation_space.shape, actor_critic.recurrent_hidden_state_size, device=device)
+    logger = maxEnt_Logger(args.num_processes, max_reward_seeds, start_train_test, envs.observation_space.shape, actor_critic.recurrent_hidden_state_size, device=device)
 
     obs = envs.reset()
     # rollouts.obs[0].copy_(torch.FloatTensor(obs))

@@ -55,7 +55,7 @@ def evaluate(actor_critic, obs_rms, eval_envs_dic, env_name, seed, num_processes
     return eval_episode_rewards
 
 def evaluate_procgen(actor_critic, eval_envs_dic, env_name, num_processes,
-                     device, steps, attention_features=False, det_masks=False, deterministic=True):
+                     device, steps, logger, attention_features=False, det_masks=False, deterministic=True):
 
     eval_envs = eval_envs_dic[env_name]
     rew_batch = []
@@ -65,10 +65,10 @@ def evaluate_procgen(actor_critic, eval_envs_dic, env_name, num_processes,
     # for _ in range(num_processes):
     #     eval_episode_len_buffer.append(0)
 
-    obs = eval_envs.reset()
-    eval_recurrent_hidden_states = torch.zeros(
-        num_processes, actor_critic.recurrent_hidden_state_size, device=device)
-    eval_masks = torch.zeros(num_processes, 1, device=device)
+    # obs = eval_envs.reset()
+    # eval_recurrent_hidden_states = torch.zeros(
+    #     num_processes, actor_critic.recurrent_hidden_state_size, device=device)
+    # eval_masks = torch.zeros(num_processes, 1, device=device)
     if attention_features:
         # eval_attn_masks = torch.zeros(num_processes, actor_critic.attention_size, device=device)
         # eval_attn_masks1 = torch.zeros(num_processes, 16, device=device)
@@ -102,9 +102,9 @@ def evaluate_procgen(actor_critic, eval_envs_dic, env_name, num_processes,
     for t in range(steps):
         with torch.no_grad():
             _, action, _, eval_recurrent_hidden_states, _, _, _, _ = actor_critic.act(
-                obs.float().to(device),
-                eval_recurrent_hidden_states,
-                eval_masks,
+                logger.obs[env_name].float().to(device),
+                logger.eval_recurrent_hidden_states[env_name],
+                logger.eval_masks[env_name],
                 attn_masks=eval_attn_masks,
                 attn_masks1=eval_attn_masks1,
                 attn_masks2=eval_attn_masks2,
@@ -114,10 +114,11 @@ def evaluate_procgen(actor_critic, eval_envs_dic, env_name, num_processes,
 
             # Observe reward and next obs
             next_obs, reward, done, infos = eval_envs.step(action.squeeze().cpu().numpy())
-            eval_masks = torch.tensor(
+            logger.eval_masks[env_name] = torch.tensor(
                 [[0.0] if done_ else [1.0] for done_ in done],
                 dtype=torch.float32,
                 device=device)
+            logger.eval_recurrent_hidden_states[env_name] = eval_recurrent_hidden_states
 
             if 'env_reward' in infos[0]:
                 rew_batch.append([info['env_reward'] for info in infos])
@@ -132,7 +133,7 @@ def evaluate_procgen(actor_critic, eval_envs_dic, env_name, num_processes,
             #         eval_episode_len.append(eval_episode_len_buffer[i])
             #         eval_episode_len_buffer[i] = 0
 
-            obs = next_obs
+            logger.obs[env_name] = next_obs
 
     rew_batch = np.array(rew_batch)
     done_batch = np.array(done_batch)

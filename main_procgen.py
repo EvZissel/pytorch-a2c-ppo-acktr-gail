@@ -43,7 +43,7 @@ def main():
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
-    logdir_ = args.env_name + '_seed_' + str(args.seed) + '_num_env_' + str(args.num_level) + '_entro_' + str(args.entropy_coef) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    logdir_ = args.env_name + '_seed_' + str(args.seed) + '_num_env_' + str(args.num_level) + '_entro_' + str(args.entropy_coef) + '_gama_' + str(args.gamma) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
     if args.normalize_rew:
         logdir_ = logdir_ + '_normalize_rew'
     if not args.recurrent_policy:
@@ -204,12 +204,20 @@ def main():
         actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch)), map_location=device)
         actor_critic.load_state_dict(actor_critic_weighs['state_dict'])
 
-    logger = Logger(args.num_processes)
+    logger = Logger(args.num_processes, envs.observation_space.shape, actor_critic.recurrent_hidden_state_size, device=device)
 
     obs = envs.reset()
     # rollouts.obs[0].copy_(torch.FloatTensor(obs))
     rollouts.obs[0].copy_(obs)
     # rollouts.to(device)
+
+    obs_train = eval_envs_dic['train_eval'].reset()
+    logger.obs['train_eval'].copy_(obs_train)
+    logger.obs_sum['train_eval'].copy_(obs_train)
+
+    obs_test = eval_envs_dic['test_eval'].reset()
+    logger.obs['test_eval'].copy_(obs_test)
+    logger.obs_sum['test_eval'].copy_(obs_test)
 
     fig = plt.figure(figsize=(20, 20))
     columns = 5
@@ -229,8 +237,8 @@ def main():
     # episode_len_buffer = []
     # for _ in range(args.num_processes):
     #     episode_len_buffer.append(0)
-    eval_test_nondet_rew = np.zeros((args.num_steps, args.num_processes))
-    eval_test_nondet_done = np.zeros((args.num_steps, args.num_processes))
+    seeds_train = np.zeros((args.num_steps, args.num_processes))
+    seeds_test = np.zeros((args.num_steps, args.num_processes))
 
     for j in range(args.continue_from_epoch, args.continue_from_epoch+num_updates):
 
@@ -338,19 +346,19 @@ def main():
             eval_dic_done = {}
             for eval_disp_name in EVAL_ENVS:
                 eval_dic_rew[eval_disp_name], eval_dic_done[eval_disp_name] = evaluate_procgen(actor_critic, eval_envs_dic, eval_disp_name,
-                                                  args.num_processes, device, args.num_steps)
+                                                  args.num_processes, device, args.num_steps, logger)
 
 
                 # log_dict[eval_disp_name].append([(j+1) * args.num_processes * args.num_steps, eval_dic_rew[eval_disp_name]])
                 # printout += eval_disp_name + ' ' + str(np.mean(eval_dic_rew[eval_disp_name])) + ' '
                 # print(printout)
 
-            if ((args.eval_nondet_interval is not None and j % args.eval_nondet_interval == 0) or j == args.continue_from_epoch):
-                eval_test_nondet_rew, eval_test_nondet_done = evaluate_procgen(actor_critic, eval_envs_dic, 'test_eval',
-                                                  args.num_processes, device, args.num_steps, deterministic=False)
+            # if ((args.eval_nondet_interval is not None and j % args.eval_nondet_interval == 0) or j == args.continue_from_epoch):
+            #     eval_test_nondet_rew, eval_test_nondet_done = evaluate_procgen(actor_critic, eval_envs_dic, 'test_eval',
+            #                                       args.num_processes, device, args.num_steps, deterministic=False)
 
-            logger.feed_eval(eval_dic_rew['train_eval'], eval_dic_done['train_eval'],eval_dic_rew['test_eval'], eval_dic_done['test_eval'],
-                             eval_dic_rew['test_eval'], eval_dic_done['test_eval'], eval_test_nondet_rew, eval_test_nondet_done)
+            logger.feed_eval(eval_dic_rew['train_eval'], eval_dic_done['train_eval'],eval_dic_rew['test_eval'], eval_dic_done['test_eval'], seeds_train, seeds_test,
+                             eval_dic_rew['test_eval'], eval_dic_done['test_eval'])
             episode_statistics = logger.get_episode_statistics()
             print(printout)
             print(episode_statistics)
