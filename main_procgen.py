@@ -240,6 +240,24 @@ def main():
     seeds_train = np.zeros((args.num_steps, args.num_processes))
     seeds_test = np.zeros((args.num_steps, args.num_processes))
 
+    #freeze layers
+    if args.freeze1:
+        for name, param in actor_critic.base.main[0].named_parameters():
+            param.requires_grad = False
+    if args.freeze2:
+        for name, param in actor_critic.base.main[0].named_parameters():
+            param.requires_grad = False
+        for name, param in actor_critic.base.main[1].named_parameters():
+            param.requires_grad = False
+    if args.freeze_all:
+        for name, param in actor_critic.base.main.named_parameters():
+            param.requires_grad = False
+    if args.freeze_all_gru:
+        for name, param in actor_critic.base.main.named_parameters():
+            param.requires_grad = False
+        for name, param in actor_critic.base.gru.named_parameters():
+            param.requires_grad = False
+
     for j in range(args.continue_from_epoch, args.continue_from_epoch+num_updates):
 
         # # plot mazes

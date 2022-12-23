@@ -205,6 +205,26 @@ def get_args():
         default=False,
         help='reinitialize GRU and the last few layers')
     parser.add_argument(
+        '--freeze1',
+        action='store_true',
+        default=False,
+        help='freeze the first layer')
+    parser.add_argument(
+        '--freeze2',
+        action='store_true',
+        default=False,
+        help='freeze the first and second layers')
+    parser.add_argument(
+        '--freeze_all',
+        action='store_true',
+        default=False,
+        help='freeze all impala layers')
+    parser.add_argument(
+        '--freeze_all_gru',
+        action='store_true',
+        default=False,
+        help='freeze all impala and gru layers')
+    parser.add_argument(
         '--use-linear-lr-decay',
         action='store_true',
         default=False,
