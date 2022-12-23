@@ -58,6 +58,11 @@ def get_args():
         default=0.01,
         help='entropy term coefficient (default: 0.01)')
     parser.add_argument(
+        '--epsilon_RPO',
+        type=float,
+        default=0.0,
+        help='epsilon RPO coefficient (default: 0.0)')
+    parser.add_argument(
         '--value-loss-coef',
         type=float,
         default=0.5,
@@ -73,6 +78,8 @@ def get_args():
         '--start-level', type=int, default=0, help='start level (default: 0)')
     parser.add_argument(
         '--num-level', type=int, default=128, help='num level (default: 25)')
+    parser.add_argument(
+        '--num-test-level', type=int, default=200, help='num level (default: 25)')
     parser.add_argument(
         '--distribution-mode', type=str, default='easy', help='distribution mode for environment')
     parser.add_argument(

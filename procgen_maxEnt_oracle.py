@@ -11,6 +11,9 @@ random.seed(0)
 torch.manual_seed(0)
 torch.cuda.manual_seed_all(0)
 np.random.seed(0)
+np.random.seed(0)
+import random;
+
 
 from gym3 import VideoRecorderWrapper
 from procgen import ProcgenEnv, ProcgenGym3Env
@@ -20,7 +23,7 @@ device = torch.device("cuda:{}".format(0))
 
 
 env_name = "maze"
-start_level = 1236
+start_level = 136
 num_level = 1
 distribution_mode = "easy"
 seed = 0
@@ -41,7 +44,8 @@ env = ProcgenGym3Env(num=1,
                           use_generated_assets=True,
                           use_backgrounds=False,
                           restrict_themes=True,
-                          use_monochrome_assets=True)
+                          use_monochrome_assets=True,
+                          rand_seed=0)
 
 # test_env = ProcgenGym3Env(num=1,
 #                           env_name=env_name,

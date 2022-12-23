@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 
 class Policy(nn.Module):
-    def __init__(self, obs_shape, action_space, base=None, base_kwargs=None):
+    def __init__(self, obs_shape, action_space, base=None, base_kwargs=None, epsilon_RPO=0):
         super(Policy, self).__init__()
         if base_kwargs is None:
             base_kwargs = {}
@@ -24,10 +24,11 @@ class Policy(nn.Module):
                 raise NotImplementedError
 
         self.base = base(obs_shape[0], **base_kwargs)
+        self.epsilon_RPO = epsilon_RPO
 
         if action_space.__class__.__name__ == "Discrete":
             num_outputs = action_space.n
-            self.dist = Categorical(self.base.output_size, num_outputs)
+            self.dist = Categorical(self.base.output_size, num_outputs, epsilon_RPO)
         elif action_space.__class__.__name__ == "Box":
             num_outputs = action_space.shape[0]
             self.dist = DiagGaussian(self.base.output_size, num_outputs)
@@ -70,8 +71,10 @@ class Policy(nn.Module):
         dist = self.dist(actor_features)
 
         if deterministic:
+            # dist = self.dist(actor_features, noisy=False)
             action = dist.mode()
         else:
+            # dist = self.dist(actor_features, noisy=True)
             action = dist.sample()
 
         # we return the log probs of either the chosen action, or chosen attention mask

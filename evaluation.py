@@ -140,21 +140,22 @@ def evaluate_procgen(actor_critic, eval_envs_dic, env_name, num_processes,
     return rew_batch, done_batch
 
 def evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, env_name, num_processes,
-                     device, steps, attention_features=False, det_masks=False, deterministic=True, oracle = False):
+                     device, steps, logger, attention_features=False, det_masks=False, deterministic=True):
 
     eval_envs = eval_envs_dic[env_name]
     rew_batch = []
     done_batch = []
+    seed_batch = []
     # eval_episode_len = []
     # eval_episode_len_buffer = []
     # for _ in range(num_processes):
     #     eval_episode_len_buffer.append(0)
 
-    obs = eval_envs.reset()
-    obs_sum = obs
-    eval_recurrent_hidden_states = torch.zeros(
-        num_processes, actor_critic.recurrent_hidden_state_size, device=device)
-    eval_masks = torch.zeros(num_processes, 1, device=device)
+    # obs = eval_envs.reset()
+    # obs_sum = obs
+    # eval_recurrent_hidden_states = torch.zeros(
+    #     num_processes, actor_critic.recurrent_hidden_state_size, device=device)
+    # eval_masks = torch.ones(num_processes, 1, device=device)
     if attention_features:
         # eval_attn_masks = torch.zeros(num_processes, actor_critic.attention_size, device=device)
         # eval_attn_masks1 = torch.zeros(num_processes, 16, device=device)
@@ -185,16 +186,13 @@ def evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, env_name, num_processes
     #     fig.add_subplot(rows, columns, i)
     #     plt.imshow(obs[i].transpose())
     # plt.show()
-    action = torch.full((num_processes, 1), 5)
+
     for t in range(steps):
         with torch.no_grad():
-            if oracle:
-                action = maxEnt_oracle(obs, action)
-            else:
-                _, action, _, eval_recurrent_hidden_states, _, _, _, _ = actor_critic.act(
-                    obs.float().to(device),
-                    eval_recurrent_hidden_states,
-                    eval_masks,
+            _, action, _, eval_recurrent_hidden_states, _, _, _, _ = actor_critic.act(
+                    logger.obs[env_name].float().to(device),
+                    logger.eval_recurrent_hidden_states[env_name],
+                    logger.eval_masks[env_name],
                     attn_masks=eval_attn_masks,
                     attn_masks1=eval_attn_masks1,
                     attn_masks2=eval_attn_masks2,
@@ -204,42 +202,52 @@ def evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, env_name, num_processes
 
             # Observe reward and next obs
             next_obs, reward, done, infos = eval_envs.step(action.squeeze().cpu().numpy())
-            eval_masks = torch.tensor(
+            logger.eval_masks[env_name] = torch.tensor(
                 [[0.0] if done_ else [1.0] for done_ in done],
                 dtype=torch.float32,
                 device=device)
+            logger.eval_recurrent_hidden_states[env_name] = eval_recurrent_hidden_states
 
             # if 'env_reward' in infos[0]:
             #     rew_batch.append([info['env_reward'] for info in infos])
             # else:
             #     rew_batch.append(reward)
+            if t==0:
+                prev_seeds = np.zeros_like(reward)
+                for i in range(len(done)):
+                    prev_seeds[i] = infos[i]['prev_level_seed']
+                seed_batch.append(prev_seeds)
 
+            seeds = np.zeros_like(reward)
             for i in range(len(done)):
+                seeds[i] = infos[i]['level_seed']
                 if done[i] == 1:
-                    obs_sum[i] = torch.zeros_like(obs_sum[i])
+                    logger.obs_sum[env_name][i] = next_obs[i].cpu()
 
             reward = np.zeros_like(reward)
-            next_obs_sum = obs_sum + next_obs
+            next_obs_sum = logger.obs_sum[env_name] + next_obs.cpu()
             for i in range(len(reward)):
-                num_zero_obs_sum = (obs_sum[i][0] == 0).sum()
+                num_zero_obs_sum = (logger.obs_sum[env_name][i][0] == 0).sum()
                 num_zero_next_obs_sum = (next_obs_sum[i][0] == 0).sum()
                 if num_zero_next_obs_sum < num_zero_obs_sum:
                     reward[i] = 1
 
             rew_batch.append(reward)
             done_batch.append(done)
+            seed_batch.append(seeds)
 
-            obs = next_obs
-            obs_sum = next_obs_sum
+            logger.obs[env_name] = next_obs
+            logger.obs_sum[env_name] = next_obs_sum
 
     rew_batch = np.array(rew_batch)
     done_batch = np.array(done_batch)
-    num_zero_obs_end = np.zeros_like(reward)
-    for i in range(len(reward)):
-        if (obs_sum[i][0] == 0).sum() == 0:
-            num_zero_obs_end[i]= 1
+    seed_batch = np.array(seed_batch)
+    # num_zero_obs_end = np.zeros_like(reward)
+    # for i in range(len(reward)):
+    #     if (obs_sum[i][0] == 0).sum() == 0:
+    #         num_zero_obs_end[i]= 1
 
-    return rew_batch, done_batch, num_zero_obs_end
+    return rew_batch, done_batch, seed_batch
 
 
 def maxEnt_oracle(obs_all, action):
@@ -251,43 +259,45 @@ def maxEnt_oracle(obs_all, action):
 
         min_r = np.nonzero((obs[1] == 1))[0].min()
         max_r = np.nonzero((obs[1] == 1))[0].max()
+        middle_r = int(min_r + (max_r - min_r + 1)/2)
 
         min_c = np.nonzero((obs[1] == 1))[1].min()
         max_c = np.nonzero((obs[1] == 1))[1].max()
+        middle_c = int(min_c + (max_c - min_c + 1)/2)
 
         if action_i == 7:
-            if (max_r + 1 < 64) and obs[0][max_r + 1, min_c] == 0:
+            if (max_r + 1 < 64) and obs[0][max_r + 1, middle_c] == 0:
                 new_action_i = np.array([3])
-            elif (max_c + 1 < 64) and obs[0][min_r, max_c + 1] == 0:
+            elif (max_c + 1 < 64) and obs[0][middle_r, max_c + 1] == 0:
                 new_action_i = np.array([7])
-            elif (min_r - 1 > 0) and obs[0][min_r - 1, min_c] == 0:
+            elif (min_r - 1 > 0) and obs[0][min_r - 1, middle_c] == 0:
                 new_action_i = np.array([5])
             else:
                 new_action_i = np.array([1])
         elif action_i == 5:
-            if (max_c + 1 < 64) and obs[0][max_r, max_c + 1] == 0:
+            if (max_c + 1 < 64) and obs[0][middle_r, max_c + 1] == 0:
                 new_action_i = np.array([7])
-            elif (min_r - 1 > 0) and obs[0][min_r - 1, min_c] == 0:
+            elif (min_r - 1 > 0) and obs[0][min_r - 1, middle_c] == 0:
                 new_action_i = np.array([5])
-            elif (min_c - 1 > 0) and obs[0][min_r, min_c - 1] == 0:
+            elif (min_c - 1 > 0) and obs[0][middle_r, min_c - 1] == 0:
                 new_action_i = np.array([1])
             else:
                 new_action_i = np.array([3])
         elif action_i == 3:
-            if (min_c - 1 > 0) and obs[0][min_r, min_c - 1] == 0:
+            if (min_c - 1 > 0) and obs[0][middle_r, min_c - 1] == 0:
                 new_action_i = np.array([1])
-            elif (max_r + 1 < 64) and obs[0][max_r + 1, min_c] == 0:
+            elif (max_r + 1 < 64) and obs[0][max_r + 1, middle_c] == 0:
                 new_action_i = np.array([3])
-            elif (max_c + 1 < 64) and obs[0][max_r, max_c + 1] == 0:
+            elif (max_c + 1 < 64) and obs[0][middle_r, max_c + 1] == 0:
                 new_action_i = np.array([7])
             else:
                 new_action_i = np.array([5])
         elif action_i == 1:
-            if (min_r - 1 > 0) and obs[0][min_r - 1, min_c] == 0:
+            if (min_r - 1 > 0) and obs[0][min_r - 1, middle_c] == 0:
                 new_action_i = np.array([5])
-            elif (min_c - 1 > 0) and obs[0][min_r, min_c - 1] == 0:
+            elif (min_c - 1 > 0) and obs[0][middle_r, min_c - 1] == 0:
                 new_action_i = np.array([1])
-            elif (max_r + 1 < 64) and obs[0][max_r + 1, min_c] == 0:
+            elif (max_r + 1 < 64) and obs[0][max_r + 1, middle_c] == 0:
                 new_action_i = np.array([3])
             else:
                 new_action_i = np.array([7])

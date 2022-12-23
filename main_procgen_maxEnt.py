@@ -25,6 +25,7 @@ import torch
 import torch.nn as nn
 from a2c_ppo_acktr.utils import init
 import wandb
+from evaluation import maxEnt_oracle
 
 EVAL_ENVS = ['train_eval','test_eval']
 
@@ -43,7 +44,7 @@ def main():
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
-    logdir_ = args.env_name + '_seed_' + str(args.seed) + '_num_env_' + str(args.num_level) + '_entro_' + str(args.entropy_coef) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    logdir_ = args.env_name + '_seed_' + str(args.seed) + '_num_env_' + str(args.num_level) + '_entro_' + str(args.entropy_coef) + '_gama_' + str(args.gamma) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
     if args.normalize_rew:
         logdir_ = logdir_ + '_normalize_rew'
     if not args.recurrent_policy:
@@ -109,6 +110,66 @@ def main():
     #                   mask_all=args.mask_all,
     #                   device=device)
 
+    #compute maximun reward per seed
+    max_reward_seeds = {
+        'train_eval': [],
+        'test_eval': []
+    }
+
+    test_start_level = 100000
+    start_train_test = {
+        'train_eval': args.start_level,
+        'test_eval': test_start_level
+    }
+
+    for eval_disp_name in EVAL_ENVS:
+        for i in range(args.num_test_level):
+            envs = make_ProcgenEnvs(num_envs=1,
+                                    env_name=args.env_name,
+                                    start_level=start_train_test[eval_disp_name] + i,
+                                    num_levels=1,
+                                    distribution_mode=args.distribution_mode,
+                                    use_generated_assets=False,
+                                    use_backgrounds=False,
+                                    restrict_themes=True,
+                                    use_monochrome_assets=True,
+                                    rand_seed=args.seed,
+                                    mask_size=args.mask_size,
+                                    normalize_rew=args.normalize_rew,
+                                    mask_all=args.mask_all)
+
+            obs = envs.reset()
+            obs_sum = obs
+            # plot mazes
+            # plt.imshow(obs[0].transpose(0, 2).cpu().numpy())
+            # plt.savefig("test.png")
+            # plt.show()
+
+            action = torch.full((1, 1), 5)
+            done = torch.full((1, 1), 0)
+            reward = 0
+
+            while not done[0]:
+                with torch.no_grad():
+
+                    action = maxEnt_oracle(obs, action)
+
+                    obs, _, done, infos = envs.step(action[0].cpu().numpy())
+                    # print(action[0])
+                    # plt.imshow(obs[0].transpose(0,2).cpu().numpy())
+                    # plt.show()
+
+                    next_obs_sum = obs_sum + obs
+                    num_zero_obs_sum = (obs_sum[0] == 0).sum()
+                    num_zero_next_obs_sum = (next_obs_sum[0] == 0).sum()
+                    if num_zero_next_obs_sum < num_zero_obs_sum:
+                        reward += 1
+
+                    obs_sum = next_obs_sum
+
+            max_reward_seeds[eval_disp_name].append(reward)
+
+
     envs = make_ProcgenEnvs(num_envs=args.num_processes,
                       env_name=args.env_name,
                       start_level=args.start_level,
@@ -128,7 +189,7 @@ def main():
     eval_envs_dic['train_eval'] = make_ProcgenEnvs(num_envs=args.num_processes,
                                                    env_name=args.env_name,
                                                    start_level=args.start_level,
-                                                   num_levels=args.num_level,
+                                                   num_levels=args.num_test_level,
                                                    distribution_mode=args.distribution_mode,
                                                    use_generated_assets=False,
                                                    use_backgrounds=False,
@@ -140,11 +201,11 @@ def main():
                                                    mask_all=args.mask_all,
                                                    device=device)
 
-    test_start_level = args.start_level + args.num_level + 1
+
     eval_envs_dic['test_eval'] = make_ProcgenEnvs(num_envs=args.num_processes,
                                                   env_name=args.env_name,
                                                   start_level=test_start_level,
-                                                  num_levels=args.num_level,
+                                                  num_levels=args.num_test_level,
                                                   distribution_mode=args.distribution_mode,
                                                   use_generated_assets=False,
                                                   use_backgrounds=False,
@@ -161,7 +222,8 @@ def main():
         envs.observation_space.shape,
         envs.action_space,
         base=ImpalaModel,
-        base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent,'hidden_size': args.recurrent_hidden_size})
+        base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent,'hidden_size': args.recurrent_hidden_size},
+        epsilon_RPO=args.epsilon_RPO)
         # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
     actor_critic.to(device)
 
@@ -212,13 +274,21 @@ def main():
         # rollouts.num_processes           = actor_critic_weighs['buffer_num_processes']
 
 
-    logger = Logger(args.num_processes)
+    logger = Logger(args.num_processes, max_reward_seeds, start_train_test, envs.observation_space.shape, actor_critic.recurrent_hidden_state_size, device=device)
 
     obs = envs.reset()
     # rollouts.obs[0].copy_(torch.FloatTensor(obs))
     rollouts.obs[0].copy_(obs)
     rollouts.obs_sum.copy_(obs)
     # rollouts.to(device)
+
+    obs_train = eval_envs_dic['train_eval'].reset()
+    logger.obs['train_eval'].copy_(obs_train)
+    logger.obs_sum['train_eval'].copy_(obs_train)
+
+    obs_test = eval_envs_dic['test_eval'].reset()
+    logger.obs['test_eval'].copy_(obs_test)
+    logger.obs_sum['test_eval'].copy_(obs_test)
 
     # plot mazes
 
@@ -241,8 +311,8 @@ def main():
     # episode_len_buffer = []
     # for _ in range(args.num_processes):
     #     episode_len_buffer.append(0)
-    eval_test_nondet_rew = np.zeros((args.num_steps, args.num_processes))
-    eval_test_nondet_done = np.zeros((args.num_steps, args.num_processes))
+    # eval_test_nondet_rew = np.zeros((args.num_steps, args.num_processes))
+    # eval_test_nondet_done = np.zeros((args.num_steps, args.num_processes))
 
     for j in range(args.continue_from_epoch, args.continue_from_epoch+num_updates):
 
@@ -275,7 +345,8 @@ def main():
             #     print(reward)
             for i in range(len(done)):
                 if done[i] == 1:
-                    rollouts.obs_sum[i] = torch.zeros_like(rollouts.obs_sum[i])
+                    # rollouts.obs_sum[i] = torch.zeros_like(rollouts.obs_sum[i])
+                    rollouts.obs_sum[i].copy_(obs[i].cpu())
 
             next_obs_sum =  rollouts.obs_sum + obs.cpu()
             reward = np.zeros_like(reward)
@@ -285,7 +356,6 @@ def main():
                     num_zero_next_obs_sum = (next_obs_sum[i][0] == 0).sum()
                     if num_zero_next_obs_sum < num_zero_obs_sum:
                         reward[i] = 1
-
 
             for i, info in enumerate(infos):
                 seeds[i] = info["level_seed"]
@@ -361,34 +431,30 @@ def main():
             printout = f'Seed {args.seed} Iter {j} '
             eval_dic_rew = {}
             eval_dic_done = {}
-            num_zero_obs_end = {}
-            eval_dic_rew_oracle = {}
-            eval_dic_done_oracle = {}
-            num_zero_obs_end_oracle = {}
-            for eval_disp_name in EVAL_ENVS:
-                eval_dic_rew[eval_disp_name], eval_dic_done[eval_disp_name], num_zero_obs_end[eval_disp_name] = evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, eval_disp_name,
-                                                  args.num_processes, device, args.num_steps)
+            eval_dic_seeds = {}
 
-                eval_dic_rew_oracle[eval_disp_name], eval_dic_done_oracle[eval_disp_name], num_zero_obs_end_oracle[eval_disp_name] = evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, eval_disp_name,
-                                                  args.num_processes, device, args.num_steps, attention_features=False, det_masks=False, deterministic=True, oracle = True)
+            for eval_disp_name in EVAL_ENVS:
+                eval_dic_rew[eval_disp_name], eval_dic_done[eval_disp_name], eval_dic_seeds[eval_disp_name] = evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, eval_disp_name,
+                                                  args.num_processes, device, args.num_steps, logger)
+
 
 
                 # log_dict[eval_disp_name].append([(j+1) * args.num_processes * args.num_steps, eval_dic_rew[eval_disp_name]])
                 # printout += eval_disp_name + ' ' + str(np.mean(eval_dic_rew[eval_disp_name])) + ' '
                 # print(printout)
-                wandb.log({"mun_maxEnt/"+eval_disp_name: np.mean(num_zero_obs_end[eval_disp_name])}, step=(j + 1) * args.num_processes * args.num_steps)
-                wandb.log({"mun_maxEnt_oracle/"+eval_disp_name: np.mean(num_zero_obs_end_oracle[eval_disp_name])}, step=(j + 1) * args.num_processes * args.num_steps)
-                wandb.log({"mun_maxEnt_vs_oracle/"+eval_disp_name: np.mean(num_zero_obs_end[eval_disp_name])/np.mean(num_zero_obs_end_oracle[eval_disp_name])}, step=(j + 1) * args.num_processes * args.num_steps)
+                # wandb.log({"mun_maxEnt/"+eval_disp_name: np.mean(num_zero_obs_end[eval_disp_name])}, step=(j + 1) * args.num_processes * args.num_steps)
+                # wandb.log({"mun_maxEnt_oracle/"+eval_disp_name: np.mean(num_zero_obs_end_oracle[eval_disp_name])}, step=(j + 1) * args.num_processes * args.num_steps)
+                # wandb.log({"mun_maxEnt_vs_oracle/"+eval_disp_name: np.mean(num_zero_obs_end[eval_disp_name])/np.mean(num_zero_obs_end_oracle[eval_disp_name])}, step=(j + 1) * args.num_processes * args.num_steps)
 
-            if ((args.eval_nondet_interval is not None and j % args.eval_nondet_interval == 0) or j == args.continue_from_epoch):
-                eval_test_nondet_rew, eval_test_nondet_done, num_zero_obs_end_nondet = evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, 'test_eval',
-                                                  args.num_processes, device, args.num_steps, deterministic=False)
-                wandb.log({"mun_maxEnt/nondet": np.mean(num_zero_obs_end_nondet)}, step=(j + 1) * args.num_processes * args.num_steps)
+            # if ((args.eval_nondet_interval is not None and j % args.eval_nondet_interval == 0) or j == args.continue_from_epoch):
+            #     eval_test_nondet_rew, eval_test_nondet_done, eval_test_nondet_seeds = evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, 'test_eval',
+            #                                       args.num_processes, device, args.num_steps, logger, deterministic=False)
+                # wandb.log({"mun_maxEnt/nondet": np.mean(num_zero_obs_end_nondet)}, step=(j + 1) * args.num_processes * args.num_steps)
 
 
             logger.feed_eval(eval_dic_rew['train_eval'], eval_dic_done['train_eval'],eval_dic_rew['test_eval'], eval_dic_done['test_eval'],
-                             eval_dic_rew_oracle['train_eval'], eval_dic_done_oracle['train_eval'], eval_dic_rew_oracle['test_eval'],eval_dic_done_oracle['test_eval'],
-                             eval_dic_rew['test_eval'], eval_dic_done['test_eval'], eval_test_nondet_rew, eval_test_nondet_done)
+                             eval_dic_seeds['train_eval'], eval_dic_seeds['test_eval'],
+                             eval_dic_rew['test_eval'], eval_dic_done['test_eval'])
             episode_statistics = logger.get_episode_statistics()
             print(printout)
             print(episode_statistics)

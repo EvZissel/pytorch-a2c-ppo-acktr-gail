@@ -15,7 +15,7 @@ np.random.seed(0)
 device = torch.device("cuda:{}".format(0))
 
 
-env_name = "maze_WOr"
+env_name = "maze"
 start_level = 0
 num_level = 1
 distribution_mode = "easy"
