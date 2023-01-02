@@ -145,6 +145,7 @@ def evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, env_name, num_processes
 
     eval_envs = eval_envs_dic[env_name]
     rew_batch = []
+    int_rew_batch = []
     done_batch = []
     seed_batch = []
     # eval_episode_len = []
@@ -225,15 +226,16 @@ def evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, env_name, num_processes
                 if done[i] == 1:
                     logger.obs_sum[env_name][i] = next_obs[i].cpu()
 
-            reward = np.zeros_like(reward)
+            int_reward = np.zeros_like(reward)
             next_obs_sum = logger.obs_sum[env_name] + next_obs.cpu()
-            for i in range(len(reward)):
+            for i in range(len(int_reward)):
                 num_zero_obs_sum = (logger.obs_sum[env_name][i][0] == 0).sum()
                 num_zero_next_obs_sum = (next_obs_sum[i][0] == 0).sum()
                 if num_zero_next_obs_sum < num_zero_obs_sum:
-                    reward[i] = 1
+                    int_reward[i] = 1
 
             rew_batch.append(reward)
+            int_rew_batch.append(int_reward)
             done_batch.append(done)
             seed_batch.append(seeds)
 
@@ -241,6 +243,7 @@ def evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, env_name, num_processes
             logger.obs_sum[env_name] = next_obs_sum
 
     rew_batch = np.array(rew_batch)
+    int_rew_batch = np.array(int_rew_batch)
     done_batch = np.array(done_batch)
     seed_batch = np.array(seed_batch)
     # num_zero_obs_end = np.zeros_like(reward)
@@ -248,7 +251,7 @@ def evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, env_name, num_processes
     #     if (obs_sum[i][0] == 0).sum() == 0:
     #         num_zero_obs_end[i]= 1
 
-    return rew_batch, done_batch, seed_batch
+    return rew_batch, int_rew_batch, done_batch, seed_batch
 
 
 def maxEnt_oracle(obs_all, action):

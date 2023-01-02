@@ -62,7 +62,7 @@ class Logger(object):
         self.num_episodes_test_nondet = 0
 
     def feed_eval(self, rew_batch_train, done_batch_train, rew_batch_test, done_batch_test, seeds_batch_train, seeds_batch_test,
-                  rew_batch_train_val, done_batch_train_val):
+                  rew_batch_train_ext, rew_batch_test_ext, rew_batch_train_val, done_batch_train_val):
 
         steps = rew_batch_train.shape[0]
         rew_batch_train = rew_batch_train.T
@@ -206,48 +206,57 @@ class Logger(object):
 
 class maxEnt_Logger(Logger):
     def __init__(self, n_envs, max_reward_seeds, start_train_test, obs_shape, recurrent_hidden_state_size, device='cpu'):
-        super(Logger, self).__init__(n_envs, obs_shape, recurrent_hidden_state_size, device)
+        super(maxEnt_Logger, self).__init__(n_envs, obs_shape, recurrent_hidden_state_size, device)
 
         self.max_reward_seeds = max_reward_seeds
         self.start_train_test = start_train_test
 
         self.episode_rewards_test_vs_oracle = []
         self.episode_rewards_train_vs_oracle = []
+        self.episode_rewards_train_ext = []
+        self.episode_rewards_test_ext = []
         for _ in range(self.n_envs):
             self.episode_rewards_train_vs_oracle.append([])
             self.episode_rewards_test_vs_oracle.append([])
+            self.episode_rewards_train_ext.append([])
+            self.episode_rewards_test_ext.append([])
 
         self.episode_reward_buffer_train_vs_oracle = deque(maxlen=self.n_envs)
         self.episode_reward_buffer_train_completed = deque(maxlen=self.n_envs)
-        self.episode_reward_buffer_test_vs_oracle = deque(maxlen=self.n_envs)
-        self.episode_reward_buffer_test_completed = deque(maxlen=self.n_envs)
+        self.episode_reward_buffer_test_vs_oracle  = deque(maxlen=self.n_envs)
+        self.episode_reward_buffer_test_completed  = deque(maxlen=self.n_envs)
+        self.episode_reward_buffer_train_ext       = deque(maxlen=self.n_envs)
+        self.episode_reward_buffer_test_ext        = deque(maxlen=self.n_envs)
 
 
     def feed_eval(self, rew_batch_train, done_batch_train, rew_batch_test, done_batch_test, seeds_batch_train, seeds_batch_test,
-                  rew_batch_train_val, done_batch_train_val):
+                  rew_batch_train_ext, rew_batch_test_ext, rew_batch_train_val, done_batch_train_val):
 
         steps = rew_batch_train.shape[0]
         rew_batch_train = rew_batch_train.T
+        rew_batch_train_ext = rew_batch_train_ext.T
         done_batch_train = done_batch_train.T
         seeds_batch_train = seeds_batch_train.T
         rew_batch_test = rew_batch_test.T
+        rew_batch_test_ext = rew_batch_test_ext.T
         done_batch_test = done_batch_test.T
         seeds_batch_test = seeds_batch_test.T
         rew_batch_train_val = rew_batch_train_val.T
         done_batch_train_val = done_batch_train_val.T
-        # rew_batch_test_nondet = rew_batch_test_nondet.T
-        # done_batch_test_nondet = done_batch_test_nondet.T
+
         for i in range(self.n_envs):
             for j in range(steps):
                 self.episode_rewards_test[i].append(rew_batch_test[i][j])
+                self.episode_rewards_test_ext[i].append(rew_batch_test_ext[i][j])
                 self.episode_rewards_train[i].append(rew_batch_train[i][j])
+                self.episode_rewards_train_ext[i].append(rew_batch_train_ext[i][j])
                 self.episode_rewards_train_val[i].append(rew_batch_train_val[i][j])
-                # self.episode_rewards_test_nondet[i].append(rew_batch_test_nondet[i][j])
                 if done_batch_train[i][j]:
                     train_seed = seeds_batch_train[i][j]
                     max_reward_train_seeds = self.max_reward_seeds['train_eval'][int(train_seed) - self.start_train_test['train_eval']]
                     self.episode_len_buffer_train.append(len(self.episode_rewards_train[i]))
                     self.episode_reward_buffer_train.append(np.sum(self.episode_rewards_train[i]))
+                    self.episode_reward_buffer_train_ext.append(np.sum(self.episode_rewards_train_ext[i]))
                     train_vs_oracle = np.sum(self.episode_rewards_train[i]) / (max_reward_train_seeds + 1e-4)
                     if train_vs_oracle > 1:
                         print("bug! train sum reward is {} ".format(train_vs_oracle))
@@ -255,12 +264,14 @@ class maxEnt_Logger(Logger):
                     self.episode_reward_buffer_train_vs_oracle.append(train_vs_oracle)
                     self.episode_reward_buffer_train_completed.append(1*(np.sum(self.episode_rewards_train[i]) == max_reward_train_seeds))
                     self.episode_rewards_train[i] = []
+                    self.episode_rewards_train_ext[i] = []
                     self.num_episodes_train += 1
                 if done_batch_test[i][j]:
                     test_seed = seeds_batch_test[i][j]
                     max_reward_test_seeds = self.max_reward_seeds['test_eval'][int(test_seed) - self.start_train_test['test_eval']]
                     self.episode_len_buffer_test.append(len(self.episode_rewards_test[i]))
                     self.episode_reward_buffer_test.append(np.sum(self.episode_rewards_test[i]))
+                    self.episode_reward_buffer_test_ext.append(np.sum(self.episode_rewards_test_ext[i]))
                     test_vs_oracle = np.sum(self.episode_rewards_test[i]) / (max_reward_test_seeds + 1e-4)
                     if test_vs_oracle > 1:
                         print("bug! test sum reward is {} ".format(test_vs_oracle))
@@ -268,17 +279,13 @@ class maxEnt_Logger(Logger):
                     self.episode_reward_buffer_test_vs_oracle.append(test_vs_oracle)
                     self.episode_reward_buffer_test_completed.append(1*(np.sum(self.episode_rewards_test[i]) == max_reward_test_seeds))
                     self.episode_rewards_test[i] = []
+                    self.episode_rewards_test_ext[i] = []
                     self.num_episodes_test += 1
                 if done_batch_train_val[i][j]:
                     self.episode_len_buffer_train_val.append(len(self.episode_rewards_train_val[i]))
                     self.episode_reward_buffer_train_val.append(np.sum(self.episode_rewards_train_val[i]))
                     self.episode_rewards_train_val[i] = []
                     self.num_episodes_train_val += 1
-                # if done_batch_test_nondet[i][j]:
-                #     self.episode_len_buffer_test_nondet.append(len(self.episode_rewards_test_nondet[i]))
-                #     self.episode_reward_buffer_test_nondet.append(np.sum(self.episode_rewards_test_nondet[i]))
-                #     self.episode_rewards_test_nondet[i] = []
-                #     self.num_episodes_test_nondet += 1
 
         # print('debug')
 
@@ -286,37 +293,31 @@ class maxEnt_Logger(Logger):
         episode_statistics = {}
         episode_statistics['Rewards/max_episodes'] = {'train': np.max(self.episode_reward_buffer),
                                                       'train_eval': np.max(self.episode_reward_buffer_train),
-                                                      'train_eval_vs_oracle': np.max(
-                                                          self.episode_reward_buffer_train_vs_oracle),
-                                                      'train_eval_completed': np.max(
-                                                          self.episode_reward_buffer_train_completed),
+                                                      'train_eval_ext': np.max(self.episode_reward_buffer_train_ext),
+                                                      'train_eval_vs_oracle': np.max(self.episode_reward_buffer_train_vs_oracle),
+                                                      'train_eval_completed': np.max(self.episode_reward_buffer_train_completed),
                                                       'test': np.max(self.episode_reward_buffer_test),
-                                                      'test_vs_oracle': np.max(
-                                                          self.episode_reward_buffer_test_vs_oracle),
-                                                      'test_completed': np.max(
-                                                          self.episode_reward_buffer_test_completed)}
+                                                      'test_ext': np.max(self.episode_reward_buffer_test_ext),
+                                                      'test_vs_oracle': np.max(self.episode_reward_buffer_test_vs_oracle),
+                                                      'test_completed': np.max(self.episode_reward_buffer_test_completed)}
         episode_statistics['Rewards/mean_episodes'] = {'train': np.mean(self.episode_reward_buffer),
                                                        'train_eval': np.mean(self.episode_reward_buffer_train),
-                                                       'train_eval_vs_oracle': np.mean(
-                                                           self.episode_reward_buffer_train_vs_oracle),
-                                                       'train_eval_completed': np.mean(
-                                                           self.episode_reward_buffer_train_completed),
+                                                       'train_eval_ext': np.mean(self.episode_reward_buffer_train_ext),
+                                                       'train_eval_vs_oracle': np.mean(self.episode_reward_buffer_train_vs_oracle),
+                                                       'train_eval_completed': np.mean(self.episode_reward_buffer_train_completed),
                                                        'test': np.mean(self.episode_reward_buffer_test),
-                                                       'test_vs_oracle': np.mean(
-                                                           self.episode_reward_buffer_test_vs_oracle),
-                                                       'test_completed': np.mean(
-                                                           self.episode_reward_buffer_test_completed)}
+                                                       'test_ext': np.mean(self.episode_reward_buffer_test_ext),
+                                                       'test_vs_oracle': np.mean(self.episode_reward_buffer_test_vs_oracle),
+                                                       'test_completed': np.mean(self.episode_reward_buffer_test_completed)}
         episode_statistics['Rewards/min_episodes'] = {'train': np.min(self.episode_reward_buffer),
                                                       'train_eval': np.min(self.episode_reward_buffer_train),
-                                                      'train_eval_vs_oracle': np.min(
-                                                          self.episode_reward_buffer_train_vs_oracle),
-                                                      'train_eval_completed': np.min(
-                                                          self.episode_reward_buffer_train_completed),
+                                                      'train_eval_ext': np.min(self.episode_reward_buffer_train_ext),
+                                                      'train_eval_vs_oracle': np.min(self.episode_reward_buffer_train_vs_oracle),
+                                                      'train_eval_completed': np.min(self.episode_reward_buffer_train_completed),
                                                       'test': np.min(self.episode_reward_buffer_test),
-                                                      'test_vs_oracle': np.min(
-                                                          self.episode_reward_buffer_test_vs_oracle),
-                                                      'test_completed': np.min(
-                                                          self.episode_reward_buffer_test_completed)}
+                                                      'test_ext': np.min(self.episode_reward_buffer_test_ext),
+                                                      'test_vs_oracle': np.min(self.episode_reward_buffer_test_vs_oracle),
+                                                      'test_completed': np.min(self.episode_reward_buffer_test_completed)}
 
         episode_statistics['Len/max_episodes'] = {'train': np.max(self.episode_len_buffer),
                                                   'train_eval': np.max(self.episode_len_buffer_train),

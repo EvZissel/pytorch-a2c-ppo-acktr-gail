@@ -73,6 +73,11 @@ def get_args():
         default=0.5,
         help='max norm of gradients (default: 0.5)')
     parser.add_argument(
+        '--beta_decay',
+        type=float,
+        default=0.5,
+        help='beta decay (default: 0.5)')
+    parser.add_argument(
         '--seed', type=int, default=1, help='random seed (default: 1)')
     parser.add_argument(
         '--start-level', type=int, default=0, help='start level (default: 0)')
