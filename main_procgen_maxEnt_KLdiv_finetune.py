@@ -12,7 +12,7 @@ from a2c_ppo_acktr.arguments import get_args
 # from a2c_ppo_acktr.envs import make_vec_envs, make_ProcgenEnvs
 from a2c_ppo_acktr.envs import make_ProcgenEnvs
 from procgen import ProcgenEnv
-from a2c_ppo_acktr.model import Policy, MLPAttnBase, MLPHardAttnBase, MLPHardAttnReinforceBase, ImpalaModel, ImpalaModel_finetune
+from a2c_ppo_acktr.model import Policy, MLPAttnBase, MLPHardAttnBase, MLPHardAttnReinforceBase, ImpalaModel
 from a2c_ppo_acktr.storage import RolloutStorage
 from evaluation import evaluate_procgen, evaluate_procgen_maxEnt
 from a2c_ppo_acktr.utils import save_obj, load_obj
@@ -58,11 +58,13 @@ def main():
         logdir_ = logdir_ + '_mask_all'
     if args.mask_size > 0:
         logdir_ = logdir_ + '_mask_' + str(args.mask_size)
+    if args.KLdiv_loss:
+        logdir_ = 'KLreg_' + logdir_  + str(args.KL_coef)
 
     logdir = os.path.join(os.path.expanduser(args.log_dir), logdir_)
     utils.cleanup_log_dir(logdir)
 
-    wandb.init(project=args.env_name + "_PPO_maximum_entropy", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
+    wandb.init(project=args.env_name + "_PPO_maximum_entropy_KLdiv", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
 
     # Ugly but simple logging
     log_dict = {
@@ -210,7 +212,7 @@ def main():
     actor_critic = Policy(
         envs.observation_space.shape,
         envs.action_space,
-        base=ImpalaModel_finetune,
+        base=ImpalaModel,
         base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent,'hidden_size': args.recurrent_hidden_size})
         # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
     actor_critic.to(device)
@@ -228,12 +230,14 @@ def main():
         args.num_mini_batch,
         args.value_loss_coef,
         args.entropy_coef,
+        args.KL_coef,
         lr=args.lr,
         eps=args.eps,
         num_tasks=args.num_processes,
         attention_policy=False,
         max_grad_norm=args.max_grad_norm,
-        weight_decay=args.weight_decay)
+        weight_decay=args.weight_decay,
+        KLdiv_loss=args.KLdiv_loss)
 
     # rollout storage for agent
     rollouts = RolloutStorage(args.num_steps, args.num_processes,
@@ -261,14 +265,40 @@ def main():
         # rollouts.step                    = actor_critic_weighs['buffer_step']
         # rollouts.num_processes           = actor_critic_weighs['buffer_num_processes']
 
+
     # Load previous model
     if (args.saved_epoch > 0) and args.save_dir != "":
         save_path = args.save_dir
         actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch)), map_location=device)
-        actor_critic.load_state_dict(actor_critic_weighs['state_dict'], strict=False)
+        actor_critic.load_state_dict(actor_critic_weighs['state_dict'])
+
+        # ilavie - added if statement
+        maxEnt_actor_critic = copy.deepcopy(actor_critic)
+        maxEnt_actor_critic.to(device)
+
+        # maxEnt reference agent
+        maxEnt_Agent = algo.PPO(
+            maxEnt_actor_critic,
+            args.clip_param,
+            args.ppo_epoch,
+            args.num_mini_batch,
+            args.value_loss_coef,
+            args.entropy_coef,
+            args.KL_coef,
+            lr=args.lr,
+            eps=args.eps,
+            num_tasks=args.num_processes,
+            attention_policy=False,
+            max_grad_norm=args.max_grad_norm,
+            weight_decay=args.weight_decay,
+            KLdiv_loss=args.KLdiv_loss)
+
+        for param in maxEnt_actor_critic.parameters():
+            param.requires_grad = False
+
 
     logger = maxEnt_Logger(args.num_processes, max_reward_seeds, start_train_test, envs.observation_space.shape,
-    actor_critic.recurrent_hidden_state_size, device=device)
+     actor_critic.recurrent_hidden_state_size, device=device)
 
     obs = envs.reset()
     # rollouts.obs[0].copy_(torch.FloatTensor(obs))
@@ -306,6 +336,7 @@ def main():
     beta = 1
 
 
+
     #freeze layers
     if args.freeze1:
         for name, param in actor_critic.base.main[0].named_parameters():
@@ -315,22 +346,6 @@ def main():
             param.requires_grad = False
         for name, param in actor_critic.base.main[1].named_parameters():
             param.requires_grad = False
-    if args.freeze2_gru:
-        for name, param in actor_critic.base.main[0].named_parameters():
-            param.requires_grad = False
-        for name, param in actor_critic.base.main[1].named_parameters():
-            param.requires_grad = False
-        for name, param in actor_critic.base.gru.named_parameters():
-            param.requires_grad = False
-        init_(actor_critic.base.main[2].conv)
-        init_(actor_critic.base.main[2].res1.conv1)
-        init_(actor_critic.base.main[2].res1.conv2)
-        init_(actor_critic.base.main[2].res2.conv1)
-        init_(actor_critic.base.main[2].res1.conv1)
-        init_(actor_critic.base.main[5])
-        init_dist(actor_critic.dist.linear)
-        init_2(actor_critic.base.critic_linear)
-
     if args.freeze_all:
         for name, param in actor_critic.base.main.named_parameters():
             param.requires_grad = False
@@ -358,15 +373,17 @@ def main():
 
         # policy rollouts
         actor_critic.eval()
+        maxEnt_actor_critic.eval() # ilavie - added
         # episode_rewards = []
         # episode_len = []
         for step in range(args.num_steps):
             # Sample actions
             with torch.no_grad():
-                value, action, action_log_prob, recurrent_hidden_states, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic.act(
+                value, action, action_log_prob, _, recurrent_hidden_states, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic.act(
                     rollouts.obs[step].to(device), rollouts.recurrent_hidden_states[step].to(device),
                     rollouts.masks[step].to(device), rollouts.attn_masks[step].to(device), rollouts.attn_masks1[step].to(device), rollouts.attn_masks2[step].to(device),
                     rollouts.attn_masks3[step].to(device))
+
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(action.squeeze().cpu().numpy())
@@ -417,7 +434,7 @@ def main():
         rollouts.compute_returns(next_value, args.use_gae, args.gamma,
                                  args.gae_lambda, args.use_proper_time_limits)
 
-        value_loss, action_loss, dist_entropy = agent.update(rollouts)
+        value_loss, action_loss, dist_entropy, kl_loss = agent.update(rollouts, maxEntAgent=maxEnt_Agent)
 
         rollouts.after_update()
 
@@ -451,12 +468,12 @@ def main():
             train_statistics = logger.get_train_val_statistics()
             print(
                 "Updates {}, num timesteps {}, FPS {}, num training episodes {} \n Last 128 training episodes: mean/median reward {:.1f}/{:.1f}, "
-                "min/max reward {:.1f}/{:.1f}, dist_entropy {} , value_loss {}, action_loss {}, unique seeds {} beta {} \n"
+                "min/max reward {:.1f}/{:.1f}, dist_entropy {} , value_loss {}, action_loss {}, KL loss {}, unique seeds {} beta {} \n"
                 .format(j, total_num_steps,
                         int(total_num_steps / (end - start)),
                         logger.num_episodes, train_statistics['Rewards_mean_episodes'],
                         train_statistics['Rewards_median_episodes'], train_statistics['Rewards_min_episodes'], train_statistics['Rewards_max_episodes'], dist_entropy, value_loss,
-                        action_loss, np.unique(rollouts.seeds.squeeze().numpy()).size, beta))
+                        action_loss, kl_loss, np.unique(rollouts.seeds.squeeze().numpy()).size, beta))
         # evaluate agent on evaluation tasks
         if ((args.eval_interval is not None and j % args.eval_interval == 0) or j == args.continue_from_epoch):
             actor_critic.eval()
@@ -536,7 +553,8 @@ def main():
 
             summary ={'Loss/pi': action_loss,
                       'Loss/v': value_loss,
-                      'Loss/entropy': dist_entropy}
+                      'Loss/entropy': dist_entropy,
+                      'Loss/KL': kl_loss}
             for key, value in summary.items():
                 summary_writer.add_scalar(key, value, (j + 1) * args.num_processes * args.num_steps)
                 wandb.log({key: value}, step=(j + 1) * args.num_processes * args.num_steps)

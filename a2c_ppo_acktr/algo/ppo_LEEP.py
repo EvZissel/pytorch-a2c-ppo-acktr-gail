@@ -12,15 +12,18 @@ import torch.optim as optim
 # from grad_tools.meanvar_grad import MeanVarGrad
 
 
-class PPO():
+class PPO_LEEP():
     def __init__(self,
                  actor_critic,
+                 actor_critic_1,
+                 actor_critic_2,
+                 actor_critic_3,
                  clip_param,
                  ppo_epoch,
                  num_mini_batch,
                  value_loss_coef,
                  entropy_coef,
-                 KLdiv_coeff=0.0,
+                 kl_coef,
                  lr=None,
                  eps=None,
                  max_grad_norm=None,
@@ -42,10 +45,12 @@ class PPO():
                  testgrad_beta=1.0,
                  grad_noise_ratio=1.0,
                  num_tasks=0,
-                 weight_decay=0.0,
-                 KLdiv_loss=False):
+                 weight_decay=0.0):
 
         self.actor_critic = actor_critic
+        self.actor_critic_1 = actor_critic_1
+        self.actor_critic_2 = actor_critic_2
+        self.actor_critic_3 = actor_critic_3
         self.num_tasks = num_tasks
         self.clip_param = clip_param
         self.ppo_epoch = ppo_epoch
@@ -53,10 +58,7 @@ class PPO():
 
         self.value_loss_coef = value_loss_coef
         self.entropy_coef = entropy_coef
-        # ilavie - added
-        self.KLdiv_loss = KLdiv_loss
-        self.KLdiv_coeff = KLdiv_coeff
-
+        self.kl_coef = kl_coef
 
         self.max_grad_norm = max_grad_norm
         self.use_clipped_value_loss = use_clipped_value_loss
@@ -141,7 +143,7 @@ class PPO():
         #     )
         #     privacy_engine.attach(self.optimizer)
 
-    def update(self, rollouts, attention_update=False, maxEntAgent=None):
+    def update(self, rollouts, attention_update=False):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
             advantages.std() + 1e-8)
@@ -149,7 +151,7 @@ class PPO():
         value_loss_epoch = 0
         action_loss_epoch = 0
         dist_entropy_epoch = 0
-        kldiv_loss_epoch = 0
+        dist_KL_epoch = 0
         for e in range(self.ppo_epoch):
             if self.actor_critic.is_recurrent:
                 data_generators = [rollouts.recurrent_generator(
@@ -177,15 +179,23 @@ class PPO():
                         obs_batch, recurrent_hidden_states_batch, masks_batch, attn_masks_batch, attn_masks1_batch, attn_masks2_batch, attn_masks3_batch,
                         actions_batch, attention_act=attention_update)
 
-                    ### ilavie - added segment #####
-                    kl_loss = 0
-                    if self.KLdiv_loss:
-                        _, _, _, maxEnt_dist_probs, _  = maxEntAgent.actor_critic.evaluate_actions(
+                    with torch.no_grad():
+                        values_1, action_log_probs_1, dist_entropy_1, dist_probs_1, _ = self.actor_critic_1.evaluate_actions(
                             obs_batch, recurrent_hidden_states_batch, masks_batch, attn_masks_batch, attn_masks1_batch, attn_masks2_batch, attn_masks3_batch,
                             actions_batch, attention_act=attention_update)
-                        kl_loss = F.kl_div(dist_probs.log(), maxEnt_dist_probs.log(),reduction='batchmean', log_target=True)
-                    ###----------#######
 
+                        values_2, action_log_probs_2, dist_entropy_2, dist_probs_2, _ = self.actor_critic_2.evaluate_actions(
+                            obs_batch, recurrent_hidden_states_batch, masks_batch, attn_masks_batch, attn_masks1_batch, attn_masks2_batch, attn_masks3_batch,
+                            actions_batch, attention_act=attention_update)
+
+                        values_3, action_log_probs_3, dist_entropy_3, dist_probs_3,  _ = self.actor_critic_3.evaluate_actions(
+                            obs_batch, recurrent_hidden_states_batch, masks_batch, attn_masks_batch, attn_masks1_batch, attn_masks2_batch, attn_masks3_batch,
+                            actions_batch, attention_act=attention_update)
+
+                        max_policy = torch.max(torch.max(torch.max(dist_probs,dist_probs_1),dist_probs_2),dist_probs_3)
+                        max_policy = torch.div(max_policy, max_policy.sum(1).unsqueeze(1))
+
+                    KL_loss = F.kl_div(dist_probs.log(), max_policy.log(), reduction='batchmean', log_target=True)
                     dist_entropy = dist_entropy / self.num_mini_batch
                     # if attention_update=True, we assume that the log_probs are the attention log_probs.
                     # This is a hack for now, and it is taken care of in model.py and in dual_rl.py
@@ -211,7 +221,7 @@ class PPO():
                         value_loss = (0.5 * (return_batch - values).pow(2).mean())/ self.num_mini_batch
                         # value_loss = 0.5 * (return_batch - values).pow(2).mean()
                     task_losses.append(value_loss * self.value_loss_coef + action_loss -
-                                       dist_entropy * self.entropy_coef + self.KLdiv_coeff * kl_loss)
+                                       dist_entropy * self.entropy_coef + self.kl_coef*KL_loss)
                 total_loss = torch.stack(task_losses).mean()
 
                 # (value_loss * self.value_loss_coef + action_loss -
@@ -242,7 +252,7 @@ class PPO():
                 value_loss_epoch += value_loss.item()
                 action_loss_epoch += action_loss.item()
                 dist_entropy_epoch += dist_entropy.item()
-                kldiv_loss_epoch += kl_loss.item()
+                dist_KL_epoch += KL_loss.item()
 
             # nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
             #                          self.max_grad_norm)
@@ -261,6 +271,6 @@ class PPO():
         value_loss_epoch /= num_updates
         action_loss_epoch /= num_updates
         dist_entropy_epoch /= num_updates
-        kldiv_loss_epoch /= num_updates
+        dist_KL_epoch /= num_updates
 
-        return value_loss_epoch, action_loss_epoch, dist_entropy_epoch, kldiv_loss_epoch
+        return value_loss_epoch, action_loss_epoch, dist_entropy_epoch, dist_KL_epoch

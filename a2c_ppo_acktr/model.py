@@ -83,7 +83,8 @@ class Policy(nn.Module):
         else:
             action_log_probs = dist.log_probs(action)
         dist_entropy = dist.entropy().mean()
-        return value, action, action_log_probs, rnn_hxs, attn_masks, attn_masks1, attn_masks2, attn_masks3
+        dist_probs = dist.probs
+        return value, action, action_log_probs, dist_probs, rnn_hxs, attn_masks, attn_masks1, attn_masks2, attn_masks3
 
     def get_value(self, inputs, rnn_hxs, masks, attn_masks, attn_masks1, attn_masks2, attn_masks3):
         value, _, _, _, _, _, _, _ = self.base(inputs, rnn_hxs, masks, attn_masks, attn_masks1, attn_masks2, attn_masks3)
@@ -108,8 +109,9 @@ class Policy(nn.Module):
             dist = self.dist(actor_features)
             action_log_probs = dist.log_probs(action)
             dist_entropy = dist.entropy().mean()
+            dist_probs = dist.probs
 
-        return value, action_log_probs, dist_entropy, rnn_hxs
+        return value, action_log_probs, dist_entropy, dist_probs,  rnn_hxs
 
 
 class NNBase(nn.Module):
@@ -353,6 +355,40 @@ class ImpalaModel(NNBase):
         x = self.main(x)
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+
+        return self.critic_linear(x), x, rnn_hxs, None, attn_masks, attn_masks1, attn_masks2, attn_masks3
+
+
+class ImpalaModel_finetune(NNBase):
+    def __init__(self, num_inputs, recurrent=False, hidden_size=256):
+        super(ImpalaModel_finetune, self).__init__(recurrent, hidden_size, hidden_size)
+
+        init_ = lambda m: init(m, nn.init.xavier_uniform_, lambda x: nn.init.
+                               constant_(x, 0))
+
+        init_2 = lambda m: init(
+            m,
+            nn.init.orthogonal_,
+            lambda x: nn.init.constant_(x, 0),
+            gain=1)
+
+        self.main = nn.Sequential(
+            ImpalaBlock(in_channels=num_inputs, out_channels=16),
+            ImpalaBlock(in_channels=16, out_channels=32),
+            ImpalaBlock(in_channels=32, out_channels=32), nn.ReLU(), Flatten(),
+            init_(nn.Linear(in_features=32 * 8 * 8, out_features=hidden_size)),nn.ReLU())
+
+        self.critic_linear = init_2(nn.Linear(hidden_size, 1))
+        self.fine_tune_adapt = nn.Sequential(init_2(nn.Linear(hidden_size, hidden_size)),nn.ReLU(),init_2(nn.Linear(hidden_size, hidden_size)),nn.ReLU())
+        self.train()
+
+    def forward(self, inputs, rnn_hxs, masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, reuse_masks=False):
+        x = inputs
+        x = self.main(x)
+        if self.is_recurrent:
+            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+
+        x = self.fine_tune_adapt(x)
 
         return self.critic_linear(x), x, rnn_hxs, None, attn_masks, attn_masks1, attn_masks2, attn_masks3
 

@@ -104,10 +104,11 @@ class Logger(object):
 
     def feed_train(self, rew_batch, done_batch):
         steps = rew_batch.shape[0]
+        n_envs = rew_batch.shape[1]
         rew_batch = rew_batch.T
         done_batch = done_batch.T
 
-        for i in range(self.n_envs):
+        for i in range(n_envs):
             for j in range(steps):
                 self.episode_rewards[i].append(rew_batch[i][j])
                 if done_batch[i][j]:

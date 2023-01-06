@@ -58,6 +58,11 @@ def get_args():
         default=0.01,
         help='entropy term coefficient (default: 0.01)')
     parser.add_argument(
+        '--KL-coef',
+        type=float,
+        default=0.01,
+        help='KL term coefficient (default: 0.01)')
+    parser.add_argument(
         '--epsilon_RPO',
         type=float,
         default=0.0,
@@ -216,6 +221,11 @@ def get_args():
         help='freeze the first layer')
     parser.add_argument(
         '--freeze2',
+        action='store_true',
+        default=False,
+        help='freeze the first and second layers')
+    parser.add_argument(
+        '--freeze2_gru',
         action='store_true',
         default=False,
         help='freeze the first and second layers')
@@ -384,8 +394,19 @@ def get_args():
         action='store_true',
         default=False,
         help='mask all frame')
-    args = parser.parse_args()
+    parser.add_argument(
+        '--num_c',
+        type=int,
+        default=4,
+        help='number of ensemble environments')
+    # ilavie - added for KLdiv finetune
+    parser.add_argument(
+        '--KLdiv_loss',
+        action='store_true',
+        default=False,
+        help='use the KLdiv loss between the maxEnt policy and the extrinsic reward policy')
 
+    args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
 
     assert args.algo in ['a2c', 'ppo', 'acktr']
