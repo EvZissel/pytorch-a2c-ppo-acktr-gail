@@ -202,6 +202,14 @@ def evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, env_name, num_processes
                     deterministic=deterministic,
                     reuse_masks=det_masks)
 
+            maxEnt_right = maxEnt_oracle(logger.obs[env_name].float().to(device), logger.last_action[env_name])
+            maxEnt_left  = maxEnt_oracle_left(logger.obs[env_name].float().to(device),  logger.last_action[env_name])
+
+            for i in range(num_processes):
+                if action[i] == 15:
+                    action[i] = maxEnt_right[i]
+                elif action[i] == 16:
+                    action[i] = maxEnt_left[i]
             # Observe reward and next obs
             next_obs, reward, done, infos = eval_envs.step(action.squeeze().cpu().numpy())
             logger.eval_masks[env_name] = torch.tensor(
@@ -225,6 +233,7 @@ def evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, env_name, num_processes
                 seeds[i] = infos[i]['level_seed']
                 if done[i] == 1:
                     logger.obs_sum[env_name][i] = next_obs[i].cpu()
+                    logger.last_action[env_name][i] = torch.tensor([7])
 
             int_reward = np.zeros_like(reward)
             next_obs_sum = logger.obs_sum[env_name] + next_obs.cpu()
@@ -241,6 +250,7 @@ def evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, env_name, num_processes
 
             logger.obs[env_name] = next_obs
             logger.obs_sum[env_name] = next_obs_sum
+            logger.last_action[env_name] = action
 
     rew_batch = np.array(rew_batch)
     int_rew_batch = np.array(int_rew_batch)
@@ -259,6 +269,7 @@ def maxEnt_oracle(obs_all, action):
     for i in range(len(action)):
         obs =  obs_all[i].cpu().numpy()
         action_i = action[i]
+        new_action_i = np.array([7])
 
 
         min_r = np.nonzero((obs[1] == 1))[0].min()
@@ -315,6 +326,7 @@ def maxEnt_oracle_left(obs_all, action):
     for i in range(len(action)):
         obs =  obs_all[i].cpu().numpy()
         action_i = action[i]
+        new_action_i = np.array([7])
 
 
         min_r = np.nonzero((obs[1] == 1))[0].min()
@@ -326,39 +338,39 @@ def maxEnt_oracle_left(obs_all, action):
         middle_c = int(min_c + (max_c - min_c + 1)/2)
 
         if action_i == 7:
-            if (max_r + 1 < 64) and obs[0][max_r + 1, middle_c] == 0:
-                new_action_i = np.array([3])
+            if (min_r - 1 > 0) and obs[0][min_r - 1, middle_c] == 0:
+                new_action_i = np.array([5])
             elif (max_c + 1 < 64) and obs[0][middle_r, max_c + 1] == 0:
                 new_action_i = np.array([7])
-            elif (min_r - 1 > 0) and obs[0][min_r - 1, middle_c] == 0:
-                new_action_i = np.array([5])
+            elif (max_r + 1 < 64) and obs[0][max_r + 1, middle_c] == 0:
+                new_action_i = np.array([3])
             else:
                 new_action_i = np.array([1])
         elif action_i == 5:
-            if (max_c + 1 < 64) and obs[0][middle_r, max_c + 1] == 0:
-                new_action_i = np.array([7])
-            elif (min_r - 1 > 0) and obs[0][min_r - 1, middle_c] == 0:
-                new_action_i = np.array([5])
-            elif (min_c - 1 > 0) and obs[0][middle_r, min_c - 1] == 0:
-                new_action_i = np.array([1])
-            else:
-                new_action_i = np.array([3])
-        elif action_i == 3:
             if (min_c - 1 > 0) and obs[0][middle_r, min_c - 1] == 0:
                 new_action_i = np.array([1])
-            elif (max_r + 1 < 64) and obs[0][max_r + 1, middle_c] == 0:
-                new_action_i = np.array([3])
+            elif (min_r - 1 > 0) and obs[0][min_r - 1, middle_c] == 0:
+                new_action_i = np.array([5])
             elif (max_c + 1 < 64) and obs[0][middle_r, max_c + 1] == 0:
                 new_action_i = np.array([7])
             else:
-                new_action_i = np.array([5])
-        elif action_i == 1:
-            if (min_r - 1 > 0) and obs[0][min_r - 1, middle_c] == 0:
-                new_action_i = np.array([5])
-            elif (min_c - 1 > 0) and obs[0][middle_r, min_c - 1] == 0:
-                new_action_i = np.array([1])
+                new_action_i = np.array([3])
+        elif action_i == 3:
+            if (max_c + 1 < 64) and obs[0][middle_r, max_c + 1] == 0:
+                new_action_i = np.array([7])
             elif (max_r + 1 < 64) and obs[0][max_r + 1, middle_c] == 0:
                 new_action_i = np.array([3])
+            elif (min_c - 1 > 0) and obs[0][middle_r, min_c - 1] == 0:
+                new_action_i = np.array([1])
+            else:
+                new_action_i = np.array([5])
+        elif action_i == 1:
+            if (max_r + 1 < 64) and obs[0][max_r + 1, middle_c] == 0:
+                new_action_i = np.array([3])
+            elif (min_c - 1 > 0) and obs[0][middle_r, min_c - 1] == 0:
+                new_action_i = np.array([1])
+            elif (min_r - 1 > 0) and obs[0][min_r - 1, middle_c] == 0:
+                new_action_i = np.array([5])
             else:
                 new_action_i = np.array([7])
 
@@ -366,6 +378,34 @@ def maxEnt_oracle_left(obs_all, action):
 
     return next_action
 
+
+def oracle_left(obs_all, action):
+    next_action = torch.tensor(action)
+    for i in range(len(action)):
+        next_action[i] = torch.tensor( np.array([1]))
+
+    return next_action
+
+def oracle_right(obs_all, action):
+    next_action = torch.tensor(action)
+    for i in range(len(action)):
+        next_action[i] =  torch.tensor(np.array([7]))
+
+    return next_action
+
+def oracle_up(obs_all, action):
+    next_action = torch.tensor(action)
+    for i in range(len(action)):
+        next_action[i] =  torch.tensor(np.array([5]))
+
+    return next_action
+
+def oracle_down(obs_all, action):
+    next_action = torch.tensor(action)
+    for i in range(len(action)):
+        next_action[i] =  torch.tensor(np.array([3]))
+
+    return next_action
 
 def evaluate_procgen_LEEP(actor_critic_0, actor_critic_1, actor_critic_2, actor_critic_3, eval_envs_dic, env_name, num_processes,
                      device, steps, logger, attention_features=False, det_masks=False, deterministic=True):

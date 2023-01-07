@@ -150,6 +150,7 @@ class PPO():
         action_loss_epoch = 0
         dist_entropy_epoch = 0
         kldiv_loss_epoch = 0
+        kl_loss = 0
         for e in range(self.ppo_epoch):
             if self.actor_critic.is_recurrent:
                 data_generators = [rollouts.recurrent_generator(
@@ -178,7 +179,6 @@ class PPO():
                         actions_batch, attention_act=attention_update)
 
                     ### ilavie - added segment #####
-                    kl_loss = 0
                     if self.KLdiv_loss:
                         _, _, _, maxEnt_dist_probs, _  = maxEntAgent.actor_critic.evaluate_actions(
                             obs_batch, recurrent_hidden_states_batch, masks_batch, attn_masks_batch, attn_masks1_batch, attn_masks2_batch, attn_masks3_batch,
@@ -242,7 +242,8 @@ class PPO():
                 value_loss_epoch += value_loss.item()
                 action_loss_epoch += action_loss.item()
                 dist_entropy_epoch += dist_entropy.item()
-                kldiv_loss_epoch += kl_loss.item()
+                if self.KLdiv_loss:
+                    kldiv_loss_epoch += kl_loss.item()
 
             # nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
             #                          self.max_grad_norm)

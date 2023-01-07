@@ -18,6 +18,7 @@ import random;
 from gym3 import VideoRecorderWrapper
 from procgen import ProcgenEnv, ProcgenGym3Env
 from gym import spaces
+from evaluation import maxEnt_oracle_left, maxEnt_oracle
 
 device = torch.device("cuda:{}".format(0))
 
@@ -209,76 +210,96 @@ done = np.zeros(1)
 step = 0
 reward = 0
 
-obs = obs[0].transpose()
-obs = np.transpose(obs, (0, 2, 1))
+# obs = obs.transpose()
+obs = np.transpose(obs, (0, 3, 1, 2))
 obs_sum = obs
+
+# return [
+# 0   ("LEFT", "DOWN"),
+# 1   ("LEFT",),
+# 2   ("LEFT", "UP"),
+# 3   ("DOWN",),
+# 4   (),
+# 5   ("UP",),
+# 6   ("RIGHT", "DOWN"),
+# 7   ("RIGHT",),
+# 8   ("RIGHT", "UP"),
+#     ("D",),
+#     ("A",),
+#     ("W",),
+#     ("S",),
+#     ("Q",),
+#     ("E",),
+# ]
 
 while not done[0]:
     with torch.no_grad():
 
+        #
+        # min_r =  np.nonzero((obs[1] == 1))[0].min()
+        # max_r =  np.nonzero((obs[1] == 1))[0].max()
+        #
+        # min_c =  np.nonzero((obs[1] == 1))[1].min()
+        # max_c =  np.nonzero((obs[1] == 1))[1].max()
+        #
+        # if action[0] == 7:
+        #     if obs[0][max_r+1,min_c] == 0:
+        #         action = np.array([3])
+        #     elif obs[0][min_r,max_c+1] == 0:
+        #         action = np.array([7])
+        #     elif obs[0][min_r-1, min_c] == 0:
+        #         action = np.array([5])
+        #     else:
+        #         action = np.array([1])
+        # elif action[0] == 5:
+        #     if obs[0][max_r,max_c+1] == 0:
+        #         action = np.array([7])
+        #     elif obs[0][min_r-1, min_c] == 0:
+        #         action = np.array([5])
+        #     elif obs[0][min_r, min_c-1] == 0:
+        #         action = np.array([1])
+        #     else:
+        #         action = np.array([3])
+        # elif action[0] == 3:
+        #     if obs[0][min_r, min_c-1] == 0:
+        #         action = np.array([1])
+        #     elif obs[0][max_r+1, min_c] == 0:
+        #         action = np.array([3])
+        #     elif obs[0][max_r,max_c+1] == 0:
+        #         action = np.array([7])
+        #     else:
+        #         action = np.array([5])
+        # elif action[0] == 1:
+        #     if obs[0][min_r-1, min_c] == 0:
+        #         action = np.array([5])
+        #     elif obs[0][min_r, min_c-1] == 0:
+        #         action = np.array([1])
+        #     elif obs[0][max_r+1, min_c] == 0:
+        #         action = np.array([3])
+        #     else:
+        #         action = np.array([7])
+        action = maxEnt_oracle(torch.tensor(obs), action)
 
-        min_r =  np.nonzero((obs[1] == 1))[0].min()
-        max_r =  np.nonzero((obs[1] == 1))[0].max()
-
-        min_c =  np.nonzero((obs[1] == 1))[1].min()
-        max_c =  np.nonzero((obs[1] == 1))[1].max()
-
-        if action[0] == 7:
-            if obs[0][max_r+1,min_c] == 0:
-                action = np.array([3])
-            elif obs[0][min_r,max_c+1] == 0:
-                action = np.array([7])
-            elif obs[0][min_r-1, min_c] == 0:
-                action = np.array([5])
-            else:
-                action = np.array([1])
-        elif action[0] == 5:
-            if obs[0][max_r,max_c+1] == 0:
-                action = np.array([7])
-            elif obs[0][min_r-1, min_c] == 0:
-                action = np.array([5])
-            elif obs[0][min_r, min_c-1] == 0:
-                action = np.array([1])
-            else:
-                action = np.array([3])
-        elif action[0] == 3:
-            if obs[0][min_r, min_c-1] == 0:
-                action = np.array([1])
-            elif obs[0][max_r+1, min_c] == 0:
-                action = np.array([3])
-            elif obs[0][max_r,max_c+1] == 0:
-                action = np.array([7])
-            else:
-                action = np.array([5])
-        elif action[0] == 1:
-            if obs[0][min_r-1, min_c] == 0:
-                action = np.array([5])
-            elif obs[0][min_r, min_c-1] == 0:
-                action = np.array([1])
-            elif obs[0][max_r+1, min_c] == 0:
-                action = np.array([3])
-            else:
-                action = np.array([7])
-
-        envs.act(action)
+        envs.act(action.cpu().numpy())
         rew, obs, first = envs.observe()
         obs = obs['rgb']/255
         # print(action[0])
         # plt.imshow(obs[0].transpose(0,2).transpose(0,1).cpu().numpy())
         # plt.show()
-        obs = obs[0].transpose()
-        obs = np.transpose(obs, (0, 2, 1))
+        # obs = obs[0].transpose()
+        # obs = np.transpose(obs, (0, 2, 1))
+        obs = np.transpose(obs, (0, 3, 1, 2))
 
-        eval_masks = torch.tensor(
-        [[0.0] if done_ else [1.0] for done_ in done],
-        dtype=torch.float32,
-        device=device)
+        # eval_masks = torch.tensor(
+        # [[0.0] if done_ else [1.0] for done_ in done],
+        # dtype=torch.float32,
+        # device=device)
 
         next_obs_sum = obs_sum + obs
-        num_zero_obs_sum = (obs_sum[0] == 0).sum()
-        num_zero_next_obs_sum = (next_obs_sum[0] == 0).sum()
+        num_zero_obs_sum = (obs_sum[0][0] == 0).sum()
+        num_zero_next_obs_sum = (next_obs_sum[0][0] == 0).sum()
         if num_zero_next_obs_sum < num_zero_obs_sum:
-                reward += 1
+            reward += 1
 
         obs_sum = next_obs_sum
         print(reward)

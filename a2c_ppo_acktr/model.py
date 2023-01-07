@@ -393,6 +393,34 @@ class ImpalaModel_finetune(NNBase):
         return self.critic_linear(x), x, rnn_hxs, None, attn_masks, attn_masks1, attn_masks2, attn_masks3
 
 
+class ImpalaModel_selection(NNBase):
+    def __init__(self, num_inputs, recurrent=False, hidden_size=256):
+        super(ImpalaModel_selection, self).__init__(recurrent, hidden_size, hidden_size)
+
+        init_ = lambda m: init(m, nn.init.xavier_uniform_, lambda x: nn.init.
+                               constant_(x, 0))
+
+        init_2 = lambda m: init(
+            m,
+            nn.init.orthogonal_,
+            lambda x: nn.init.constant_(x, 0),
+            gain=1)
+
+        self.main = nn.Sequential(
+            ImpalaBlock(in_channels=num_inputs, out_channels=4), nn.ReLU(), Flatten(),
+            init_(nn.Linear(in_features=4 * 32 * 32, out_features=hidden_size)),nn.ReLU())
+
+        self.critic_linear = init_2(nn.Linear(hidden_size, 1))
+        self.train()
+
+    def forward(self, inputs, rnn_hxs, masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, reuse_masks=False):
+        x = inputs
+        x = self.main(x)
+        if self.is_recurrent:
+            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+
+        return self.critic_linear(x), x, rnn_hxs, None, attn_masks, attn_masks1, attn_masks2, attn_masks3
+
 class ImpalaHardAttnReinforce(NNBase):
     def __init__(self, num_inputs, recurrent=False, hidden_size=256, att_size=None, obs_size=None):
         super(ImpalaHardAttnReinforce, self).__init__(recurrent, hidden_size, hidden_size, attention=True, attention_size=att_size)

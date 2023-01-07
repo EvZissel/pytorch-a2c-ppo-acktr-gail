@@ -14,16 +14,19 @@ class Logger(object):
         self.obs_sum = {}
         self.eval_recurrent_hidden_states = {}
         self.eval_masks = {}
+        self.last_action = {}
 
         self.obs['train_eval'] = torch.zeros(self.n_envs, *obs_shape)
         self.obs_sum['train_eval'] = torch.zeros(self.n_envs, *obs_shape)
         self.eval_recurrent_hidden_states['train_eval'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
         self.eval_masks['train_eval'] = torch.ones(self.n_envs, 1, device=device)
+        self.last_action['train_eval'] = torch.full([n_envs, 1], 7, device=device)
 
         self.obs['test_eval'] = torch.zeros(self.n_envs, *obs_shape)
         self.obs_sum['test_eval'] = torch.zeros(self.n_envs, *obs_shape)
         self.eval_recurrent_hidden_states['test_eval'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
         self.eval_masks['test_eval'] = torch.ones(self.n_envs, 1, device=device)
+        self.last_action['test_eval'] = torch.full([n_envs, 1], 7, device=device)
 
 
         self.episode_rewards = []
