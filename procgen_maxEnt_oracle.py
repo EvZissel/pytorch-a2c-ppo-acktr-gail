@@ -24,7 +24,7 @@ device = torch.device("cuda:{}".format(0))
 
 
 env_name = "maze"
-start_level = 136
+start_level = 6895
 num_level = 1
 distribution_mode = "easy"
 seed = 0

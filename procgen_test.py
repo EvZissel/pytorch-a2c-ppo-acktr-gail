@@ -19,7 +19,7 @@ from a2c_ppo_acktr.distributions import Bernoulli, Categorical, DiagGaussian, Fi
 EVAL_ENVS = ['train_eval','test_eval']
 
 # num_processes = 600
-env_name = "maze"
+env_name = "miner"
 start_level = 3562
 num_level = 1
 num_level_test = 128
@@ -54,12 +54,17 @@ eval_envs_dic['train_eval'] = ProcgenEnv(num_envs=1,
                                           distribution_mode=distribution_mode,
                                          use_generated_assets=False,
                                          use_backgrounds=False,
-                                         restrict_themes=True,
-                                         use_monochrome_assets=True,
+                                         restrict_themes=False,
+                                         use_monochrome_assets=False,
                                           rand_seed=seed)
 
 obs = eval_envs_dic['train_eval'].reset()
 myobj = plt.imshow(obs['rgb'][0])
+plt.show()
+
+action = np.array([3])
+next_obs, reward, done, infos = eval_envs_dic['train_eval'].step(action)
+plt.imshow(next_obs['rgb'][0])
 plt.show()
 
 print("something")
@@ -150,8 +155,8 @@ actor_critic.to(device)
 #     weight_decay=0)
 
 # Load previous model
-continue_from_epoch = 6096
-save_dir = '/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_0_noRNN/maze_seed_0_num_env_1000_entro_0.01_01-10-2021_13-26-16_noRNN'
+continue_from_epoch = 3124
+save_dir = '/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_0_num_env_200_entro_0.01_gama_0.8_01-01-2023_21-07-10'
 if (continue_from_epoch >= 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(

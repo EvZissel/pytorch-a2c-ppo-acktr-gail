@@ -186,7 +186,7 @@ class PPO():
                         kl_loss = F.kl_div(dist_probs.log(), maxEnt_dist_probs.log(),reduction='batchmean', log_target=True)
                     ###----------#######
 
-                    dist_entropy = dist_entropy / self.num_mini_batch
+                    dist_entropy = dist_entropy
                     # if attention_update=True, we assume that the log_probs are the attention log_probs.
                     # This is a hack for now, and it is taken care of in model.py and in dual_rl.py
                     ratio = torch.exp(action_log_probs -
@@ -194,7 +194,7 @@ class PPO():
                     surr1 = ratio * adv_targ
                     surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
                                         1.0 + self.clip_param) * adv_targ
-                    action_loss = (-torch.min(surr1, surr2).mean())/ self.num_mini_batch
+                    action_loss = (-torch.min(surr1, surr2).mean())
                     # action_loss = -torch.min(surr1, surr2).mean()
 
                     if self.use_clipped_value_loss:
@@ -204,11 +204,11 @@ class PPO():
                         value_losses_clipped = (
                             value_pred_clipped - return_batch).pow(2)
                         value_loss = (0.5 * torch.max(value_losses,
-                                                     value_losses_clipped).mean())/ self.num_mini_batch
+                                                     value_losses_clipped).mean())
                         # value_loss = 0.5 * torch.max(value_losses,
                         #                              value_losses_clipped).mean()
                     else:
-                        value_loss = (0.5 * (return_batch - values).pow(2).mean())/ self.num_mini_batch
+                        value_loss = (0.5 * (return_batch - values).pow(2).mean())
                         # value_loss = 0.5 * (return_batch - values).pow(2).mean()
                     task_losses.append(value_loss * self.value_loss_coef + action_loss -
                                        dist_entropy * self.entropy_coef + self.KLdiv_coeff * kl_loss)
@@ -245,17 +245,17 @@ class PPO():
                 if self.KLdiv_loss:
                     kldiv_loss_epoch += kl_loss.item()
 
-            # nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
-            #                          self.max_grad_norm)
-            if self.attention_policy:
-                nn.utils.clip_grad_norm_(self.attention_parameters,
-                                         self.max_grad_norm)
-            else:
-                nn.utils.clip_grad_norm_(self.non_attention_parameters,
-                                         self.max_grad_norm)
+                # nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
+                #                          self.max_grad_norm)
+                if self.attention_policy:
+                    nn.utils.clip_grad_norm_(self.attention_parameters,
+                                             self.max_grad_norm)
+                else:
+                    nn.utils.clip_grad_norm_(self.non_attention_parameters,
+                                             self.max_grad_norm)
 
-            self.optimizer.step()
-            self.optimizer.zero_grad()
+                self.optimizer.step()
+                self.optimizer.zero_grad()
 
         num_updates = self.ppo_epoch * self.num_mini_batch
 

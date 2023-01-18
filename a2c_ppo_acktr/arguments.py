@@ -178,6 +178,26 @@ def get_args():
         default="",
         help='directory to save agent logs (default: "")')
     parser.add_argument(
+        '--save-dir0',
+        default="",
+        help='directory to save agent logs (default: "")')
+    parser.add_argument(
+        '--save-dir1',
+        default="",
+        help='directory to save agent logs (default: "")')
+    parser.add_argument(
+        '--save-dir2',
+        default="",
+        help='directory to save agent logs (default: "")')
+    parser.add_argument(
+        '--save-dir3',
+        default="",
+        help='directory to save agent logs (default: "")')
+    parser.add_argument(
+        '--save-dir_maxEnt',
+        default="",
+        help='directory to save agent logs (default: "")')
+    parser.add_argument(
         '--no-cuda',
         action='store_true',
         default=False,
@@ -286,6 +306,31 @@ def get_args():
         help='load previous training (from model save dir) and continue')
     parser.add_argument(
         '--saved_epoch',
+        type=int,
+        default=0,
+        help='load previous training (from model save dir)')
+    parser.add_argument(
+        '--saved_epoch0',
+        type=int,
+        default=0,
+        help='load previous training (from model save dir)')
+    parser.add_argument(
+        '--saved_epoch1',
+        type=int,
+        default=0,
+        help='load previous training (from model save dir)')
+    parser.add_argument(
+        '--saved_epoch2',
+        type=int,
+        default=0,
+        help='load previous training (from model save dir)')
+    parser.add_argument(
+        '--saved_epoch3',
+        type=int,
+        default=0,
+        help='load previous training (from model save dir)')
+    parser.add_argument(
+        '--saved_epoch_maxEnt',
         type=int,
         default=0,
         help='load previous training (from model save dir)')

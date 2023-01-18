@@ -210,8 +210,8 @@ def main():
 
     actor_critic = Policy(
         envs.observation_space.shape,
-        gym.spaces.Discrete(envs.action_space.n+2),
-        base=ImpalaModel_selection,
+        gym.spaces.Discrete(5),
+        base=ImpalaModel,
         base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent,'hidden_size': args.recurrent_hidden_size})
         # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
     actor_critic.to(device)
@@ -240,7 +240,7 @@ def main():
 
     # rollout storage for agent
     rollouts = RolloutStorage(args.num_steps, args.num_processes,
-                              envs.observation_space.shape, gym.spaces.Discrete(envs.action_space.n+2),
+                              envs.observation_space.shape, gym.spaces.Discrete(5),
                               actor_critic.recurrent_hidden_state_size, args.mask_size, device=device)
 
     # Load previous model
@@ -332,7 +332,8 @@ def main():
     #     init_dist(actor_critic.dist.linear)
     #     init_2(actor_critic.base.critic_linear)
 
-    last_action = torch.full([args.num_processes,1],7).to(device)
+    env_action = torch.full([args.num_processes,1],7).to(device)
+    env_last_action = torch.full([args.num_processes,1],7).to(device)
 
     for j in range(args.continue_from_epoch, args.continue_from_epoch+num_updates):
 
@@ -359,18 +360,24 @@ def main():
                     rollouts.masks[step].to(device), rollouts.attn_masks[step].to(device), rollouts.attn_masks1[step].to(device), rollouts.attn_masks2[step].to(device),
                     rollouts.attn_masks3[step].to(device))
 
-            maxEnt_right = maxEnt_oracle(rollouts.obs[step], last_action)
-            maxEnt_left = maxEnt_oracle_left(rollouts.obs[step], last_action)
+            maxEnt_right = maxEnt_oracle(rollouts.obs[step], env_last_action)
+            # maxEnt_left = maxEnt_oracle_left(rollouts.obs[step], last_action)
 
             for i in range(args.num_processes):
-                if action[i] == 15:
-                    action[i] = maxEnt_right[i]
-                elif action[i] == 16:
-                    action[i] = maxEnt_left[i]
+                if action[i] == 0:
+                    env_action[i] = maxEnt_right[i]
+                elif action[i] == 1:
+                    env_action[i] = torch.tensor([1])
+                elif action[i] == 2:
+                    env_action[i] = torch.tensor([3])
+                elif action[i] == 3:
+                    env_action[i] = torch.tensor([5])
+                elif action[i] == 4:
+                    env_action[i] = torch.tensor([7])
 
 
             # Observe reward and next obs
-            obs, reward, done, infos = envs.step(action.squeeze().cpu().numpy())
+            obs, reward, done, infos = envs.step(env_action.squeeze().cpu().numpy())
             # if max(reward) < 10 and max(reward) >0:
             #     print(reward)
 
@@ -386,7 +393,7 @@ def main():
                 if done[i] == 1:
                     # rollouts.obs_sum[i] = torch.zeros_like(rollouts.obs_sum[i])
                     rollouts.obs_sum[i].copy_(obs[i].cpu())
-                    last_action[i] = torch.tensor([7])
+                    env_last_action[i] = torch.tensor([7])
 
             next_obs_sum =  rollouts.obs_sum + obs.cpu()
             int_reward = np.zeros_like(reward)
@@ -397,8 +404,8 @@ def main():
                     if num_zero_next_obs_sum < num_zero_obs_sum:
                         int_reward[i] = 1
 
-                    if action[i] != last_action[i]:
-                        reward[i] += -1
+                    # if action[i] < 15:
+                    #     reward[i] += -1
 
             reward = (1-beta)*reward + beta*int_reward
             # If done then clean the history of observations.
@@ -409,7 +416,7 @@ def main():
                  for info in infos])
             rollouts.insert(obs, recurrent_hidden_states, action,
                             action_log_prob, value, torch.from_numpy(reward).unsqueeze(1), masks, bad_masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, infos)
-            last_action = action
+            env_last_action = env_action
 
         beta = beta*args.beta_decay
 

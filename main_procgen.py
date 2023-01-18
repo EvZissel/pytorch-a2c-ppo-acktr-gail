@@ -28,7 +28,7 @@ import wandb
 
 EVAL_ENVS = ['train_eval','test_eval']
 
-init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+init_  = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
                        constant_(x, 0), nn.init.calculate_gain('relu'))
 init_2 = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=1)
 
@@ -56,7 +56,7 @@ def main():
     logdir = os.path.join(os.path.expanduser(args.log_dir), logdir_)
     utils.cleanup_log_dir(logdir)
 
-    wandb.init(project=args.env_name + "_PPO_maximum_entropy", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
+    wandb.init(project=args.env_name + "_PPO_small_networks", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
 
     # Ugly but simple logging
     log_dict = {
@@ -278,7 +278,7 @@ def main():
         for step in range(args.num_steps):
             # Sample actions
             with torch.no_grad():
-                value, action, action_log_prob, recurrent_hidden_states, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic.act(
+                value, action, action_log_prob, _, recurrent_hidden_states, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic.act(
                     rollouts.obs[step].to(device), rollouts.recurrent_hidden_states[step].to(device),
                     rollouts.masks[step].to(device), rollouts.attn_masks[step].to(device), rollouts.attn_masks1[step].to(device), rollouts.attn_masks2[step].to(device),
                     rollouts.attn_masks3[step].to(device))
@@ -316,7 +316,7 @@ def main():
         rollouts.compute_returns(next_value, args.use_gae, args.gamma,
                                  args.gae_lambda, args.use_proper_time_limits)
 
-        value_loss, action_loss, dist_entropy = agent.update(rollouts)
+        value_loss, action_loss, dist_entropy, _  = agent.update(rollouts)
 
         rollouts.after_update()
 
@@ -372,11 +372,11 @@ def main():
                 # print(printout)
 
             # if ((args.eval_nondet_interval is not None and j % args.eval_nondet_interval == 0) or j == args.continue_from_epoch):
-            #     eval_test_nondet_rew, eval_test_nondet_done = evaluate_procgen(actor_critic, eval_envs_dic, 'test_eval',
-            #                                       args.num_processes, device, args.num_steps, deterministic=False)
+            eval_test_nondet_rew, eval_test_nondet_done = evaluate_procgen(actor_critic, eval_envs_dic, 'test_eval',
+                                                  args.num_processes, device, args.num_steps, logger, attention_features=False, det_masks=False, deterministic=False)
 
             logger.feed_eval(eval_dic_rew['train_eval'], eval_dic_done['train_eval'],eval_dic_rew['test_eval'], eval_dic_done['test_eval'], seeds_train, seeds_test,
-                             eval_dic_rew['test_eval'], eval_dic_done['test_eval'])
+                             eval_dic_rew['train_eval'], eval_dic_rew['test_eval'], eval_dic_rew['test_eval'], eval_dic_done['test_eval'], eval_test_nondet_rew, eval_test_nondet_done)
             episode_statistics = logger.get_episode_statistics()
             print(printout)
             print(episode_statistics)

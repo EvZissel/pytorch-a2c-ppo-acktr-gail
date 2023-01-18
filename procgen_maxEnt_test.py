@@ -16,7 +16,7 @@ device = torch.device("cuda:{}".format(0))
 
 
 env_name = "maze"
-start_level = 0
+start_level = 100106
 num_level = 1
 distribution_mode = "easy"
 seed = 0
@@ -149,6 +149,15 @@ plt.show()
 #     obs_sum += obs
 # # plt.imshow(obs_sum[0].transpose(0,2).cpu().numpy())
 # # plt.show()
+
+action = np.array([2])
+
+obs, _, done, infos = envs.step(action)
+
+plt.imshow(obs[0].transpose(0,2).cpu().numpy())
+# plt.savefig("test.png")
+plt.show()
+
 
 actor_critic = Policy(
     envs.observation_space.shape,

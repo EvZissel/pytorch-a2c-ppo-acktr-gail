@@ -14,7 +14,7 @@ from a2c_ppo_acktr.envs import make_ProcgenEnvs
 from procgen import ProcgenEnv
 from a2c_ppo_acktr.model import Policy, MLPAttnBase, MLPHardAttnBase, MLPHardAttnReinforceBase, ImpalaModel
 from a2c_ppo_acktr.storage import RolloutStorage
-from evaluation import evaluate_procgen, evaluate_procgen_maxEnt
+from evaluation import evaluate_procgen, evaluate_procgen_maxEnt, evaluate_procgen_maxEnt_miner
 from a2c_ppo_acktr.utils import save_obj, load_obj
 from a2c_ppo_acktr.procgen_wrappers import *
 from a2c_ppo_acktr.logger import Logger, maxEnt_Logger
@@ -44,7 +44,7 @@ def main():
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
-    logdir_ = args.env_name + '_seed_' + str(args.seed) + '_num_env_' + str(args.num_level) + '_entro_' + str(args.entropy_coef) + '_gama_' + str(args.gamma) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    logdir_ = args.env_name + '_maxEnt_' + '_seed_' + str(args.seed) + '_num_env_' + str(args.num_level) + '_entro_' + str(args.entropy_coef) + '_gama_' + str(args.gamma) + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
     if args.normalize_rew:
         logdir_ = logdir_ + '_normalize_rew'
     if not args.recurrent_policy:
@@ -129,45 +129,30 @@ def main():
                                     start_level=start_train_test[eval_disp_name] + i,
                                     num_levels=1,
                                     distribution_mode=args.distribution_mode,
-                                    use_generated_assets=True,
+                                    use_generated_assets=False,
                                     use_backgrounds=False,
-                                    restrict_themes=True,
-                                    use_monochrome_assets=True,
+                                    restrict_themes=False,
+                                    use_monochrome_assets=False,
                                     rand_seed=args.seed,
                                     mask_size=args.mask_size,
                                     normalize_rew=args.normalize_rew,
                                     mask_all=args.mask_all)
 
             obs = envs.reset()
-            obs_sum = obs
             # # plot mazes
             # plt.imshow(obs[0].transpose(0, 2).cpu().numpy())
             # plt.savefig("test.png")
             # plt.show()
 
-            action = torch.full((1, 1), 5)
-            done = torch.full((1, 1), 0)
-            reward = 0
+            only_dirt = (obs[0] * (obs[0][2] > 0.1) * (obs[0][2] < 0.3) * (obs[0][0] > 0.3))[0]
+            indices_row = torch.tensor([3, 9, 16, 22, 28, 35, 41, 48, 54, 61])
+            indices_cal = torch.tensor([3, 10, 16, 22, 28, 35, 42, 48, 54, 61])
+            main_num_nonzeros = ((obs[0] * (obs[0][2] > 0.1) * (obs[0][2] < 0.3) * (obs[0][0] > 0.3))[0] == 0).sum()
 
-            while not done[0]:
-                with torch.no_grad():
+            ds_only_dirt = torch.index_select(only_dirt, 0, indices_row)
+            ds_only_dirt = torch.index_select(ds_only_dirt, 1, indices_cal)
 
-                    action = maxEnt_oracle(obs, action)
-
-                    obs, _, done, infos = envs.step(action[0].cpu().numpy())
-                    # print(action[0])
-                    # plt.imshow(obs[0].transpose(0,2).cpu().numpy())
-                    # plt.show()
-
-                    next_obs_sum = obs_sum + obs
-                    num_zero_obs_sum = (obs_sum[0] == 0).sum()
-                    num_zero_next_obs_sum = (next_obs_sum[0] == 0).sum()
-                    if num_zero_next_obs_sum < num_zero_obs_sum:
-                        reward += 1
-
-                    obs_sum = next_obs_sum
-
-            max_reward_seeds[eval_disp_name].append(reward)
+            max_reward_seeds[eval_disp_name].append((ds_only_dirt > 0).sum())
 
 
     envs = make_ProcgenEnvs(num_envs=args.num_processes,
@@ -175,10 +160,10 @@ def main():
                       start_level=args.start_level,
                       num_levels=args.num_level,
                       distribution_mode=args.distribution_mode,
-                      use_generated_assets=True,
+                      use_generated_assets=False,
                       use_backgrounds=False,
-                      restrict_themes=True,
-                      use_monochrome_assets=True,
+                      restrict_themes=False,
+                      use_monochrome_assets=False,
                       rand_seed=args.seed,
                       mask_size=args.mask_size,
                       normalize_rew=args.normalize_rew,
@@ -191,10 +176,10 @@ def main():
                                                    start_level=args.start_level,
                                                    num_levels=args.num_test_level,
                                                    distribution_mode=args.distribution_mode,
-                                                   use_generated_assets=True,
+                                                   use_generated_assets=False,
                                                    use_backgrounds=False,
-                                                   restrict_themes=True,
-                                                   use_monochrome_assets=True,
+                                                   restrict_themes=False,
+                                                   use_monochrome_assets=False,
                                                    rand_seed=args.seed,
                                                    mask_size=args.mask_size,
                                                    normalize_rew= args.normalize_rew,
@@ -207,10 +192,10 @@ def main():
                                                   start_level=test_start_level,
                                                   num_levels=args.num_test_level,
                                                   distribution_mode=args.distribution_mode,
-                                                  use_generated_assets=True,
+                                                  use_generated_assets=False,
                                                   use_backgrounds=False,
-                                                  restrict_themes=True,
-                                                  use_monochrome_assets=True,
+                                                  restrict_themes=False,
+                                                  use_monochrome_assets=False,
                                                   rand_seed=args.seed,
                                                   mask_size=args.mask_size,
                                                   normalize_rew=args.normalize_rew,
@@ -341,20 +326,21 @@ def main():
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(action.squeeze().cpu().numpy())
-            # if max(reward) < 10 and max(reward) >0:
-            #     print(reward)
-            for i in range(len(done)):
-                if done[i] == 1:
-                    # rollouts.obs_sum[i] = torch.zeros_like(rollouts.obs_sum[i])
-                    rollouts.obs_sum[i].copy_(obs[i].cpu())
 
-            next_obs_sum =  rollouts.obs_sum + obs.cpu()
+            # for i in range(len(done)):
+            #     if done[i] == 1:
+            #         rollouts.obs_sum[i].copy_(obs[i].cpu())
+
+
+            # next_obs_sum =  rollouts.obs_sum * obs.cpu()
             reward = np.zeros_like(reward)
             for i in range(len(reward)):
+                dirt = rollouts.obs[step][i] * (rollouts.obs[step][i][2] > 0.1) * (rollouts.obs[step][i][2] < 0.3) * (rollouts.obs[step][i][0] > 0.3)
+                next_dirt = obs[i] * (obs[i][2] > 0.1) * (obs[i][2] < 0.3) * (obs[i][0] > 0.3)
                 if done[i] == 0:
-                    num_zero_obs_sum = (rollouts.obs_sum[i][0] == 0).sum()
-                    num_zero_next_obs_sum = (next_obs_sum[i][0] == 0).sum()
-                    if num_zero_next_obs_sum < num_zero_obs_sum:
+                    num_dirt_obs_sum = (dirt[0] > 0).sum()
+                    num_dirt_next_obs_sum = (next_dirt[0] > 0).sum()
+                    if num_dirt_next_obs_sum < num_dirt_obs_sum:
                         reward[i] = 1
 
             for i, info in enumerate(infos):
@@ -435,9 +421,8 @@ def main():
             eval_dic_seeds = {}
 
             for eval_disp_name in EVAL_ENVS:
-                eval_dic_rew[eval_disp_name], eval_dic_int_rew[eval_disp_name], eval_dic_done[eval_disp_name], eval_dic_seeds[eval_disp_name] = evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, eval_disp_name,
+                eval_dic_rew[eval_disp_name], eval_dic_int_rew[eval_disp_name], eval_dic_done[eval_disp_name], eval_dic_seeds[eval_disp_name] = evaluate_procgen_maxEnt_miner(actor_critic, eval_envs_dic, eval_disp_name,
                                                   args.num_processes, device, args.num_steps, logger)
-
 
 
                 # log_dict[eval_disp_name].append([(j+1) * args.num_processes * args.num_steps, eval_dic_rew[eval_disp_name]])
@@ -452,10 +437,12 @@ def main():
             #                                       args.num_processes, device, args.num_steps, logger, deterministic=False)
                 # wandb.log({"mun_maxEnt/nondet": np.mean(num_zero_obs_end_nondet)}, step=(j + 1) * args.num_processes * args.num_steps)
 
+            eval_test_nondet_rew, eval_test_nondet_int_rew, eval_test_nondet_done, eval_test_nondet_seeds = evaluate_procgen_maxEnt_miner(actor_critic, eval_envs_dic, 'test_eval',
+                                                  args.num_processes, device, args.num_steps, logger, attention_features=False, det_masks=False, deterministic=False)
 
             logger.feed_eval(eval_dic_int_rew['train_eval'], eval_dic_done['train_eval'],eval_dic_int_rew['test_eval'], eval_dic_done['test_eval'],
                              eval_dic_seeds['train_eval'], eval_dic_seeds['test_eval'], eval_dic_rew['train_eval'], eval_dic_rew['test_eval'],
-                             eval_dic_rew['test_eval'], eval_dic_done['test_eval'])
+                             eval_dic_rew['test_eval'], eval_dic_done['test_eval'], eval_test_nondet_int_rew, eval_test_nondet_done)
             episode_statistics = logger.get_episode_statistics()
             print(printout)
             print(episode_statistics)

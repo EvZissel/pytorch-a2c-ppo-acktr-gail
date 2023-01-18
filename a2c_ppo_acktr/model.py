@@ -326,6 +326,25 @@ class ImpalaBlock(nn.Module):
 
         return x
 
+class ImpalaBlock_small(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(ImpalaBlock_small, self).__init__()
+        init_ = lambda m: init(m, nn.init.xavier_uniform_, lambda x: nn.init.
+                               constant_(x, 0))
+
+        self.conv = init_(
+            nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1))
+        self.res1 = ResidualBlock(out_channels)
+        self.res2 = ResidualBlock(out_channels)
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = nn.MaxPool2d(kernel_size=5, stride=4, padding=2)(x)
+        x = self.res1(x)
+        x = self.res2(x)
+
+        return x
+
 
 class ImpalaModel(NNBase):
     def __init__(self, num_inputs, recurrent=False, hidden_size=256):
@@ -393,9 +412,9 @@ class ImpalaModel_finetune(NNBase):
         return self.critic_linear(x), x, rnn_hxs, None, attn_masks, attn_masks1, attn_masks2, attn_masks3
 
 
-class ImpalaModel_selection(NNBase):
+class ImpalaModel_small(NNBase):
     def __init__(self, num_inputs, recurrent=False, hidden_size=256):
-        super(ImpalaModel_selection, self).__init__(recurrent, hidden_size, hidden_size)
+        super(ImpalaModel_small, self).__init__(recurrent, hidden_size, hidden_size)
 
         init_ = lambda m: init(m, nn.init.xavier_uniform_, lambda x: nn.init.
                                constant_(x, 0))
@@ -407,8 +426,8 @@ class ImpalaModel_selection(NNBase):
             gain=1)
 
         self.main = nn.Sequential(
-            ImpalaBlock(in_channels=num_inputs, out_channels=4), nn.ReLU(), Flatten(),
-            init_(nn.Linear(in_features=4 * 32 * 32, out_features=hidden_size)),nn.ReLU())
+            ImpalaBlock_small(in_channels=num_inputs, out_channels=4), nn.ReLU(), Flatten(),
+            init_(nn.Linear(in_features=4 * 16 * 16, out_features=hidden_size)),nn.ReLU())
 
         self.critic_linear = init_2(nn.Linear(hidden_size, 1))
         self.train()
