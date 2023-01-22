@@ -23,7 +23,7 @@ from evaluation import maxEnt_oracle_left, maxEnt_oracle
 device = torch.device("cuda:{}".format(0))
 
 
-env_name = "maze"
+env_name = "heist"
 start_level = 6895
 num_level = 1
 distribution_mode = "easy"
@@ -42,10 +42,10 @@ env = ProcgenGym3Env(num=1,
                           num_levels=num_level,
                           distribution_mode=distribution_mode,
                           render_mode="rgb_array",
-                          use_generated_assets=True,
+                          use_generated_assets=False,
                           use_backgrounds=False,
-                          restrict_themes=True,
-                          use_monochrome_assets=True,
+                          restrict_themes=False,
+                          use_monochrome_assets=False,
                           rand_seed=0)
 
 # test_env = ProcgenGym3Env(num=1,
@@ -278,7 +278,7 @@ while not done[0]:
         #         action = np.array([3])
         #     else:
         #         action = np.array([7])
-        action = maxEnt_oracle(torch.tensor(obs), action)
+        action = maxEnt_oracle_heist(torch.tensor(obs), action)
 
         envs.act(action.cpu().numpy())
         rew, obs, first = envs.observe()

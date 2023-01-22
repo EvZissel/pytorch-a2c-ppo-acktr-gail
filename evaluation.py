@@ -733,7 +733,7 @@ def evaluate_procgen_LEEP(actor_critic_0, actor_critic_1, actor_critic_2, actor_
 
     for t in range(steps):
         with torch.no_grad():
-            _, action, _, dist_probs, eval_recurrent_hidden_states, _, _, _, _ = actor_critic_0.act(
+            _, action0, _, dist_probs, eval_recurrent_hidden_states, _, _, _, _ = actor_critic_0.act(
                     logger.obs[env_name].float().to(device),
                     logger.eval_recurrent_hidden_states[env_name],
                     logger.eval_masks[env_name],
@@ -780,8 +780,13 @@ def evaluate_procgen_LEEP(actor_critic_0, actor_critic_1, actor_critic_2, actor_
             max_policy = torch.max(torch.max(torch.max(dist_probs, dist_probs_1), dist_probs_2), dist_probs_3)
             max_policy = torch.div(max_policy, max_policy.sum(1).unsqueeze(1))
 
+            if deterministic:
+                action = max_policy.max(1)[1]
+            else:
+                x = FixedCategorical(logits=max_policy)
+                action = x.sample()
             # Observe reward and next obs
-            next_obs, reward, done, infos = eval_envs.step(max_policy.max(1)[1].squeeze().cpu().numpy())
+            next_obs, reward, done, infos = eval_envs.step(action.squeeze().cpu().numpy())
             logger.eval_masks[env_name] = torch.tensor(
                 [[0.0] if done_ else [1.0] for done_ in done],
                 dtype=torch.float32,
@@ -886,7 +891,7 @@ def evaluate_procgen_ensemble(actor_critic, actor_critic_1, actor_critic_2, acto
     maxEnt_steps = torch.zeros(num_processes,1, device=device)
     for t in range(steps):
         with torch.no_grad():
-            _, _, _, dist_probs, eval_recurrent_hidden_states, _, _, _, _ = actor_critic.act(
+            _, action0, _, dist_probs, eval_recurrent_hidden_states, _, _, _, _ = actor_critic.act(
                 logger.obs[env_name].float().to(device),
                 torch.zeros(num_processes, actor_critic.recurrent_hidden_state_size, device=device),
                 logger.eval_masks[env_name],
@@ -914,7 +919,7 @@ def evaluate_procgen_ensemble(actor_critic, actor_critic_1, actor_critic_2, acto
             idex_prob = (prob_pure_action > 0.9)
             moving_average_prob = moving_average_prob*idex_prob
 
-            _, _, _, dist_probs1, eval_recurrent_hidden_states1, _, _, _, _ = actor_critic_1.act(
+            _, action1, _, dist_probs1, eval_recurrent_hidden_states1, _, _, _, _ = actor_critic_1.act(
                 logger.obs[env_name].float().to(device),
                 torch.zeros(num_processes, actor_critic.recurrent_hidden_state_size, device=device),
                 logger.eval_masks[env_name],
@@ -937,7 +942,7 @@ def evaluate_procgen_ensemble(actor_critic, actor_critic_1, actor_critic_2, acto
             pure_action1 = dist_probs1.max(1)[1].unsqueeze(1)
             prob_pure_action1 = dist_probs1.max(1)[0].unsqueeze(1)
 
-            _, _, _, dist_probs2, eval_recurrent_hidden_states2, _, _, _, _ = actor_critic_2.act(
+            _, action2, _, dist_probs2, eval_recurrent_hidden_states2, _, _, _, _ = actor_critic_2.act(
                 logger.obs[env_name].float().to(device),
                 torch.zeros(num_processes, actor_critic.recurrent_hidden_state_size, device=device),
                 logger.eval_masks[env_name],
@@ -960,7 +965,7 @@ def evaluate_procgen_ensemble(actor_critic, actor_critic_1, actor_critic_2, acto
             pure_action2 = dist_probs2.max(1)[1].unsqueeze(1)
             prob_pure_action2 = dist_probs2.max(1)[0].unsqueeze(1)
 
-            _, _, _, dist_probs3, eval_recurrent_hidden_states3, _, _, _, _ = actor_critic_3.act(
+            _, action3, _, dist_probs3, eval_recurrent_hidden_states3, _, _, _, _ = actor_critic_3.act(
                 logger.obs[env_name].float().to(device),
                 torch.zeros(num_processes, actor_critic.recurrent_hidden_state_size, device=device),
                 logger.eval_masks[env_name],
@@ -983,7 +988,7 @@ def evaluate_procgen_ensemble(actor_critic, actor_critic_1, actor_critic_2, acto
             pure_action3 = dist_probs3.max(1)[1].unsqueeze(1)
             prob_pure_action3 = dist_probs3.max(1)[0].unsqueeze(1)
 
-            _, _, _, dist_probs_maxEnt, eval_recurrent_hidden_states_maxEnt, _, _, _, _ = actor_critic_maxEnt.act(
+            _, action_maxEnt, _, dist_probs_maxEnt, eval_recurrent_hidden_states_maxEnt, _, _, _, _ = actor_critic_maxEnt.act(
                 logger.obs[env_name].float().to(device),
                 logger.eval_recurrent_hidden_states_maxEnt[env_name],
                 logger.eval_masks[env_name],
@@ -1012,14 +1017,14 @@ def evaluate_procgen_ensemble(actor_critic, actor_critic_1, actor_critic_2, acto
             # env_steps = env_steps+1
             maxEnt_steps = maxEnt_steps - 1
             is_maxEnt_steps_limit = (maxEnt_steps<=0)
-            is_equal = (pure_action == pure_action1) * (pure_action == pure_action2) * (pure_action == pure_action3)
+            is_equal = (action0 == action1) * (action0 == action2) * (action0 == action3)
             # step_count = (step_count+1)*is_equal
             # is_maxEnt = (step_count<10)
             # is_pure_action = is_novel*is_equal
             is_pure_action = is_equal*is_maxEnt_steps_limit
             maxEnt_steps = (m.sample() + 1).to(device)*is_pure_action + maxEnt_steps*(~is_pure_action)
 
-            action = pure_action*is_pure_action + pure_action_maxEnt*(~is_pure_action)
+            action = action0*is_pure_action + action_maxEnt*(~is_pure_action)
             # action = pure_action*(~is_maxEnt) + pure_action_maxEnt*is_maxEnt
             # is_stuck = (env_steps > 100)
             # action = action*is_stuck + pure_action2*(~is_stuck)
@@ -1033,7 +1038,7 @@ def evaluate_procgen_ensemble(actor_critic, actor_critic_1, actor_critic_2, acto
 
             # Observe reward and next obs
             # next_obs, reward, done, infos = eval_envs.step(max_policy.max(1)[1].squeeze().cpu().numpy())
-            next_obs, reward, done, infos = eval_envs.step(action.squeeze().cpu().numpy())
+            next_obs, reward, done, infos = eval_envs.step(action0.squeeze().cpu().numpy())
             logger.eval_masks[env_name] = torch.tensor(
                 [[0.0] if done_ else [1.0] for done_ in done],
                 dtype=torch.float32,
@@ -1044,19 +1049,24 @@ def evaluate_procgen_ensemble(actor_critic, actor_critic_1, actor_critic_2, acto
             logger.eval_recurrent_hidden_states_maxEnt[env_name] = eval_recurrent_hidden_states_maxEnt
 
 
-            if 'env_reward' in infos[0]:
-                rew_batch.append([info['env_reward'] for info in infos])
-            else:
-                rew_batch.append(reward)
-            done_batch.append(done)
+            # if 'env_reward' in infos[0]:
+            #     rew_batch.append([info['env_reward'] for info in infos])
+            # else:
+            #     rew_batch.append(reward)
+
 
 
             seeds = np.zeros_like(reward)
+            clean_reward = np.zeros_like(reward)
+            clean_done = np.zeros_like(reward)
             for i in range(len(done)):
                 seeds[i] = infos[i]['level_seed']
-                # if done[i]:
-                #     env_steps[i] = 0
+                if (t > 0 and np.array(done_batch)[:,i].sum() == 0):
+                    clean_reward[i] = reward[i]
+                    clean_done[i] = done[i]
             seed_batch.append(seeds)
+            rew_batch.append(clean_reward)
+            done_batch.append(clean_done)
 
             if t == 498:
                 print("stop")
@@ -1088,5 +1098,9 @@ def evaluate_procgen_ensemble(actor_critic, actor_critic_1, actor_critic_2, acto
     done_batch = np.array(done_batch)
     seed_batch = np.array(seed_batch)
     # np.where(np.logical_xor(rew_batch, done_batch))
+    # done_row_sum = done_batch.sum(0)
+    # for i in range(len(done_row_sum)):
+    #     if done_row_sum[i] == 0 :
+    #         done_batch[steps-1,i] = True
 
     return rew_batch, done_batch

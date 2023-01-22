@@ -56,7 +56,7 @@ def main():
     logdir = os.path.join(os.path.expanduser(args.log_dir), logdir_)
     utils.cleanup_log_dir(logdir)
 
-    wandb.init(project=args.env_name + "_PPO_small_networks", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
+    wandb.init(project=args.env_name + "_PPO", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
 
     # Ugly but simple logging
     log_dict = {

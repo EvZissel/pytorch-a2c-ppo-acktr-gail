@@ -153,22 +153,22 @@ def main():
         # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
     actor_critic.to(device)
 
-    # actor_critic1 = Policy(
-    #     eval_envs_dic['train_eval'].observation_space.shape,
-    #     eval_envs_dic['train_eval'].action_space,
-    #     base=ImpalaModel,
-    #     base_kwargs={'recurrent': False,'hidden_size': args.recurrent_hidden_size})
-    #     # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
-    # actor_critic1.to(device)
-    #
-    # actor_critic2 = Policy(
-    #     eval_envs_dic['train_eval'].observation_space.shape,
-    #     eval_envs_dic['train_eval'].action_space,
-    #     base=ImpalaModel,
-    #     base_kwargs={'recurrent': False,'hidden_size': args.recurrent_hidden_size})
-    #     # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
-    # actor_critic2.to(device)
-    #
+    actor_critic1 = Policy(
+        eval_envs_dic['train_eval'].observation_space.shape,
+        eval_envs_dic['train_eval'].action_space,
+        base=ImpalaModel,
+        base_kwargs={'recurrent': False,'hidden_size': args.recurrent_hidden_size})
+        # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
+    actor_critic1.to(device)
+
+    actor_critic2 = Policy(
+        eval_envs_dic['train_eval'].observation_space.shape,
+        eval_envs_dic['train_eval'].action_space,
+        base=ImpalaModel,
+        base_kwargs={'recurrent': False,'hidden_size': args.recurrent_hidden_size})
+        # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
+    actor_critic2.to(device)
+
     # actor_critic3 = Policy(
     #     eval_envs_dic['train_eval'].observation_space.shape,
     #     eval_envs_dic['train_eval'].action_space,
@@ -177,13 +177,13 @@ def main():
     #     # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
     # actor_critic3.to(device)
     #
-    # actor_critic_maxEnt = Policy(
-    #     eval_envs_dic['train_eval'].observation_space.shape,
-    #     eval_envs_dic['train_eval'].action_space,
-    #     base=ImpalaModel,
-    #     base_kwargs={'recurrent': True,'hidden_size': args.recurrent_hidden_size})
-    #     # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
-    # actor_critic_maxEnt.to(device)
+    actor_critic_maxEnt = Policy(
+        eval_envs_dic['train_eval'].observation_space.shape,
+        eval_envs_dic['train_eval'].action_space,
+        base=ImpalaModel,
+        base_kwargs={'recurrent': True,'hidden_size': args.recurrent_hidden_size})
+        # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
+    actor_critic_maxEnt.to(device)
 
 
     if args.algo != 'ppo':
@@ -238,25 +238,25 @@ def main():
         actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch)), map_location=device)
         actor_critic.load_state_dict(actor_critic_weighs['state_dict'])
 
-    # if (args.saved_epoch1 > 0) and args.save_dir1 != "":
-    #     save_path = args.save_dir1
-    #     actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch1)), map_location=device)
-    #     actor_critic1.load_state_dict(actor_critic_weighs['state_dict'])
-    #
-    # if (args.saved_epoch2 > 0) and args.save_dir2 != "":
-    #     save_path = args.save_dir2
-    #     actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch2)), map_location=device)
-    #     actor_critic2.load_state_dict(actor_critic_weighs['state_dict'])
-    #
+    if (args.saved_epoch1 > 0) and args.save_dir1 != "":
+        save_path = args.save_dir1
+        actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch1)), map_location=device)
+        actor_critic1.load_state_dict(actor_critic_weighs['state_dict'])
+
+    if (args.saved_epoch2 > 0) and args.save_dir2 != "":
+        save_path = args.save_dir2
+        actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch2)), map_location=device)
+        actor_critic2.load_state_dict(actor_critic_weighs['state_dict'])
+
     # if (args.saved_epoch3 > 0) and args.save_dir3 != "":
     #     save_path = args.save_dir3
     #     actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch3)), map_location=device)
     #     actor_critic3.load_state_dict(actor_critic_weighs['state_dict'])
-    #
-    # if (args.saved_epoch_maxEnt > 0) and args.save_dir_maxEnt != "":
-    #     save_path = args.save_dir_maxEnt
-    #     actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch_maxEnt)), map_location=device)
-    #     actor_critic_maxEnt.load_state_dict(actor_critic_weighs['state_dict'])
+
+    if (args.saved_epoch_maxEnt > 0) and args.save_dir_maxEnt != "":
+        save_path = args.save_dir_maxEnt
+        actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch_maxEnt)), map_location=device)
+        actor_critic_maxEnt.load_state_dict(actor_critic_weighs['state_dict'])
 
 
     logger = Logger(args.num_processes, eval_envs_dic['train_eval'].observation_space.shape, 256, device=device)
@@ -414,14 +414,15 @@ def main():
     #     # evaluate agent on evaluation tasks
     #     if ((args.eval_interval is not None and j % args.eval_interval == 0) or j == args.continue_from_epoch):
     actor_critic.eval()
-    # actor_critic1.eval()
-    # actor_critic2.eval()
+    actor_critic1.eval()
+    actor_critic2.eval()
+    actor_critic_maxEnt.eval()
 
     eval_dic_rew = {}
     eval_dic_done = {}
     for eval_disp_name in EVAL_ENVS:
-        eval_dic_rew[eval_disp_name], eval_dic_done[eval_disp_name] = evaluate_procgen(actor_critic, eval_envs_dic, eval_disp_name,
-                                                      args.num_processes, device, args.num_steps, logger, attention_features=False, det_masks=False, deterministic=True)
+        eval_dic_rew[eval_disp_name], eval_dic_done[eval_disp_name] = evaluate_procgen_ensemble(actor_critic, actor_critic1, actor_critic2, actor_critic2, actor_critic_maxEnt, eval_envs_dic, eval_disp_name,
+                                                      args.num_processes, device, args.num_steps, logger, attention_features=False, det_masks=False, deterministic=False)
 
 
             # if ((args.eval_nondet_interval is not None and j % args.eval_nondet_interval == 0) or j == args.continue_from_epoch):
@@ -429,7 +430,7 @@ def main():
             #                                       args.num_processes, device, args.num_steps, deterministic=False)
 
     logger.feed_eval(eval_dic_rew['train_eval'], eval_dic_done['train_eval'],eval_dic_rew['test_eval'], eval_dic_done['test_eval'], seeds_train, seeds_test,
-                             eval_dic_rew['train_eval'], eval_dic_rew['test_eval'], eval_dic_rew['test_eval'], eval_dic_done['test_eval'])
+                             eval_dic_rew['train_eval'], eval_dic_rew['test_eval'], eval_dic_rew['test_eval'], eval_dic_done['test_eval'], eval_dic_rew['test_eval'], eval_dic_done['test_eval'])
     episode_statistics = logger.get_train_test_statistics()
     print("train and test eval")
     print(episode_statistics)

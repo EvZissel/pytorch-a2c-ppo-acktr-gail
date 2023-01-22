@@ -397,19 +397,13 @@ class maxEnt_Logger(Logger):
                                                       'test': np.min(self.episode_len_buffer_test),
                                                       'test_nondet': np.min(self.episode_len_buffer_test_nondet)}
         else:
-            episode_statistics['Rewards/max_episodes'] = {'train': np.max(self.episode_reward_buffer),
-                                                          'test_nondet': np.max(self.episode_reward_buffer_test_nondet)}
-            episode_statistics['Rewards/mean_episodes'] = {'train': np.mean(self.episode_reward_buffer),
-                                                           'test_nondet': np.mean(self.episode_reward_buffer_test_nondet)}
-            episode_statistics['Rewards/min_episodes'] = {'train': np.min(self.episode_reward_buffer),
-                                                          'test_nondet': np.min(self.episode_reward_buffer_test_nondet)}
+            episode_statistics['Rewards/max_episodes'] = {'train': np.max(self.episode_reward_buffer)}
+            episode_statistics['Rewards/mean_episodes'] = {'train': np.mean(self.episode_reward_buffer)}
+            episode_statistics['Rewards/min_episodes'] = {'train': np.min(self.episode_reward_buffer)}
 
-            episode_statistics['Len/max_episodes'] = {'train': np.max(self.episode_len_buffer),
-                                                      'test_nondet': np.max(self.episode_len_buffer_test_nondet)}
-            episode_statistics['Len/mean_episodes'] = {'train': np.mean(self.episode_len_buffer),
-                                                       'test_nondet': np.mean(self.episode_len_buffer_test_nondet)}
-            episode_statistics['Len/min_episodes'] = {'train': np.min(self.episode_len_buffer),
-                                                      'test_nondet': np.min(self.episode_len_buffer_test_nondet)}
+            episode_statistics['Len/max_episodes'] = {'train': np.max(self.episode_len_buffer)}
+            episode_statistics['Len/mean_episodes'] = {'train': np.mean(self.episode_len_buffer)}
+            episode_statistics['Len/min_episodes'] = {'train': np.min(self.episode_len_buffer)}
 
 
         if len(self.episode_reward_buffer_val) > 0:

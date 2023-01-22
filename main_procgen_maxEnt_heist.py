@@ -121,6 +121,8 @@ def main():
         'train_eval': args.start_level,
         'test_eval': test_start_level
     }
+    indices_row = torch.tensor([3, 9, 16, 22, 28, 35, 41, 48, 54, 61])
+    indices_cal = torch.tensor([3, 10, 16, 22, 28, 35, 42, 48, 54, 61])
 
     for eval_disp_name in EVAL_ENVS:
         for i in range(args.num_test_level):
@@ -129,45 +131,27 @@ def main():
                                     start_level=start_train_test[eval_disp_name] + i,
                                     num_levels=1,
                                     distribution_mode=args.distribution_mode,
-                                    use_generated_assets=True,
+                                    use_generated_assets=False,
                                     use_backgrounds=False,
-                                    restrict_themes=True,
-                                    use_monochrome_assets=True,
+                                    restrict_themes=False,
+                                    use_monochrome_assets=False,
                                     rand_seed=args.seed,
                                     mask_size=args.mask_size,
                                     normalize_rew=args.normalize_rew,
                                     mask_all=args.mask_all)
 
             obs = envs.reset()
-            obs_sum = obs
+            # obs_sum = obs
             # # plot mazes
             # plt.imshow(obs[0].transpose(0, 2).cpu().numpy())
             # plt.savefig("test.png")
             # plt.show()
 
-            action = torch.full((1, 1), 5)
-            done = torch.full((1, 1), 0)
-            reward = 0
+            ds_obs = torch.index_select(obs[0][0], 0, indices_row)
+            ds_obs = torch.index_select(ds_obs, 1, indices_cal)
 
-            while not done[0]:
-                with torch.no_grad():
 
-                    action = maxEnt_oracle(obs, action)
-
-                    obs, _, done, infos = envs.step(action[0].cpu().numpy())
-                    # print(action[0])
-                    # plt.imshow(obs[0].transpose(0,2).cpu().numpy())
-                    # plt.show()
-
-                    next_obs_sum = obs_sum + obs
-                    num_zero_obs_sum = (obs_sum[0] == 0).sum()
-                    num_zero_next_obs_sum = (next_obs_sum[0] == 0).sum()
-                    if num_zero_next_obs_sum < num_zero_obs_sum:
-                        reward += 1
-
-                    obs_sum = next_obs_sum
-
-            max_reward_seeds[eval_disp_name].append(reward)
+            max_reward_seeds[eval_disp_name].append((ds_obs == 0).sum())
 
 
     envs = make_ProcgenEnvs(num_envs=args.num_processes,
@@ -175,10 +159,10 @@ def main():
                       start_level=args.start_level,
                       num_levels=args.num_level,
                       distribution_mode=args.distribution_mode,
-                      use_generated_assets=True,
+                      use_generated_assets=False,
                       use_backgrounds=False,
-                      restrict_themes=True,
-                      use_monochrome_assets=True,
+                      restrict_themes=False,
+                      use_monochrome_assets=False,
                       rand_seed=args.seed,
                       mask_size=args.mask_size,
                       normalize_rew=args.normalize_rew,
@@ -191,10 +175,10 @@ def main():
                                                    start_level=args.start_level,
                                                    num_levels=args.num_test_level,
                                                    distribution_mode=args.distribution_mode,
-                                                   use_generated_assets=True,
+                                                   use_generated_assets=False,
                                                    use_backgrounds=False,
-                                                   restrict_themes=True,
-                                                   use_monochrome_assets=True,
+                                                   restrict_themes=False,
+                                                   use_monochrome_assets=False,
                                                    rand_seed=args.seed,
                                                    mask_size=args.mask_size,
                                                    normalize_rew= args.normalize_rew,
@@ -207,10 +191,10 @@ def main():
                                                   start_level=test_start_level,
                                                   num_levels=args.num_test_level,
                                                   distribution_mode=args.distribution_mode,
-                                                  use_generated_assets=True,
+                                                  use_generated_assets=False,
                                                   use_backgrounds=False,
-                                                  restrict_themes=True,
-                                                  use_monochrome_assets=True,
+                                                  restrict_themes=False,
+                                                  use_monochrome_assets=False,
                                                   rand_seed=args.seed,
                                                   mask_size=args.mask_size,
                                                   normalize_rew=args.normalize_rew,
@@ -349,11 +333,18 @@ def main():
                     rollouts.obs_sum[i].copy_(obs[i].cpu())
 
             next_obs_sum =  rollouts.obs_sum + obs.cpu()
+
             reward = np.zeros_like(reward)
             for i in range(len(reward)):
+                ds_obs_sum = torch.index_select(rollouts.obs_sum[i][0], 0, indices_row)
+                ds_obs_sum = torch.index_select(ds_obs_sum, 1, indices_cal)
+
+                ds_next_obs_sum = torch.index_select(next_obs_sum[i][0], 0, indices_row)
+                ds_next_obs_sum = torch.index_select(ds_next_obs_sum, 1, indices_cal)
+
                 if done[i] == 0:
-                    num_zero_obs_sum = (rollouts.obs_sum[i][0] == 0).sum()
-                    num_zero_next_obs_sum = (next_obs_sum[i][0] == 0).sum()
+                    num_zero_obs_sum = (ds_obs_sum > 0).sum()
+                    num_zero_next_obs_sum = (ds_next_obs_sum > 0).sum()
                     if num_zero_next_obs_sum < num_zero_obs_sum:
                         reward[i] = 1
 
@@ -438,8 +429,6 @@ def main():
                 eval_dic_rew[eval_disp_name], eval_dic_int_rew[eval_disp_name], eval_dic_done[eval_disp_name], eval_dic_seeds[eval_disp_name] = evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, eval_disp_name,
                                                   args.num_processes, device, args.num_steps, logger)
 
-
-
                 # log_dict[eval_disp_name].append([(j+1) * args.num_processes * args.num_steps, eval_dic_rew[eval_disp_name]])
                 # printout += eval_disp_name + ' ' + str(np.mean(eval_dic_rew[eval_disp_name])) + ' '
                 # print(printout)
@@ -455,7 +444,7 @@ def main():
 
             logger.feed_eval(eval_dic_int_rew['train_eval'], eval_dic_done['train_eval'],eval_dic_int_rew['test_eval'], eval_dic_done['test_eval'],
                              eval_dic_seeds['train_eval'], eval_dic_seeds['test_eval'], eval_dic_rew['train_eval'], eval_dic_rew['test_eval'],
-                             eval_dic_rew['test_eval'], eval_dic_done['test_eval'],eval_dic_rew['test_eval'], eval_dic_done['test_eval'])
+                             eval_dic_rew['test_eval'], eval_dic_done['test_eval'], eval_dic_rew['test_eval'], eval_dic_done['test_eval'])
             episode_statistics = logger.get_episode_statistics()
             print(printout)
             print(episode_statistics)

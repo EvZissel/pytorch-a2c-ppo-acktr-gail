@@ -254,17 +254,17 @@ class PPO_LEEP():
                 dist_entropy_epoch += dist_entropy.item()
                 dist_KL_epoch += KL_loss.item()
 
-            # nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
-            #                          self.max_grad_norm)
-            if self.attention_policy:
-                nn.utils.clip_grad_norm_(self.attention_parameters,
-                                         self.max_grad_norm)
-            else:
-                nn.utils.clip_grad_norm_(self.non_attention_parameters,
-                                         self.max_grad_norm)
+                # nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
+                #                          self.max_grad_norm)
+                if self.attention_policy:
+                    nn.utils.clip_grad_norm_(self.attention_parameters,
+                                             self.max_grad_norm)
+                else:
+                    nn.utils.clip_grad_norm_(self.non_attention_parameters,
+                                             self.max_grad_norm)
 
-            self.optimizer.step()
-            self.optimizer.zero_grad()
+                self.optimizer.step()
+                self.optimizer.zero_grad()
 
         num_updates = self.ppo_epoch * self.num_mini_batch
 

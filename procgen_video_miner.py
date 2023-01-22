@@ -57,7 +57,7 @@ class VideoRecorderprocess(VideoRecorderWrapper):
 
         return obs
 
-test_start_level = 236
+test_start_level = 224
 # test_env  = ProcgenConatEnvs(env_name=env_name,
 #                              num_envs=num_level,
 #                              start_level=test_start_level,
@@ -100,33 +100,33 @@ test_env = ProcgenGym3Env(num=1,
 
 test_env = VideoRecorderWrapper(env=test_env, directory="./videos", info_key="rgb", prefix=str(test_start_level), fps=5, render=True)
 
-# actor_critic_maxEnt = Policy(
-#     (3,64,64),
-#     spaces.Discrete(15),
-#     base=ImpalaModel,
-#     base_kwargs={'recurrent': True ,'hidden_size': 256})
-# actor_critic_maxEnt.to(device)
+actor_critic_maxEnt = Policy(
+    (3,64,64),
+    spaces.Discrete(15),
+    base=ImpalaModel,
+    base_kwargs={'recurrent': True ,'hidden_size': 256})
+actor_critic_maxEnt.to(device)
 
 actor_critic1 = Policy(
     (3,64,64),
     spaces.Discrete(15),
     base=ImpalaModel,
-    base_kwargs={'recurrent': True ,'hidden_size': 256})
+    base_kwargs={'recurrent': False ,'hidden_size': 256})
 actor_critic1.to(device)
-#
-# actor_critic2 = Policy(
-#     (3,64,64),
-#     spaces.Discrete(15),
-#     base=ImpalaModel,
-#     base_kwargs={'recurrent': False ,'hidden_size': 256})
-# actor_critic2.to(device)
-#
-# actor_critic3 = Policy(
-#     (3,64,64),
-#     spaces.Discrete(15),
-#     base=ImpalaModel,
-#     base_kwargs={'recurrent': False ,'hidden_size': 256})
-# actor_critic3.to(device)
+
+actor_critic2 = Policy(
+    (3,64,64),
+    spaces.Discrete(15),
+    base=ImpalaModel,
+    base_kwargs={'recurrent': False ,'hidden_size': 256})
+actor_critic2.to(device)
+
+actor_critic3 = Policy(
+    (3,64,64),
+    spaces.Discrete(15),
+    base=ImpalaModel,
+    base_kwargs={'recurrent': False ,'hidden_size': 256})
+actor_critic3.to(device)
 #
 # actor_critic4= Policy(
 #     (3,64,64),
@@ -193,34 +193,35 @@ actor_critic1.to(device)
 #     weight_decay=0)
 
 # Load previous model
-# saved_epoch = 3124
-# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_0_num_env_200_entro_0.01_gama_0.5_25-12-2022_00-56-16"
-# if (saved_epoch > 0) and save_dir != "":
-#     save_path = save_dir
-#     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
-#     actor_critic_maxEnt.load_state_dict(actor_critic_weighs['state_dict'])
 
 saved_epoch = 1524
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_maxEnt__seed_0_num_env_5000_entro_0.01_gama_0.9_17-01-2023_23-12-22"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_maxEnt__seed_0_num_env_200_entro_0.01_gama_0.2_19-01-2023_16-30-14"
+if (saved_epoch > 0) and save_dir != "":
+    save_path = save_dir
+    actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
+    actor_critic_maxEnt.load_state_dict(actor_critic_weighs['state_dict'])
+
+saved_epoch = 1524
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_0_num_env_200_entro_0.01_gama_0.999_16-01-2023_21-42-24_noRNN"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic1.load_state_dict(actor_critic_weighs['state_dict'])
-#
-# saved_epoch = 1524
-# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_3256_num_env_200_entro_0.01_gama_0.999_14-01-2023_00-12-46_noRNN"
-# if (saved_epoch > 0) and save_dir != "":
-#     save_path = save_dir
-#     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
-#     actor_critic2.load_state_dict(actor_critic_weighs['state_dict'])
-#
-# saved_epoch = 1524
-# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_9658_num_env_200_entro_0.01_gama_0.999_14-01-2023_10-38-48_noRNN"
-# if (saved_epoch > 0) and save_dir != "":
-#     save_path = save_dir
-#     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
-#     actor_critic3.load_state_dict(actor_critic_weighs['state_dict'])
-#
+
+saved_epoch = 1524
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_1345_num_env_200_entro_0.01_gama_0.999_17-01-2023_17-14-35_noRNN"
+if (saved_epoch > 0) and save_dir != "":
+    save_path = save_dir
+    actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
+    actor_critic2.load_state_dict(actor_critic_weighs['state_dict'])
+
+saved_epoch = 1524
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_35896_num_env_200_entro_0.01_gama_0.999_17-01-2023_17-17-15_noRNN"
+if (saved_epoch > 0) and save_dir != "":
+    save_path = save_dir
+    actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
+    actor_critic3.load_state_dict(actor_critic_weighs['state_dict'])
+
 # saved_epoch = 1524
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_13598_num_env_200_entro_0.01_gama_0.999_15-01-2023_00-37-27_noRNN"
 # if (saved_epoch > 0) and save_dir != "":
@@ -280,10 +281,10 @@ eval_attn_masks1 = torch.zeros(num_level, 16, device=device)
 eval_attn_masks2 = torch.zeros(num_level, 32, device=device)
 eval_attn_masks3 = torch.zeros(num_level, 32, device=device)
 
-# actor_critic_maxEnt.eval()
+actor_critic_maxEnt.eval()
 actor_critic1.eval()
-# actor_critic2.eval()
-# actor_critic3.eval()
+actor_critic2.eval()
+actor_critic3.eval()
 # actor_critic4.eval()
 rew, obs, first = test_env.observe()
 
@@ -322,11 +323,13 @@ max_ent_step = 0
 ent_step_count = 0
 ent_last_step_count = 0
 novel = True
-
+#Good for maze
 # m = FixedCategorical(torch.tensor([ 0.55, 0.25, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.0125, 0.0125, 0.0125, 0.0125]))
+# m = FixedCategorical(torch.tensor([ 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
 # m = FixedCategorical(torch.tensor([ 0.55, 0.25, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025]))
 # m = FixedCategorical(torch.tensor([ 0.55, 0.25, 0.05, 0.05, 0.025, 0.025, 0.025, 0.025]))
-# m = m = FixedCategorical(torch.tensor([ 0.55, 0.25, 0.045, 0.025, 0.025, 0.025, 0.015, 0.015, 0.0125, 0.0125, 0.0125, 0.0125]))
+m = FixedCategorical(torch.tensor([1.0, 0.0]))
+# m  = FixedCategorical(torch.tensor([ 0.55, 0.25, 0.045, 0.025, 0.025, 0.025, 0.015, 0.015, 0.0125, 0.0125, 0.0125, 0.0125]))
 maxEnt_steps = 0
 while not done[0] and iter<2000:
     iter +=1
@@ -344,7 +347,7 @@ while not done[0] and iter<2000:
         # plt.show()
 
 
-        _, action, _, dist_probs1, _, _, _, _, _ = actor_critic1.act(
+        _, action1, _, dist_probs1, _, _, _, _, _ = actor_critic1.act(
             obs.float().to(device),
             eval_recurrent_hidden_states,
             eval_masks,
@@ -352,7 +355,7 @@ while not done[0] and iter<2000:
             attn_masks1=eval_attn_masks1,
             attn_masks2=eval_attn_masks2,
             attn_masks3=eval_attn_masks3,
-            deterministic=True,
+            deterministic=False,
             reuse_masks=False)
 
         dist_probs1[:, 1] += dist_probs1[:, 0]
@@ -371,57 +374,57 @@ while not done[0] and iter<2000:
         #     moving_average_prob1 = (1-beta)*moving_average_prob1 + beta*prob_pure_action1
         # else:
         #     moving_average_prob1 = 0
-        #
-        # _, _, _, dist_probs2, _, _, _, _, _ = actor_critic2.act(
-        #     obs.float().to(device),
-        #     eval_recurrent_hidden_states,
-        #     eval_masks,
-        #     attn_masks=eval_attn_masks,
-        #     attn_masks1=eval_attn_masks1,
-        #     attn_masks2=eval_attn_masks2,
-        #     attn_masks3=eval_attn_masks3,
-        #     deterministic=True,
-        #     reuse_masks=False)
-        #
-        # dist_probs2[:, 1] += dist_probs2[:, 0]
-        # dist_probs2[:, 1] += dist_probs2[:, 2]
-        # dist_probs2[:, 0] = 0
-        # dist_probs2[:, 2] = 0
-        #
-        # dist_probs2[:, 7] += dist_probs2[:, 6]
-        # dist_probs2[:, 7] += dist_probs2[:, 8]
-        # dist_probs2[:, 6] = 0
-        # dist_probs2[:, 8] = 0
-        # pure_action2 = dist_probs2.max(1)[1].unsqueeze(1)
-        # prob_pure_action2 = dist_probs2.max(1)[0].unsqueeze(1)
-        #
+
+        _, action2, _, dist_probs2, _, _, _, _, _ = actor_critic2.act(
+            obs.float().to(device),
+            eval_recurrent_hidden_states,
+            eval_masks,
+            attn_masks=eval_attn_masks,
+            attn_masks1=eval_attn_masks1,
+            attn_masks2=eval_attn_masks2,
+            attn_masks3=eval_attn_masks3,
+            deterministic=False,
+            reuse_masks=False)
+
+        dist_probs2[:, 1] += dist_probs2[:, 0]
+        dist_probs2[:, 1] += dist_probs2[:, 2]
+        dist_probs2[:, 0] = 0
+        dist_probs2[:, 2] = 0
+
+        dist_probs2[:, 7] += dist_probs2[:, 6]
+        dist_probs2[:, 7] += dist_probs2[:, 8]
+        dist_probs2[:, 6] = 0
+        dist_probs2[:, 8] = 0
+        pure_action2 = dist_probs2.max(1)[1].unsqueeze(1)
+        prob_pure_action2 = dist_probs2.max(1)[0].unsqueeze(1)
+
         # if (prob_pure_action2 > 0.9):
         #     moving_average_prob2 = (1 - beta) * moving_average_prob2 + beta * prob_pure_action2
         # else:
         #     moving_average_prob2 = 0
-        #
-        # _, _, _, dist_probs3, _, _, _, _, _ = actor_critic3.act(
-        #     obs.float().to(device),
-        #     eval_recurrent_hidden_states,
-        #     eval_masks,
-        #     attn_masks=eval_attn_masks,
-        #     attn_masks1=eval_attn_masks1,
-        #     attn_masks2=eval_attn_masks2,
-        #     attn_masks3=eval_attn_masks3,
-        #     deterministic=True,
-        #     reuse_masks=False)
-        #
-        # dist_probs3[:, 1] += dist_probs3[:, 0]
-        # dist_probs3[:, 1] += dist_probs3[:, 2]
-        # dist_probs3[:, 0] = 0
-        # dist_probs3[:, 2] = 0
-        #
-        # dist_probs3[:, 7] += dist_probs3[:, 6]
-        # dist_probs3[:, 7] += dist_probs3[:, 8]
-        # dist_probs3[:, 6] = 0
-        # dist_probs3[:, 8] = 0
-        # pure_action3 = dist_probs3.max(1)[1].unsqueeze(1)
-        # prob_pure_action3 = dist_probs3.max(1)[0].unsqueeze(1)
+
+        _, action3, _, dist_probs3, _, _, _, _, _ = actor_critic3.act(
+            obs.float().to(device),
+            eval_recurrent_hidden_states,
+            eval_masks,
+            attn_masks=eval_attn_masks,
+            attn_masks1=eval_attn_masks1,
+            attn_masks2=eval_attn_masks2,
+            attn_masks3=eval_attn_masks3,
+            deterministic=False,
+            reuse_masks=False)
+
+        dist_probs3[:, 1] += dist_probs3[:, 0]
+        dist_probs3[:, 1] += dist_probs3[:, 2]
+        dist_probs3[:, 0] = 0
+        dist_probs3[:, 2] = 0
+
+        dist_probs3[:, 7] += dist_probs3[:, 6]
+        dist_probs3[:, 7] += dist_probs3[:, 8]
+        dist_probs3[:, 6] = 0
+        dist_probs3[:, 8] = 0
+        pure_action3 = dist_probs3.max(1)[1].unsqueeze(1)
+        prob_pure_action3 = dist_probs3.max(1)[0].unsqueeze(1)
         #
         # _, _, _, dist_probs4, _, _, _, _, _ = actor_critic4.act(
         #     obs.float().to(device),
@@ -583,45 +586,49 @@ while not done[0] and iter<2000:
         # dist_probs10[:, 8] = 0
         # pure_action10 = dist_probs10.max(1)[1].unsqueeze(1)
         # prob_pure_action10 = dist_probs10.max(1)[0].unsqueeze(1)
-        #
-        # _, _, _, dist_probs_maxEnt, eval_recurrent_hidden_states, _, _, _, _ = actor_critic_maxEnt.act(
-        #     obs.float().to(device),
-        #     eval_recurrent_hidden_states,
-        #     eval_masks,
-        #     attn_masks=eval_attn_masks,
-        #     attn_masks1=eval_attn_masks1,
-        #     attn_masks2=eval_attn_masks2,
-        #     attn_masks3=eval_attn_masks3,
-        #     deterministic=True,
-        #     reuse_masks=False)
-        #
-        # dist_probs_maxEnt[:, 1] += dist_probs_maxEnt[:, 0]
-        # dist_probs_maxEnt[:, 1] += dist_probs_maxEnt[:, 2]
-        # dist_probs_maxEnt[:, 0] = 0
-        # dist_probs_maxEnt[:, 2] = 0
-        #
-        # dist_probs_maxEnt[:, 7] += dist_probs_maxEnt[:, 6]
-        # dist_probs_maxEnt[:, 7] += dist_probs_maxEnt[:, 8]
-        # dist_probs_maxEnt[:, 6] = 0
-        # dist_probs_maxEnt[:, 8] = 0
-        # pure_action_maxEnt = dist_probs_maxEnt.max(1)[1].unsqueeze(1)
-        # prob_pure_action_maxEnt = dist_probs_maxEnt.max(1)[0].unsqueeze(1)
+
+        _, _, _, dist_probs_maxEnt, eval_recurrent_hidden_states, _, _, _, _ = actor_critic_maxEnt.act(
+            obs.float().to(device),
+            eval_recurrent_hidden_states,
+            eval_masks,
+            attn_masks=eval_attn_masks,
+            attn_masks1=eval_attn_masks1,
+            attn_masks2=eval_attn_masks2,
+            attn_masks3=eval_attn_masks3,
+            deterministic=True,
+            reuse_masks=False)
+
+        dist_probs_maxEnt[:, 1] += dist_probs_maxEnt[:, 0]
+        dist_probs_maxEnt[:, 1] += dist_probs_maxEnt[:, 2]
+        dist_probs_maxEnt[:, 0] = 0
+        dist_probs_maxEnt[:, 2] = 0
+
+        dist_probs_maxEnt[:, 7] += dist_probs_maxEnt[:, 6]
+        dist_probs_maxEnt[:, 7] += dist_probs_maxEnt[:, 8]
+        dist_probs_maxEnt[:, 6] = 0
+        dist_probs_maxEnt[:, 8] = 0
+        pure_action_maxEnt = dist_probs_maxEnt.max(1)[1].unsqueeze(1)
+        prob_pure_action_maxEnt = dist_probs_maxEnt.max(1)[0].unsqueeze(1)
 
     # # next_obs, rew, done, info = test_env.step(act.cpu().numpy())
-    # # action = pure_action4
-    # action = pure_action_maxEnt
+    # action = action3
+    action = pure_action_maxEnt
     # # # if (pure_action1 != pure_action2) or (moving_average_prob1 < 0.98) or (moving_average_prob2 < 0.98):
     # # # if (moving_average_prob1 > 0.9):
     # # ent_step_count += 1
-    # maxEnt_steps -= 1
-    #
-    # if (maxEnt_steps<=0) and pure_action1 == pure_action2 == pure_action3 == pure_action4:
+    maxEnt_steps -= 1
+
+    if (maxEnt_steps<0) and action1 == action2:
     # # if novel and pure_action1 == pure_action2 == pure_action3 == pure_action4:
     # # if novel and pure_action1 == pure_action2 == pure_action3 == pure_action4 == pure_action5 == pure_action6 == pure_action7 == pure_action8 == pure_action9 == pure_action10:
     # # if novel:
     #     # if step_count > 5:
+    #     maxEnt_steps = 1
+        # if np.random.rand() >= 0.15:    # elif np.random.rand() >= 0.15:
     #     action = pure_action1
-    #     maxEnt_steps = m.sample() + 1
+        action = action1
+
+        maxEnt_steps = m.sample()
     # #         max_ent_step +=1
     # #         step_count  = max_ent_step
     # # #     step_count += 1
@@ -629,10 +636,14 @@ while not done[0] and iter<2000:
     # #     ent_last_step_count = ent_step_count
     #     ent_step_count = 0
 
+    elif np.random.rand() >= 0.15:
+        action = pure_action1
 
     # if iter < 100:
     #     action = pure_action1
-    test_env.act(pure_action1[0].cpu().numpy())
+    action = np.array([4])
+    # test_env.act(action[0].cpu().numpy())
+    test_env.act(action)
     # steps_remaining -= 1
 
 

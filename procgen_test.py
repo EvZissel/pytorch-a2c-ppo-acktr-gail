@@ -19,8 +19,8 @@ from a2c_ppo_acktr.distributions import Bernoulli, Categorical, DiagGaussian, Fi
 EVAL_ENVS = ['train_eval','test_eval']
 
 # num_processes = 600
-env_name = "miner"
-start_level = 3562
+env_name = "heist"
+start_level = 2589
 num_level = 1
 num_level_test = 128
 distribution_mode = "easy"

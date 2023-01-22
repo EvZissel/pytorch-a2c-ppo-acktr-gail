@@ -259,7 +259,7 @@ def main():
         args.KL_coef,
         lr=args.lr,
         eps=args.eps,
-        num_tasks=args.num_processes,
+        num_tasks=int(args.num_processes/args.num_c),
         attention_policy=False,
         max_grad_norm=args.max_grad_norm,
         weight_decay=args.weight_decay)
@@ -278,7 +278,7 @@ def main():
         args.KL_coef,
         lr=args.lr,
         eps=args.eps,
-        num_tasks=args.num_processes,
+        num_tasks=int(args.num_processes/args.num_c),
         attention_policy=False,
         max_grad_norm=args.max_grad_norm,
         weight_decay=args.weight_decay)
@@ -297,7 +297,7 @@ def main():
         args.KL_coef,
         lr=args.lr,
         eps=args.eps,
-        num_tasks=args.num_processes,
+        num_tasks=int(args.num_processes/args.num_c),
         attention_policy=False,
         max_grad_norm=args.max_grad_norm,
         weight_decay=args.weight_decay)
@@ -316,7 +316,7 @@ def main():
         args.KL_coef,
         lr=args.lr,
         eps=args.eps,
-        num_tasks=args.num_processes,
+        num_tasks=int(args.num_processes/args.num_c),
         attention_policy=False,
         max_grad_norm=args.max_grad_norm,
         weight_decay=args.weight_decay)
@@ -386,8 +386,8 @@ def main():
     logger.obs_sum['test_eval'].copy_(obs_test)
 
     fig = plt.figure(figsize=(20, 20))
-    columns = 5
-    rows = 5
+    columns = 1
+    rows = 1
     for i in range(1, columns * rows + 1):
         fig.add_subplot(rows, columns, i)
         plt.imshow(rollouts_0.obs[0][i].transpose(0,2))
@@ -665,12 +665,12 @@ def main():
                 # print(printout)
 
             # if ((args.eval_nondet_interval is not None and j % args.eval_nondet_interval == 0) or j == args.continue_from_epoch):
-            #     eval_test_nondet_rew, eval_test_nondet_done = evaluate_procgen(actor_critic, eval_envs_dic, 'test_eval',
-            #                                       args.num_processes, device, args.num_steps, deterministic=False)
+            eval_test_nondet_rew, _, eval_test_nondet_done, _ = evaluate_procgen_LEEP(actor_critic_0, actor_critic_1, actor_critic_2, actor_critic_3,
+                                                                                    eval_envs_dic, 'test_eval', args.num_processes, device, args.num_steps, logger, deterministic=False)
 
             logger.feed_eval(eval_dic_int_rew['train_eval'], eval_dic_done['train_eval'], eval_dic_int_rew['test_eval'], eval_dic_done['test_eval'],
                              eval_dic_seeds['train_eval'], eval_dic_seeds['test_eval'], eval_dic_rew['train_eval'], eval_dic_rew['test_eval'],
-                             eval_dic_rew['test_eval'], eval_dic_done['test_eval'])
+                             eval_dic_rew['test_eval'], eval_dic_done['test_eval'], eval_test_nondet_rew, eval_test_nondet_done)
             episode_statistics = logger.get_episode_statistics()
             print(printout)
             print(episode_statistics)
