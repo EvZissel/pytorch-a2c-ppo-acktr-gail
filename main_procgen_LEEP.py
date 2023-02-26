@@ -340,22 +340,14 @@ def main():
     if (args.continue_from_epoch > 0) and args.save_dir != "":
         save_path = args.save_dir
         actor_critic_weighs = torch.load(os.path.join(save_path, args.env_name + "-epoch-{}.pt".format(args.continue_from_epoch)), map_location=device)
+        actor_critic_0.load_state_dict(actor_critic_weighs['state_dict_0'])
+        agent_0.optimizer.load_state_dict(actor_critic_weighs['optimizer_state_dict_0'])
         actor_critic_1.load_state_dict(actor_critic_weighs['state_dict_1'])
         agent_1.optimizer.load_state_dict(actor_critic_weighs['optimizer_state_dict_1'])
-        # rollouts.obs                            = actor_critic_weighs['buffer_obs']
-        # rollouts.recurrent_hidden_states = actor_critic_weighs['buffer_recurrent_hidden_states']
-        # rollouts.rewards                 = actor_critic_weighs['buffer_rewards']
-        # rollouts.seeds                   = actor_critic_weighs['buffer_seeds']
-        # rollouts.value_preds             = actor_critic_weighs['buffer_value_preds']
-        # rollouts.returns                 = actor_critic_weighs['buffer_returns']
-        # rollouts.action_log_probs        = actor_critic_weighs['buffer_action_log_probs']
-        # rollouts.actions                 = actor_critic_weighs['buffer_actions']
-        # rollouts.masks                   = actor_critic_weighs['buffer_masks']
-        # rollouts.bad_masks               = actor_critic_weighs['buffer_bad_masks']
-        # rollouts.info_batch              = actor_critic_weighs['buffer_info_batch']
-        # rollouts.num_steps               = actor_critic_weighs['buffer_num_steps']
-        # rollouts.step                    = actor_critic_weighs['buffer_step']
-        # rollouts.num_processes           = actor_critic_weighs['buffer_num_processes']
+        actor_critic_2.load_state_dict(actor_critic_weighs['state_dict_2'])
+        agent_2.optimizer.load_state_dict(actor_critic_weighs['optimizer_state_dict_2'])
+        actor_critic_3.load_state_dict(actor_critic_weighs['state_dict_3'])
+        agent_3.optimizer.load_state_dict(actor_critic_weighs['optimizer_state_dict_3'])
 
     # Load previous model
     if (args.saved_epoch > 0) and args.save_dir != "":

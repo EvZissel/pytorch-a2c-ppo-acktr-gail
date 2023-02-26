@@ -347,7 +347,7 @@ class ImpalaBlock_small(nn.Module):
 
 
 class ImpalaModel(NNBase):
-    def __init__(self, num_inputs, recurrent=False, hidden_size=256):
+    def __init__(self, num_inputs, recurrent=False, hidden_size=256, gray_scale=False):
         super(ImpalaModel, self).__init__(recurrent, hidden_size, hidden_size)
 
         init_ = lambda m: init(m, nn.init.xavier_uniform_, lambda x: nn.init.
@@ -366,11 +366,21 @@ class ImpalaModel(NNBase):
             init_(nn.Linear(in_features=32 * 8 * 8, out_features=hidden_size)),nn.ReLU())
 
         self.critic_linear = init_2(nn.Linear(hidden_size, 1))
+        self.gray = gray_scale
 
         self.train()
 
     def forward(self, inputs, rnn_hxs, masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, reuse_masks=False):
         x = inputs
+        if self.gray:
+            x_gray = x.clone()
+            r = x[:,0, :, :]
+            g = x[:,1, :, :]
+            b = x[:,2, :, :]
+            x_gray[:,0, :, :] = 0.2989 * r + 0.5870 * g + 0.1140 * b
+            x_gray[:,1, :, :] = 0.2989 * r + 0.5870 * g + 0.1140 * b
+            x_gray[:,2, :, :] = 0.2989 * r + 0.5870 * g + 0.1140 * b
+            x = x_gray
         x = self.main(x)
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)

@@ -62,7 +62,7 @@ def main():
     logdir = os.path.join(os.path.expanduser(args.log_dir), logdir_)
     utils.cleanup_log_dir(logdir)
 
-    wandb.init(project=args.env_name + "_PPO_maximum_entropy", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
+    wandb.init(project=args.env_name + "_PPO_maximum_entropy_finetune", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
 
     # Ugly but simple logging
     log_dict = {
@@ -118,7 +118,7 @@ def main():
                                     start_level=start_train_test[eval_disp_name] + i,
                                     num_levels=1,
                                     distribution_mode=args.distribution_mode,
-                                    use_generated_assets=False,
+                                    use_generated_assets=True,
                                     use_backgrounds=False,
                                     restrict_themes=True,
                                     use_monochrome_assets=True,
@@ -164,7 +164,7 @@ def main():
                       start_level=args.start_level,
                       num_levels=args.num_level,
                       distribution_mode=args.distribution_mode,
-                      use_generated_assets=False,
+                      use_generated_assets=True,
                       use_backgrounds=False,
                       restrict_themes=True,
                       use_monochrome_assets=True,
@@ -180,7 +180,7 @@ def main():
                                                    start_level=args.start_level,
                                                    num_levels=args.num_test_level,
                                                    distribution_mode=args.distribution_mode,
-                                                   use_generated_assets=False,
+                                                   use_generated_assets=True,
                                                    use_backgrounds=False,
                                                    restrict_themes=True,
                                                    use_monochrome_assets=True,
@@ -196,7 +196,7 @@ def main():
                                                   start_level=test_start_level,
                                                   num_levels=args.num_test_level,
                                                   distribution_mode=args.distribution_mode,
-                                                  use_generated_assets=False,
+                                                  use_generated_assets=True,
                                                   use_backgrounds=False,
                                                   restrict_themes=True,
                                                   use_monochrome_assets=True,
@@ -210,7 +210,7 @@ def main():
     actor_critic = Policy(
         envs.observation_space.shape,
         envs.action_space,
-        base=ImpalaModel_finetune,
+        base=ImpalaModel,
         base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent,'hidden_size': args.recurrent_hidden_size})
         # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
     actor_critic.to(device)
@@ -303,7 +303,7 @@ def main():
     #     episode_len_buffer.append(0)
     # seeds_train = np.zeros((args.num_steps, args.num_processes))
     # seeds_test = np.zeros((args.num_steps, args.num_processes))
-    beta = 1
+    beta = args.beta_int
 
 
     #freeze layers
@@ -363,7 +363,7 @@ def main():
         for step in range(args.num_steps):
             # Sample actions
             with torch.no_grad():
-                value, action, action_log_prob, recurrent_hidden_states, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic.act(
+                value, action, action_log_prob, _, recurrent_hidden_states, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic.act(
                     rollouts.obs[step].to(device), rollouts.recurrent_hidden_states[step].to(device),
                     rollouts.masks[step].to(device), rollouts.attn_masks[step].to(device), rollouts.attn_masks1[step].to(device), rollouts.attn_masks2[step].to(device),
                     rollouts.attn_masks3[step].to(device))
@@ -395,7 +395,7 @@ def main():
                     if num_zero_next_obs_sum < num_zero_obs_sum:
                         int_reward[i] = 1
 
-            reward = (1-beta)*reward + beta*int_reward
+            reward = (1-beta)*reward + beta*10*int_reward
             # If done then clean the history of observations.
             masks = torch.FloatTensor(
                 [[0.0] if done_ else [1.0] for done_ in done])
@@ -417,7 +417,7 @@ def main():
         rollouts.compute_returns(next_value, args.use_gae, args.gamma,
                                  args.gae_lambda, args.use_proper_time_limits)
 
-        value_loss, action_loss, dist_entropy = agent.update(rollouts)
+        value_loss, action_loss, dist_entropy, _ = agent.update(rollouts)
 
         rollouts.after_update()
 
@@ -467,7 +467,7 @@ def main():
             eval_dic_seeds = {}
 
             for eval_disp_name in EVAL_ENVS:
-                eval_dic_rew[eval_disp_name], eval_dic_int_rew[eval_disp_name], eval_dic_done[eval_disp_name], eval_dic_seeds[eval_disp_name]  = evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, eval_disp_name,
+                eval_dic_rew[eval_disp_name], eval_dic_int_rew[eval_disp_name], eval_dic_done[eval_disp_name], eval_dic_seeds[eval_disp_name] = evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, eval_disp_name,
                                                   args.num_processes, device, args.num_steps, logger)
 
 
@@ -479,23 +479,23 @@ def main():
             #     eval_test_nondet_rew, eval_test_nondet_done = evaluate_procgen(actor_critic, eval_envs_dic, 'test_eval',
             #                                       args.num_processes, device, args.num_steps, deterministic=False)
 
-            logger.feed_eval(eval_dic_int_rew['train_eval'], eval_dic_done['train_eval'], eval_dic_int_rew['test_eval'], eval_dic_done['test_eval'],
+            logger.feed_eval(eval_dic_int_rew['train_eval'], eval_dic_done['train_eval'],eval_dic_int_rew['test_eval'], eval_dic_done['test_eval'],
                              eval_dic_seeds['train_eval'], eval_dic_seeds['test_eval'], eval_dic_rew['train_eval'], eval_dic_rew['test_eval'],
-                             eval_dic_rew['test_eval'], eval_dic_done['test_eval'])
+                             eval_dic_rew['test_eval'], eval_dic_done['test_eval'],eval_dic_rew['test_eval'], eval_dic_done['test_eval'])
             episode_statistics = logger.get_episode_statistics()
             print(printout)
             print(episode_statistics)
 
-            # reinitialize the last layers of networks + GRU unit
-            if args.reinitialization and (j % 500 == 0):
-                print('initialize weights j = {}'.format(j))
-                init_2(actor_critic.base.critic_linear)
-                init_(actor_critic.base.main[5])
-                for name, param in actor_critic.base.gru.named_parameters():
-                    if 'bias' in name:
-                        nn.init.constant_(param, 0)
-                    elif 'weight' in name:
-                        nn.init.orthogonal_(param)
+            # # reinitialize the last layers of networks + GRU unit
+            # if args.reinitialization and (j % 500 == 0):
+            #     print('initialize weights j = {}'.format(j))
+            #     init_2(actor_critic.base.critic_linear)
+            #     init_(actor_critic.base.main[5])
+            #     for name, param in actor_critic.base.gru.named_parameters():
+            #         if 'bias' in name:
+            #             nn.init.constant_(param, 0)
+            #         elif 'weight' in name:
+            #             nn.init.orthogonal_(param)
 
 
             # summary_writer.add_scalars('eval_mean_rew', {f'{eval_disp_name}': np.mean(eval_dic_rew[eval_disp_name])},

@@ -52,11 +52,16 @@ def main():
         logdir_ = logdir_ + '_mask_all'
     if args.mask_size > 0:
         logdir_ = logdir_ + '_mask_' + str(args.mask_size)
+    if not args.use_generated_assets and args.use_backgrounds and not args.restrict_themes and not args.use_monochrome_assets:
+        logdir_ = logdir_ + '_original'
 
     logdir = os.path.join(os.path.expanduser(args.log_dir), logdir_)
     utils.cleanup_log_dir(logdir)
 
-    wandb.init(project=args.env_name + "_PPO", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
+    if args.distribution_mode == "hard":
+        wandb.init(project=args.env_name + "_PPO_hard", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
+    else:
+        wandb.init(project=args.env_name + "_PPO", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
 
     # Ugly but simple logging
     log_dict = {
@@ -99,10 +104,10 @@ def main():
                       start_level=args.start_level,
                       num_levels=args.num_level,
                       distribution_mode=args.distribution_mode,
-                      use_generated_assets=True,
-                      use_backgrounds=False,
-                      restrict_themes=True,
-                      use_monochrome_assets=True,
+                      use_generated_assets=args.use_generated_assets,
+                      use_backgrounds=args.use_backgrounds,
+                      restrict_themes=args.restrict_themes,
+                      use_monochrome_assets=args.use_monochrome_assets,
                       rand_seed=args.seed,
                       mask_size=args.mask_size,
                       normalize_rew=args.normalize_rew,
@@ -116,10 +121,10 @@ def main():
                                                       start_level=args.start_level,
                                                       num_levels=args.num_level,
                                                       distribution_mode=args.distribution_mode,
-                                                      use_generated_assets=True,
-                                                      use_backgrounds=False,
-                                                      restrict_themes=True,
-                                                      use_monochrome_assets=True,
+                                                      use_generated_assets=args.use_generated_assets,
+                                                      use_backgrounds=args.use_backgrounds,
+                                                      restrict_themes=args.restrict_themes,
+                                                      use_monochrome_assets=args.use_monochrome_assets,
                                                       rand_seed=args.seed,
                                                       mask_size=args.mask_size,
                                                       normalize_rew= args.normalize_rew,
@@ -130,24 +135,41 @@ def main():
     eval_envs_dic['test_eval'] = make_ProcgenEnvs(num_envs=args.num_processes,
                                                      env_name=args.env_name,
                                                      start_level=test_start_level,
-                                                     num_levels=args.num_level,
+                                                     num_levels=0,
                                                      distribution_mode=args.distribution_mode,
-                                                     use_generated_assets=True,
-                                                     use_backgrounds=False,
-                                                     restrict_themes=True,
-                                                     use_monochrome_assets=True,
+                                                     use_generated_assets=args.use_generated_assets,
+                                                     use_backgrounds=args.use_backgrounds,
+                                                     restrict_themes=args.restrict_themes,
+                                                     use_monochrome_assets=args.use_monochrome_assets,
                                                      rand_seed=args.seed,
                                                      mask_size=args.mask_size,
                                                      normalize_rew=args.normalize_rew,
                                                      mask_all=args.mask_all,
                                                      device=device)
+
+    eval_envs_dic_nondet = {}
+    eval_envs_dic_nondet['test_eval_nondet'] =  make_ProcgenEnvs(num_envs=args.num_processes,
+                                                     env_name=args.env_name,
+                                                     start_level=test_start_level,
+                                                     num_levels=0,
+                                                     distribution_mode=args.distribution_mode,
+                                                     use_generated_assets=args.use_generated_assets,
+                                                     use_backgrounds=args.use_backgrounds,
+                                                     restrict_themes=args.restrict_themes,
+                                                     use_monochrome_assets=args.use_monochrome_assets,
+                                                     rand_seed=args.seed,
+                                                     mask_size=args.mask_size,
+                                                     normalize_rew=args.normalize_rew,
+                                                     mask_all=args.mask_all,
+                                                     device=device)
+
     print('done')
 
     actor_critic = Policy(
         envs.observation_space.shape,
         envs.action_space,
         base=ImpalaModel,
-        base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent,'hidden_size': args.recurrent_hidden_size})
+        base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent,'hidden_size': args.recurrent_hidden_size,'gray_scale': args.gray_scale})
         # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
     actor_critic.to(device)
 
@@ -218,6 +240,10 @@ def main():
     obs_test = eval_envs_dic['test_eval'].reset()
     logger.obs['test_eval'].copy_(obs_test)
     logger.obs_sum['test_eval'].copy_(obs_test)
+
+    obs_test_nondet = eval_envs_dic_nondet['test_eval_nondet'].reset()
+    logger.obs['test_eval_nondet'].copy_(obs_test_nondet)
+    logger.obs_sum['test_eval_nondet'].copy_(obs_test_nondet)
 
     fig = plt.figure(figsize=(20, 20))
     columns = 5
@@ -304,7 +330,7 @@ def main():
                 [[0.0] if 'bad_transition' in info.keys() else [1.0]
                  for info in infos])
             rollouts.insert(obs, recurrent_hidden_states, action,
-                            action_log_prob, value, torch.from_numpy(reward).unsqueeze(1), masks, bad_masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, infos)
+                            action_log_prob, value, torch.from_numpy(reward).unsqueeze(1), masks, bad_masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, infos, obs)
 
         with torch.no_grad():
             next_value = actor_critic.get_value(
@@ -372,11 +398,11 @@ def main():
                 # print(printout)
 
             # if ((args.eval_nondet_interval is not None and j % args.eval_nondet_interval == 0) or j == args.continue_from_epoch):
-            eval_test_nondet_rew, eval_test_nondet_done = evaluate_procgen(actor_critic, eval_envs_dic, 'test_eval',
+            eval_test_nondet_rew, eval_test_nondet_done = evaluate_procgen(actor_critic, eval_envs_dic_nondet, 'test_eval_nondet',
                                                   args.num_processes, device, args.num_steps, logger, attention_features=False, det_masks=False, deterministic=False)
 
             logger.feed_eval(eval_dic_rew['train_eval'], eval_dic_done['train_eval'],eval_dic_rew['test_eval'], eval_dic_done['test_eval'], seeds_train, seeds_test,
-                             eval_dic_rew['train_eval'], eval_dic_rew['test_eval'], eval_dic_rew['test_eval'], eval_dic_done['test_eval'], eval_test_nondet_rew, eval_test_nondet_done)
+                             eval_dic_rew['train_eval'], eval_dic_rew['test_eval'], eval_test_nondet_rew, eval_test_nondet_done)
             episode_statistics = logger.get_episode_statistics()
             print(printout)
             print(episode_statistics)

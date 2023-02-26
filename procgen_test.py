@@ -19,10 +19,10 @@ from a2c_ppo_acktr.distributions import Bernoulli, Categorical, DiagGaussian, Fi
 EVAL_ENVS = ['train_eval','test_eval']
 
 # num_processes = 600
-env_name = "heist"
-start_level = 2589
+env_name = "jumper"
+start_level = 0
 num_level = 1
-num_level_test = 128
+# num_level_test = 128
 distribution_mode = "easy"
 seed = 0
 normalize_rew = False
@@ -32,7 +32,7 @@ n_steps = 1
 device = torch.device("cuda:{}".format(0))
 
 eval_envs_dic = {}
-# eval_envs_dic['train_eval'] = ProcgenConatEnvs(env_name=env_name,
+  # eval_envs_dic['train_eval'] = ProcgenConatEnvs(env_name=env_name,
 #                                                num_envs=num_level,
 #                                                start_level=start_level,
 #                                                distribution_mode=distribution_mode,
@@ -48,21 +48,61 @@ eval_envs_dic = {}
 #                                                mask_all=False)
 
 eval_envs_dic['train_eval'] = ProcgenEnv(num_envs=1,
-                                          env_name=env_name,
-                                          start_level=start_level,
-                                          num_levels=1,
-                                          distribution_mode=distribution_mode,
+                                         env_name=env_name,
+                                         start_level=start_level,
+                                         num_levels=1,
+                                         distribution_mode=distribution_mode,
                                          use_generated_assets=False,
-                                         use_backgrounds=False,
+                                         use_backgrounds=True,
                                          restrict_themes=False,
                                          use_monochrome_assets=False,
-                                          rand_seed=seed)
+                                         rand_seed=seed)
 
 obs = eval_envs_dic['train_eval'].reset()
 myobj = plt.imshow(obs['rgb'][0])
 plt.show()
 
-action = np.array([3])
+action = np.array([5])
+next_obs, reward, done, infos = eval_envs_dic['train_eval'].step(action)
+plt.imshow(next_obs['rgb'][0])
+plt.show()
+
+action = np.array([5])
+next_obs, reward, done, infos = eval_envs_dic['train_eval'].step(action)
+plt.imshow(next_obs['rgb'][0])
+plt.show()
+
+action = np.array([5])
+next_obs, reward, done, infos = eval_envs_dic['train_eval'].step(action)
+plt.imshow(next_obs['rgb'][0])
+plt.show()
+
+action = np.array([5])
+next_obs, reward, done, infos = eval_envs_dic['train_eval'].step(action)
+plt.imshow(next_obs['rgb'][0])
+plt.show()
+
+action = np.array([5])
+next_obs, reward, done, infos = eval_envs_dic['train_eval'].step(action)
+plt.imshow(next_obs['rgb'][0])
+plt.show()
+
+action = np.array([5])
+next_obs, reward, done, infos = eval_envs_dic['train_eval'].step(action)
+plt.imshow(next_obs['rgb'][0])
+plt.show()
+
+action = np.array([5])
+next_obs, reward, done, infos = eval_envs_dic['train_eval'].step(action)
+plt.imshow(next_obs['rgb'][0])
+plt.show()
+
+action = np.array([5])
+next_obs, reward, done, infos = eval_envs_dic['train_eval'].step(action)
+plt.imshow(next_obs['rgb'][0])
+plt.show()
+
+action = np.array([5])
 next_obs, reward, done, infos = eval_envs_dic['train_eval'].step(action)
 plt.imshow(next_obs['rgb'][0])
 plt.show()
@@ -85,21 +125,21 @@ print("something")
 #                                                         mask_all=False,
 #                                                         device=device))
 
-test_start_level = 10000
-eval_envs_dic['test_eval']  = ProcgenConatEnvs(env_name=env_name,
-                                               num_envs=num_level_test,
-                                               start_level=test_start_level,
-                                               distribution_mode=distribution_mode,
-                                               use_generated_assets=False,
-                                               use_backgrounds=False,
-                                               restrict_themes=True,
-                                               use_monochrome_assets=True,
-                                               normalize_rew=normalize_rew,
-                                               num_stack=1,
-                                               seed=0,
-                                               device=device,
-                                               mask_size=0,
-                                               mask_all=False)
+# test_start_level = 10000
+# eval_envs_dic['test_eval']  = ProcgenConatEnvs(env_name=env_name,
+#                                                num_envs=num_level_test,
+#                                                start_level=test_start_level,
+#                                                distribution_mode=distribution_mode,
+#                                                use_generated_assets=False,
+#                                                use_backgrounds=False,
+#                                                restrict_themes=True,
+#                                                use_monochrome_assets=True,
+#                                                normalize_rew=normalize_rew,
+#                                                num_stack=1,
+#                                                seed=0,
+#                                                device=device,
+#                                                mask_size=0,
+#                                                mask_all=False)
 # eval_envs_dic['test_eval']  = []
 # for i in range(num_level):
 #     eval_envs_dic['train_eval'].append(make_ProcgenEnvs(num_envs=1,
@@ -132,12 +172,12 @@ eval_envs_dic['test_eval']  = ProcgenConatEnvs(env_name=env_name,
 # log_probs = (1/9) * torch.ones(num_processes, 9)
 # dist = torch.distributions.Categorical(logits=log_probs)
 
-actor_critic = Policy(
-    eval_envs_dic['train_eval'].observation_space.shape,
-    eval_envs_dic['train_eval'].action_space,
-    base=ImpalaModel,
-    base_kwargs={'recurrent': False})
-actor_critic.to(device)
+# actor_critic = Policy(
+#     eval_envs_dic['train_eval'].observation_space.shape,
+#     eval_envs_dic['train_eval'].action_space,
+#     base=ImpalaModel,
+#     base_kwargs={'recurrent': False})
+# actor_critic.to(device)
 
 # # training agent
 # agent = algo.PPO(
@@ -154,15 +194,15 @@ actor_critic.to(device)
 #     max_grad_norm=0.5,
 #     weight_decay=0)
 
-# Load previous model
-continue_from_epoch = 3124
-save_dir = '/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_0_num_env_200_entro_0.01_gama_0.8_01-01-2023_21-07-10'
-if (continue_from_epoch >= 0) and save_dir != "":
-    save_path = save_dir
-    actor_critic_weighs = torch.load(
-        os.path.join(save_path, env_name + "-epoch-{}.pt".format(continue_from_epoch)), map_location=device)
-    actor_critic.load_state_dict(actor_critic_weighs['state_dict'])
-    # agent.optimizer.load_state_dict(actor_critic_weighs['optimizer_state_dict'])
+# # Load previous model
+# continue_from_epoch = 3124
+# save_dir = '/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_0_num_env_200_entro_0.01_gama_0.8_01-01-2023_21-07-10'
+# if (continue_from_epoch >= 0) and save_dir != "":
+#     save_path = save_dir
+#     actor_critic_weighs = torch.load(
+#         os.path.join(save_path, env_name + "-epoch-{}.pt".format(continue_from_epoch)), map_location=device)
+#     actor_critic.load_state_dict(actor_critic_weighs['state_dict'])
+#     # agent.optimizer.load_state_dict(actor_critic_weighs['optimizer_state_dict'])
 
 
 # seeds_train = torch.zeros(num_processes, 1)

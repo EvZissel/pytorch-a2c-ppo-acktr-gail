@@ -80,8 +80,13 @@ def get_args():
     parser.add_argument(
         '--beta_decay',
         type=float,
+        default=1.0,
+        help='beta decay (default: 1.0)')
+    parser.add_argument(
+        '--beta_int',
+        type=float,
         default=0.5,
-        help='beta decay (default: 0.5)')
+        help='beta intrinsic (default: 0.5)')
     parser.add_argument(
         '--seed', type=int, default=1, help='random seed (default: 1)')
     parser.add_argument(
@@ -450,6 +455,62 @@ def get_args():
         action='store_true',
         default=False,
         help='use the KLdiv loss between the maxEnt policy and the extrinsic reward policy')
+    parser.add_argument(
+        '--use_generated_assets',
+        action='store_true',
+        default=False,
+        help='use_generated_assets = True for maze')
+    parser.add_argument(
+        '--use_backgrounds',
+        action='store_true',
+        default=False,
+        help='use_generated_assets = False for maze')
+    parser.add_argument(
+        '--restrict_themes',
+        action='store_true',
+        default=False,
+        help='use_generated_assets = True for maze')
+    parser.add_argument(
+        '--use_monochrome_assets',
+        action='store_true',
+        default=False,
+        help='use_generated_assets = True for maze')
+    parser.add_argument(
+        '--eps_diff_NN',
+        type=float,
+        default=1e-5,
+        help='two state can be different up to epsilon and its still considered 0 (default: 1e-5)')
+    parser.add_argument(
+        '--eps_NN',
+        type=int,
+        default=1,
+        help='number of different pixels (default: 1)')
+    parser.add_argument(
+        '--num_buffer',
+        type=int,
+        default=256,
+        help='number of images to evaluate k-NN (default: 256)')
+    parser.add_argument(
+        '--num_detEnt',
+        type=int,
+        default=0,
+        help='number of deterministic maxEnt steps for ensemble (default: 0)')
+    parser.add_argument(
+        '--rand_act',
+        action='store_true',
+        default=False,
+        help='if maxEnt step or random step')
+    parser.add_argument(
+        '--gray_scale',
+        action='store_true',
+        default=False,
+        help='if learns form gray scale image')
+    parser.add_argument(
+        '--reset_cont',
+        type=int,
+        default=256,
+        help='reset int reward count (default: 256)')
+
 
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()

@@ -15,8 +15,8 @@ np.random.seed(0)
 device = torch.device("cuda:{}".format(0))
 
 
-env_name = "maze"
-start_level = 100106
+env_name = "jumper"
+start_level = 256
 num_level = 1
 distribution_mode = "easy"
 seed = 0
@@ -39,7 +39,6 @@ envs = make_ProcgenEnvs(num_envs=1,
                         use_backgrounds=True,
                         restrict_themes=False,
                         use_monochrome_assets=False,
-                        center_agent=False,
                         rand_seed=seed,
                         mask_size=0,
                         normalize_rew=normalize_rew,
@@ -48,117 +47,196 @@ envs = make_ProcgenEnvs(num_envs=1,
 # print(envs.action_space)
 
 obs = envs.reset()
-obs_sum = obs
-obs0 = obs.clone()
-diff_obs = torch.zeros_like(obs)
-diff_obs_vec  = []
-diff_obs_vec.append(diff_obs[0].clone())
+# obs[0] = (obs[0][1,:,:] != 1.0)*obs[0]
+# obs_sum = obs
+# obs0 = obs.clone()
+# diff_obs = torch.zeros_like(obs)
+obs_stack = obs.clone()
 # plot mazes
-plt.imshow(obs[0].transpose(0,2).cpu().numpy())
-# plt.savefig("test.png")
+plt.imshow(obs[0].transpose(0,2).transpose(0,1).cpu().numpy())
 plt.show()
 
-action = np.array([7])
+action = np.array([5])
 obs, reward, done, infos = envs.step(action)
-obs_sum += obs
-n_steps +=1
-plt.imshow(obs[0].transpose(0,2).cpu().numpy())
+# obs[0] = (obs[0][1,:,:] != 1.0)*obs[0]
+# obs_sum += obs
+# n_steps +=1
+plt.imshow(obs[0].transpose(0,2).transpose(0,1).cpu().numpy())
 plt.show()
-init = int(max(0,n_steps-5))
-next_diff_obs = 1*(((obs_sum/n_steps-obs0)[0] > epsilon) + ((obs_sum/n_steps-obs0)[0] < -epsilon))
-diff_obs_vec.append(next_diff_obs.clone())
+
+norm2_dis = (obs_stack - obs).reshape(2,-1).pow(2).sum(1)
+int_reward = norm2_dis.min()
+print('inr reward: {}'.format(int_reward))
+obs_stack = torch.cat((obs_stack,obs.clone()),0)
+# init = int(max(0,n_steps-5))
+# next_diff_obs = 1*(((obs_sum/n_steps-obs0)[0] > epsilon) + ((obs_sum/n_steps-obs0)[0] < -epsilon))
+# diff_obs_vec.append(next_diff_obs.clone())
 # plt.imshow((255*(next_diff_obs-diff_obs_vec[0])).transpose(0,2).cpu().numpy())
 # # plt.savefig("test.png")
 # plt.show()
-print((next_diff_obs-diff_obs).sum())
-int_reward = 1*((next_diff_obs-diff_obs).sum() > epsilon_NN)
-print("int reward: {}".format(int_reward) )
-diff_obs = next_diff_obs
+# print((next_diff_obs-diff_obs).sum())
+# int_reward = 1*((next_diff_obs-diff_obs).sum() > epsilon_NN)
+# print("int reward: {}".format(int_reward) )
+# diff_obs = next_diff_obs
 
-action = np.array([1])
+action = np.array([5])
 obs, reward, done, infos = envs.step(action)
-obs_sum += obs
-n_steps +=1
-plt.imshow(obs[0].transpose(0,2).cpu().numpy())
+# obs_sum += obs
+# n_steps +=1
+# plt.imshow(((obs[0][1,:,:] != 1.0)*obs[0]).transpose(0,2).transpose(0,1).cpu().numpy())
+plt.imshow(obs[0].transpose(0,2).transpose(0,1).cpu().numpy())
 plt.show()
-init = int(max(0,n_steps-5))
-next_diff_obs = 1*(((obs_sum/n_steps-obs0)[0] > epsilon) + ((obs_sum/n_steps-obs0)[0] < -epsilon))
-diff_obs_vec.append(next_diff_obs.clone())
+norm2_dis = (obs_stack - obs).reshape(2,-1).pow(2).sum(1)
+int_reward = norm2_dis.min()
+print('inr reward: {}'.format(int_reward))
+obs_stack = torch.cat((obs_stack,obs.clone()),0)
+# init = int(max(0,n_steps-5))
+# next_diff_obs = 1*(((obs_sum/n_steps-obs0)[0] > epsilon) + ((obs_sum/n_steps-obs0)[0] < -epsilon))
+# diff_obs_vec.append(next_diff_obs.clone())
 # plt.imshow((255*(next_diff_obs-diff_obs_vec[0])).transpose(0,2).cpu().numpy())
 # # plt.savefig("test.png")
 # plt.show()
-print((next_diff_obs-diff_obs).sum())
-int_reward = 1*((next_diff_obs-diff_obs).sum() > epsilon_NN)
-print("int reward: {}".format(int_reward) )
-diff_obs = next_diff_obs
+# print((next_diff_obs-diff_obs).sum())
+# int_reward = 1*((next_diff_obs-diff_obs).sum() > epsilon_NN)
+# print("int reward: {}".format(int_reward) )
+# diff_obs = next_diff_obs
 
 
-action = np.array([7])
+action = np.array([5])
 obs, reward, done, infos = envs.step(action)
-obs_sum += obs
-n_steps +=1
-# plt.imshow(obs[0].transpose(0,2).cpu().numpy())
+# obs_sum += obs
+# n_steps +=1
+# plt.imshow(((obs[0][1,:,:] != 1.0)*obs[0]).transpose(0,2).transpose(0,1).cpu().numpy())
+plt.imshow(obs[0].transpose(0,2).transpose(0,1).cpu().numpy())
+plt.show()
+norm2_dis = (obs_stack - obs).reshape(2,-1).pow(2).sum(1)
+int_reward = norm2_dis.min()
+print('inr reward: {}'.format(int_reward))
+obs_stack = torch.cat((obs_stack,obs.clone()),0)
+# init = int(max(0,n_steps-5))
+# next_diff_obs = 1*(((obs_sum/n_steps-obs0)[0] > epsilon) + ((obs_sum/n_steps-obs0)[0] < -epsilon))
+# diff_obs_vec.append(next_diff_obs.clone())
+# plt.imshow((255*(next_diff_obs-diff_obs_vec[0])).transpose(0,2).cpu().numpy())
+# plt.savefig("test.png")
 # plt.show()
-init = int(max(0,n_steps-5))
-next_diff_obs = 1*(((obs_sum/n_steps-obs0)[0] > epsilon) + ((obs_sum/n_steps-obs0)[0] < -epsilon))
-diff_obs_vec.append(next_diff_obs.clone())
-plt.imshow((255*(next_diff_obs-diff_obs_vec[0])).transpose(0,2).cpu().numpy())
-# plt.savefig("test.png")
-plt.show()
-print((next_diff_obs-diff_obs).sum())
-int_reward = 1*((next_diff_obs-diff_obs).sum() > epsilon_NN)
-print("int reward: {}".format(int_reward) )
-diff_obs = next_diff_obs
+# print((next_diff_obs-diff_obs).sum())
+# int_reward = 1*((next_diff_obs-diff_obs).sum() > epsilon_NN)
+# print("int reward: {}".format(int_reward) )
+# diff_obs = next_diff_obs
 
-action = np.array([7])
+action = np.array([5])
 obs, reward, done, infos = envs.step(action)
-obs_sum += obs
-n_steps +=1
-# plt.imshow(obs[0].transpose(0,2).cpu().numpy())
+# obs_sum += obs
+# n_steps +=1
+# plt.imshow(((obs[0][1,:,:] != 1.0)*obs[0]).transpose(0,2).transpose(0,1).cpu().numpy())
+plt.imshow(obs[0].transpose(0,2).transpose(0,1).cpu().numpy())
+plt.show()
+norm2_dis = (obs_stack - obs).reshape(2,-1).pow(2).sum(1)
+int_reward = norm2_dis.min()
+print('inr reward: {}'.format(int_reward))
+obs_stack = torch.cat((obs_stack,obs.clone()),0)
+# init = int(max(0,n_steps-5))
+# next_diff_obs = 1*(((obs_sum/n_steps-obs0)[0] > epsilon) + ((obs_sum/n_steps-obs0)[0] < -epsilon))
+# diff_obs_vec.append(next_diff_obs.clone())
+# plt.imshow((255*(next_diff_obs-diff_obs_vec[0])).transpose(0,2).cpu().numpy())
+# plt.savefig("test.png")
 # plt.show()
-init = int(max(0,n_steps-5))
-next_diff_obs = 1*(((obs_sum/n_steps-obs0)[0] > epsilon) + ((obs_sum/n_steps-obs0)[0] < -epsilon))
-diff_obs_vec.append(next_diff_obs.clone())
-plt.imshow((255*(next_diff_obs-diff_obs_vec[0])).transpose(0,2).cpu().numpy())
-# plt.savefig("test.png")
-plt.show()
-print((next_diff_obs-diff_obs).sum())
-int_reward = 1*((next_diff_obs-diff_obs).sum() > epsilon_NN)
-print("int reward: {}".format(int_reward) )
-diff_obs = next_diff_obs
+# print((next_diff_obs-diff_obs).sum())
+# int_reward = 1*((next_diff_obs-diff_obs).sum() > epsilon_NN)
+# print("int reward: {}".format(int_reward) )
+# diff_obs = next_diff_obs
 
-action = np.array([1])
+action = np.array([5])
 obs, reward, done, infos = envs.step(action)
-obs_sum += obs
-n_steps +=1
-# plt.imshow(obs[0].transpose(0,2).cpu().numpy())
+# obs_sum += obs
+# n_steps +=1
+# plt.imshow(((obs[0][1,:,:] != 1.0)*obs[0]).transpose(0,2).transpose(0,1).cpu().numpy())
+plt.imshow(obs[0].transpose(0,2).transpose(0,1).cpu().numpy())
+plt.show()
+norm2_dis = (obs_stack - obs).reshape(2,-1).pow(2).sum(1)
+int_reward = norm2_dis.min()
+print('inr reward: {}'.format(int_reward))
+obs_stack = torch.cat((obs_stack,obs.clone()),0)
+# init = int(max(0,n_steps-5))
+# next_diff_obs = 1*(((obs_sum/n_steps-obs0)[0] > epsilon) + ((obs_sum/n_steps-obs0)[0] < -epsilon))
+# diff_obs_vec.append(next_diff_obs.clone())
+# plt.imshow((255*(next_diff_obs-diff_obs_vec[0])).transpose(0,2).cpu().numpy())
+# plt.savefig("test.png")
 # plt.show()
-init = int(max(0,n_steps-5))
-next_diff_obs = 1*(((obs_sum/n_steps-obs0)[0] > epsilon) + ((obs_sum/n_steps-obs0)[0] < -epsilon))
-diff_obs_vec.append(next_diff_obs.clone())
-plt.imshow((255*(next_diff_obs-diff_obs_vec[0])).transpose(0,2).cpu().numpy())
-# plt.savefig("test.png")
-plt.show()
-print((next_diff_obs-diff_obs).sum())
-int_reward = 1*((next_diff_obs-diff_obs).sum() > epsilon_NN)
-print("int reward: {}".format(int_reward) )
-diff_obs = next_diff_obs
+# print((next_diff_obs-diff_obs).sum())
+# int_reward = 1*((next_diff_obs-diff_obs).sum() > epsilon_NN)
+# print("int reward: {}".format(int_reward) )
+# diff_obs = next_diff_obs
 
-action = np.array([7])
+action = np.array([5])
 obs, reward, done, infos = envs.step(action)
-obs_sum += obs
-n_steps +=1
-# plt.imshow(obs[0].transpose(0,2).cpu().numpy())
-init = int(max(0,n_steps-5))
-next_diff_obs = 1*(((obs_sum/n_steps-obs0)[0] > epsilon) + ((obs_sum/n_steps-obs0)[0] < -epsilon))
-diff_obs_vec.append(next_diff_obs.clone())
-plt.imshow((255*(next_diff_obs-diff_obs_vec[0])).transpose(0,2).cpu().numpy())
-# plt.savefig("test.png")
+# obs_sum += obs
+# n_steps +=1
+# plt.imshow(((obs[0][1,:,:] != 1.0)*obs[0]).transpose(0,2).transpose(0,1).cpu().numpy())
+plt.imshow(obs[0].transpose(0,2).transpose(0,1).cpu().numpy())
 plt.show()
-print((next_diff_obs-diff_obs).sum())
-int_reward = 1*((next_diff_obs-diff_obs).sum() > epsilon_NN)
-print("int reward: {}".format(int_reward) )
-diff_obs = next_diff_obs
+norm2_dis = (obs_stack - obs).reshape(2,-1).pow(2).sum(1)
+int_reward = norm2_dis.min()
+print('inr reward: {}'.format(int_reward))
+obs_stack = torch.cat((obs_stack,obs.clone()),0)
+# init = int(max(0,n_steps-5))
+# next_diff_obs = 1*(((obs_sum/n_steps-obs0)[0] > epsilon) + ((obs_sum/n_steps-obs0)[0] < -epsilon))
+# diff_obs_vec.append(next_diff_obs.clone())
+# plt.imshow((255*(next_diff_obs-diff_obs_vec[0])).transpose(0,2).cpu().numpy())
+# # plt.savefig("test.png")
+# plt.show()
+# print((next_diff_obs-diff_obs).sum())
+# int_reward = 1*((next_diff_obs-diff_obs).sum() > epsilon_NN)
+# print("int reward: {}".format(int_reward) )
+# diff_obs = next_diff_obs
+
+action = np.array([5])
+obs, reward, done, infos = envs.step(action)
+# obs_sum += obs
+# n_steps +=1
+# plt.imshow(((obs[0][1,:,:] != 1.0)*obs[0]).transpose(0,2).transpose(0,1).cpu().numpy())
+plt.imshow(obs[0].transpose(0,2).transpose(0,1).cpu().numpy())
+plt.show()
+norm2_dis = (obs_stack - obs).reshape(2,-1).pow(2).sum(1)
+int_reward = norm2_dis.min()
+print('inr reward: {}'.format(int_reward))
+obs_stack = torch.cat((obs_stack,obs.clone()),0)
+
+action = np.array([5])
+obs, reward, done, infos = envs.step(action)
+# obs_sum += obs
+# n_steps +=1
+# plt.imshow(((obs[0][1,:,:] != 1.0)*obs[0]).transpose(0,2).transpose(0,1).cpu().numpy())
+plt.imshow(obs[0].transpose(0,2).transpose(0,1).cpu().numpy())
+plt.show()
+norm2_dis = (obs_stack - obs).reshape(2,-1).pow(2).sum(1)
+int_reward = norm2_dis.min()
+print('inr reward: {}'.format(int_reward))
+obs_stack = torch.cat((obs_stack,obs.clone()),0)
+
+action = np.array([5])
+obs, reward, done, infos = envs.step(action)
+# obs_sum += obs
+# n_steps +=1
+# plt.imshow(((obs[0][1,:,:] != 1.0)*obs[0]).transpose(0,2).transpose(0,1).cpu().numpy())
+plt.imshow(obs[0].transpose(0,2).transpose(0,1).cpu().numpy())
+plt.show()
+norm2_dis = (obs_stack - obs).reshape(2,-1).pow(2).sum(1)
+int_reward = norm2_dis.min()
+print('inr reward: {}'.format(int_reward))
+obs_stack = torch.cat((obs_stack,obs.clone()),0)
+
+action = np.array([5])
+obs, reward, done, infos = envs.step(action)
+# obs_sum += obs
+# n_steps +=1
+# plt.imshow(((obs[0][1,:,:] != 1.0)*obs[0]).transpose(0,2).transpose(0,1).cpu().numpy())
+plt.imshow(obs[0].transpose(0,2).transpose(0,1).cpu().numpy())
+plt.show()
+norm2_dis = (obs_stack - obs).reshape(2,-1).pow(2).sum(1)
+int_reward = norm2_dis.min()
+print('inr reward: {}'.format(int_reward))
+obs_stack = torch.cat((obs_stack,obs.clone()),0)
 
 action = np.array([5])
 obs, reward, done, infos = envs.step(action)

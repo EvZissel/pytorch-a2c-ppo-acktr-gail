@@ -140,7 +140,7 @@ def main():
 
             obs = envs.reset()
             obs_sum = obs
-            # # plot mazes
+            # plot mazes
             # plt.imshow(obs[0].transpose(0, 2).cpu().numpy())
             # plt.savefig("test.png")
             # plt.show()
