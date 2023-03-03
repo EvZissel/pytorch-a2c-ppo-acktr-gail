@@ -27,9 +27,9 @@ EVAL_ENVS = ['train_eval','test_eval']
 # num_processes = 600
 env_name = "jumper"
 start_level = 0
-num_level = 1
+num_level = 10
 distribution_mode = "easy"
-seed = 0
+seed = 1
 normalize_rew = False
 no_normalize = True
 # n_steps = 1
@@ -43,7 +43,10 @@ class VideoRecorderprocess(VideoRecorderWrapper):
     def _process_frame(self, frame: np.ndarray) -> np.ndarray:
         obs = frame
         # indexes = np.stack([(obs[:, :, 2] == 255), (obs[:, :, 2] == 255), (obs[:, :, 2] == 255)], axis=2)
-        # obs = (obs * (1 - indexes)).astype(np.uint8)
+        indexes = (obs[:, :, 0] == 63)*(obs[:, :, 1] == 255)*(obs[:, :, 2] == 63)
+        obs[:, :, 0] = (obs[:, :, 0] * (1 - indexes))
+        obs[:, :, 1] = (obs[:, :, 1] * (1 - indexes))
+        obs[:, :, 2] = (obs[:, :, 2] * (1 - indexes))
         # # obs[50:55,43:47,0] = 127
         # # obs[50:55,43:47,1] = 127
         # # obs[50:55,43:47,2] = 255
@@ -53,19 +56,19 @@ class VideoRecorderprocess(VideoRecorderWrapper):
         # obs[9:13, 9:14, 0] = 127
         # obs[9:13, 9:14, 1] = 127
         # obs[9:13, 9:14, 2] = 255
-        obs = obs.astype(np.uint8)
-        r = obs[:, :, 0]
-        g = obs[:, :, 1]
-        b = obs[:, :, 2]
-        res_obs = np.zeros_like(obs)
-        res_obs[:, :, 0] = 0.2989 * r + 0.5870 * g + 0.1140 * b
-        res_obs[:, :, 1] = 0.2989 * r + 0.5870 * g + 0.1140 * b
-        res_obs[:, :, 2] = 0.2989 * r + 0.5870 * g + 0.1140 * b
+        # obs = obs.astype(np.uint8)
+        # r = obs[:, :, 0]
+        # g = obs[:, :, 1]
+        # b = obs[:, :, 2]
+        # res_obs = np.zeros_like(obs)
+        # res_obs[:, :, 0] = 0.2989 * r + 0.5870 * g + 0.1140 * b
+        # res_obs[:, :, 1] = 0.2989 * r + 0.5870 * g + 0.1140 * b
+        # res_obs[:, :, 2] = 0.2989 * r + 0.5870 * g + 0.1140 * b
 
-        return res_obs
+        return obs
 
 # test_start_level = 201 #bi maze
-test_start_level = 888
+test_start_level = 3
 # test_env  = ProcgenConatEnvs(env_name=env_name,
 #                              num_envs=num_level,
 #                              start_level=test_start_level,
@@ -87,12 +90,25 @@ test_env = ProcgenGym3Env(num=1,
                           num_levels=num_level,
                           distribution_mode=distribution_mode,
                           render_mode="rgb_array",
-                          use_generated_assets=True,
+                          use_generated_assets=False,
+                          center_agent=True,
                           use_backgrounds=False,
                           restrict_themes=True,
-                          use_monochrome_assets=True)
+                          use_monochrome_assets=True,
+                          rand_seed=seed)
 
-
+test_env2 = ProcgenGym3Env(num=1,
+                          env_name=env_name,
+                          start_level=test_start_level,
+                          num_levels=num_level,
+                          distribution_mode=distribution_mode,
+                          render_mode="rgb_array",
+                          use_generated_assets=False,
+                          center_agent=False,
+                          use_backgrounds=False,
+                          restrict_themes=True,
+                          use_monochrome_assets=True,
+                          rand_seed=seed)
 # test_env = ProcgenGym3Env(num=1,
 #                           env_name=env_name,
 #                           center_agent=False,
@@ -107,7 +123,7 @@ test_env = ProcgenGym3Env(num=1,
 #                           render_mode="rgb_array"
 #                           )
 
-test_env = VideoRecorderWrapper(env=test_env, directory="./videos", info_key="rgb", prefix=str(test_start_level), fps=5, render=True)
+test_env = VideoRecorderprocess(env=test_env, directory="./videos", info_key="rgb", prefix=str(test_start_level), fps=5, render=True)
 
 actor_critic_maxEnt = Policy(
     (3,64,64),
@@ -120,7 +136,7 @@ actor_critic1 = Policy(
     (3,64,64),
     spaces.Discrete(15),
     base=ImpalaModel,
-    base_kwargs={'recurrent': False ,'hidden_size': 256})
+    base_kwargs={'recurrent': True ,'hidden_size': 256})
 actor_critic1.to(device)
 
 actor_critic2 = Policy(
@@ -202,7 +218,7 @@ actor_critic4.to(device)
 #     weight_decay=0)
 
 # Load previous model
-saved_epoch = 1525
+saved_epoch = 3050
 
 # # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_58967_num_env_200_entro_0.01_gama_0.5_05-02-2023_22-24-49_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_58967_num_env_200_entro_0.01_gama_0.5_05-02-2023_18-15-27_original"
@@ -220,7 +236,7 @@ if (saved_epoch > 0) and save_dir != "":
 
 saved_epoch = 1525
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_0_num_env_200_entro_0.01_gama_0.999_24-01-2023_18-15-01_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_3569_num_env_200_entro_0.01_gama_0.999_20-02-2023_18-06-19_noRNN"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_3569_num_env_200_entro_0.01_gama_0.999_28-02-2023_17-39-09"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
@@ -292,24 +308,44 @@ if (saved_epoch > 0) and save_dir != "":
 # obs = test_env.reset()
 
 eval_recurrent_hidden_states = torch.zeros(
-    num_level, actor_critic_maxEnt.recurrent_hidden_state_size, device=device)
-eval_masks = torch.zeros(num_level, 1, device=device)
+    1, actor_critic_maxEnt.recurrent_hidden_state_size, device=device)
+eval_masks = torch.zeros(1, 1, device=device)
 
-eval_attn_masks  = torch.zeros(num_level, actor_critic_maxEnt.attention_size, device=device)
-eval_attn_masks1 = torch.zeros(num_level, 16, device=device)
-eval_attn_masks2 = torch.zeros(num_level, 32, device=device)
-eval_attn_masks3 = torch.zeros(num_level, 32, device=device)
+eval_attn_masks  = torch.zeros(1, actor_critic_maxEnt.attention_size, device=device)
+eval_attn_masks1 = torch.zeros(1, 16, device=device)
+eval_attn_masks2 = torch.zeros(1, 32, device=device)
+eval_attn_masks3 = torch.zeros(1, 32, device=device)
 
+down_sample_avg = nn.AvgPool2d(3, stride=3)
 actor_critic_maxEnt.eval()
 # actor_critic1.eval()
 # actor_critic2.eval()
 # actor_critic3.eval()
 # actor_critic4.eval()
 rew, obs, first = test_env.observe()
+# states = test_env.callmethod("get_state")
+# test_env2.callmethod("set_state", states)
+rew2, obs2, first2 = test_env2.observe()
 
-obs = obs['rgb']
-obs = torch.FloatTensor(obs.transpose(0, 3, 1, 2) / 255)
-obs_sum = obs
+
+
+obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs2 = obs2['rgb'].transpose(0, 3, 1, 2)
+# obs0 = obs2[0]
+# indexes = (obs0[0, :, :] == 63) * (obs0[1, :, :] == 255) * (obs0[2, :, :] == 63)
+# obs0[0, :, :]  = (obs0[0, :, :] * (~indexes))
+# obs0[1, :, :]  = (obs0[1, :, :] * (~indexes))
+# obs0[2, :, :]  = (obs0[2, :, :] * (~indexes))
+obs2 = torch.tensor(obs2)
+myobj = plt.imshow(obs2[0].transpose(0, 2).transpose(0, 1))
+plt.show()
+
+obs = torch.FloatTensor(obs / 255)
+obs2 = torch.FloatTensor(obs2 / 255)
+# obs = torch.FloatTensor(obs.transpose(0, 3, 1, 2) / 255)
+obs2 = down_sample_avg(obs2)
+obs_sum = obs2[0][0]
+Oracle = (obs_sum == 0).sum()
 obs_stack = obs.clone()
 # Change reward location
 # obs = obs['rgb']
@@ -329,10 +365,10 @@ obs_stack = obs.clone()
 # obs = np.expand_dims(obs, axis=0).transpose(0, 3, 1, 2) / 255.0
 # hidden_state = np.zeros((1, 1))
 # hidden_state = torch.FloatTensor(hidden_state).to(device=device)
+
+
 done = np.zeros(1)
 step = 0
-# myobj = plt.imshow(obs[0].transpose(1, 2, 0))
-# plt.show()
 iter = 0
 beta = 0.5
 moving_average_prob1 = 0
@@ -343,6 +379,7 @@ max_ent_step = 0
 ent_step_count = 0
 ent_last_step_count = 0
 novel = True
+int_reward_sum = 0
 
 # m = FixedCategorical(torch.tensor([ 0.55, 0.25, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.0125, 0.0125, 0.0125, 0.0125]))
 m = FixedCategorical(torch.tensor([ 0.55, 0.25, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025]))
@@ -350,7 +387,8 @@ m = FixedCategorical(torch.tensor([ 0.55, 0.25, 0.025, 0.025, 0.025, 0.025, 0.02
 # m = m = FixedCategorical(torch.tensor([ 0.55, 0.25, 0.045, 0.025, 0.025, 0.025, 0.015, 0.015, 0.0125, 0.0125, 0.0125, 0.0125]))
 rand_policy = FixedCategorical(torch.tensor([ 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 1-14*0.067]))
 maxEnt_steps = 0
-while not done[0] and iter<1000:
+# while not done[0] and iter<1000:
+while iter<1500:
     iter +=1
     with torch.no_grad():
         # obs = torch.FloatTensor(obs).to(device=device)
@@ -359,10 +397,7 @@ while not done[0] and iter<1000:
         # dist, value, hidden_state = policy(obs, hidden_state, mask)
         # act = dist.sample()
         # log_prob_act = dist.log_prob(act)
-        # plt.imshow(obs[0].transpose(1, 2, 0))
-        # plt.show()
-
-        # myobj.set_data(obs[0].transpose(1, 2, 0))
+        # plt.imshow(u.transpose(1, 2, 0))
         # plt.show()
 
 
@@ -655,7 +690,8 @@ while not done[0] and iter<1000:
 
     # if iter < 100:
     #     action = pure_action1
-    test_env.act(action_maxEnt[0].cpu().numpy())
+    test_env.act(action1[0].cpu().numpy())
+    test_env2.act(action1[0].cpu().numpy())
     # steps_remaining -= 1
 
 
@@ -669,28 +705,52 @@ while not done[0] and iter<1000:
     done[0] = first
     step += 1
 
-    obs = obs['rgb']
-    obs = torch.FloatTensor(obs.transpose(0, 3, 1, 2) / 255)
-    norm2_dis = (obs_stack - obs).reshape(obs_stack.size(0),-1).pow(2).sum(1)
-    int_reward = norm2_dis.min()
-    print('inr reward: {}'.format(int_reward))
-    obs_stack = torch.cat((obs_stack, obs.clone()), 0)
+    # states = test_env.callmethod("get_state")
+    # test_env2.callmethod("set_state", states)
+    rew2, obs2, first2 = test_env2.observe()
+
+    obs = obs['rgb'].transpose(0, 3, 1, 2)
+    obs2 = obs2['rgb'].transpose(0, 3, 1, 2)
+
+    # obs0 = obs2[0]
+    # indexes = (obs0[0, :, :] == 63) * (obs0[1, :, :] == 255) * (obs0[2, :, :] == 63)
+    # obs0[0, :, :] = (obs0[0, :, :] * (~indexes))
+    # obs0[1, :, :] = (obs0[1, :, :] * (~indexes))
+    # obs0[2, :, :] = (obs0[2, :, :] * (~indexes))
+    obs2 = torch.tensor(obs2)
+    myobj = plt.imshow(obs2[0].transpose(0, 2).transpose(0, 1))
+    plt.show()
+
+    obs = torch.FloatTensor(obs / 255)
+    obs2 = torch.FloatTensor(obs2 / 255)
+    obs2 = down_sample_avg(obs2)
+
+    # norm2_dis = (obs_stack - obs).reshape(obs_stack.size(0),-1).pow(2).sum(1)
+    # int_reward = 1 * (norm2_dis.min() > 100)
+    # print('int reward: {}'.format(int_reward))
+    # obs_stack = torch.cat((obs_stack, obs.clone()), 0)
+    # int_reward_sum += int_reward
+    # if iter == 256:
+    #     obs_stack = obs.clone()
 
 
-    next_obs_sum = obs_sum + obs
+
+    next_obs_sum = obs_sum + obs2[0][0]
     num_zero_obs_sum = (obs_sum == 0).sum()
     num_zero_next_obs_sum = (next_obs_sum == 0).sum()
-    if num_zero_next_obs_sum < num_zero_obs_sum:
+    if num_zero_obs_sum - num_zero_next_obs_sum > 0:
         novel = True
+        obs_sum = obs_sum + obs2[0][0]
     else:
         novel = False
+    int_reward_sum +=  num_zero_obs_sum - num_zero_next_obs_sum
 
-    obs_sum = obs_sum + obs
 
 
 
     # print(f"step {step} reward {rew} first {first}")
-    print(f"step {step} reward {rew} first {first} action {action} if action1 {(action4 == action1 == action2 == action3)} novel {novel}")
+    print(f"step {step} reward {rew} first {first} action {action} if action1 {(action4 == action1 == action2 == action3)} novel {novel} int_reward_sum {int_reward_sum}")
+    print("debug")
     # print(f" prob1 {prob_pure_action1} prob2 {prob_pure_action2} prob3 {prob_pure_action3} prob4 {prob_pure_action4}")
 
     # # Change reward location

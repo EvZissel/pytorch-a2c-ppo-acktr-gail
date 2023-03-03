@@ -2,7 +2,7 @@
 from a2c_ppo_acktr.procgen_wrappers import *
 # from a2c_ppo_acktr.envs import make_vec_envs, make_ProcgenEnvs
 import matplotlib.pyplot as plt
-from procgen import ProcgenEnv
+from procgen import ProcgenEnv, ProcgenGym3Env
 # from a2c_ppo_acktr.envs import make_ProcgenEnvs
 from a2c_ppo_acktr.const_env import ProcgenConatEnvs
 import random
@@ -30,6 +30,81 @@ no_normalize = False
 n_steps = 1
 
 device = torch.device("cuda:{}".format(0))
+
+test_env = ProcgenGym3Env(num=1,
+                          env_name=env_name,
+                          start_level=start_level,
+                          num_levels=num_level,
+                          distribution_mode=distribution_mode,
+                          render_mode="rgb_array",
+                          use_generated_assets=False,
+                          center_agent=True,
+                          use_backgrounds=True,
+                          restrict_themes=False,
+                          use_monochrome_assets=False)
+
+test_env2 = ProcgenGym3Env(num=1,
+                          env_name=env_name,
+                          start_level=start_level,
+                          num_levels=num_level,
+                          distribution_mode=distribution_mode,
+                          render_mode="rgb_array",
+                          use_generated_assets=False,
+                          center_agent=False,
+                          use_backgrounds=True,
+                          restrict_themes=False,
+                          use_monochrome_assets=False)
+
+
+rew, obs, first = test_env.observe()
+obs = obs['rgb'].transpose(0, 3, 1, 2)
+
+obs = torch.tensor(obs)
+myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1))
+plt.show()
+myobj = plt.imshow(test_env.get_info()[0]['rgb'])
+plt.show()
+
+action = np.array([7])
+test_env.act(action)
+
+rew, obs, first = test_env.observe()
+obs = obs['rgb'].transpose(0, 3, 1, 2)
+
+obs = torch.tensor(obs)
+myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1))
+plt.show()
+myobj = plt.imshow(test_env.get_info()[0]['rgb'])
+plt.show()
+
+print('stop')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 eval_envs_dic = {}
   # eval_envs_dic['train_eval'] = ProcgenConatEnvs(env_name=env_name,

@@ -112,65 +112,66 @@ def main():
     #                   mask_all=args.mask_all,
     #                   device=device)
 
-    # #compute maximun reward per seed
-    # max_reward_seeds = {
-    #     'train_eval': [],
-    #     'test_eval': []
-    # }
-    #
-    # test_start_level = args.start_level + args.num_level + 1
-    # start_train_test = {
-    #     'train_eval': args.start_level,
-    #     'test_eval': test_start_level
-    # }
-    #
-    # for eval_disp_name in EVAL_ENVS:
-    #     for i in range(args.num_test_level):
-    #         envs = make_ProcgenEnvs(num_envs=1,
-    #                                 env_name=args.env_name,
-    #                                 start_level=start_train_test[eval_disp_name] + i,
-    #                                 num_levels=1,
-    #                                 distribution_mode=args.distribution_mode,
-    #                                 use_generated_assets=args.use_generated_assets,
-    #                                 use_backgrounds=args.use_backgrounds,
-    #                                 restrict_themes=args.restrict_themes,
-    #                                 use_monochrome_assets=args.use_monochrome_assets,
-    #                                 center_agent=False,
-    #                                 rand_seed=args.seed,
-    #                                 mask_size=args.mask_size,
-    #                                 normalize_rew=args.normalize_rew,
-    #                                 mask_all=args.mask_all)
-    #
-    #         obs = envs.reset()
-    #         obs_sum = obs
-    #         # plot mazes
-    #         # plt.imshow(obs[0].transpose(0, 2).cpu().numpy())
-    #         # plt.savefig("test.png")
-    #         # plt.show()
-    #
-    #         action = torch.full((1, 1), 5)
-    #         done = torch.full((1, 1), 0)
-    #         reward = 0
-    #
-    #         while not done[0]:
-    #             with torch.no_grad():
-    #
-    #                 action = maxEnt_oracle(obs, action)
-    #
-    #                 obs, _, done, infos = envs.step(action[0].cpu().numpy())
-    #                 # print(action[0])
-    #                 # plt.imshow(obs[0].transpose(0,2).cpu().numpy())
-    #                 # plt.show()
-    #
-    #                 next_obs_sum = obs_sum + obs
-    #                 num_zero_obs_sum = (obs_sum[0] == 0).sum()
-    #                 num_zero_next_obs_sum = (next_obs_sum[0] == 0).sum()
-    #                 if num_zero_next_obs_sum < num_zero_obs_sum:
-    #                     reward += 1
-    #
-    #                 obs_sum = next_obs_sum
-    #
-    #         max_reward_seeds[eval_disp_name].append(reward)
+    #compute maximun reward per seed
+
+    max_reward_seeds = {
+        'train_eval': [],
+        'test_eval': []
+    }
+
+    test_start_level = args.start_level + args.num_level + 1
+    start_train_test = {
+        'train_eval': args.start_level,
+        'test_eval': test_start_level
+    }
+
+    for eval_disp_name in EVAL_ENVS:
+        for i in range(args.num_test_level):
+            envs = make_ProcgenEnvs(num_envs=1,
+                                    env_name=args.env_name,
+                                    start_level=start_train_test[eval_disp_name] + i,
+                                    num_levels=1,
+                                    distribution_mode=args.distribution_mode,
+                                    use_generated_assets=args.use_generated_assets,
+                                    use_backgrounds=args.use_backgrounds,
+                                    restrict_themes=args.restrict_themes,
+                                    use_monochrome_assets=args.use_monochrome_assets,
+                                    center_agent=False,
+                                    rand_seed=args.seed,
+                                    mask_size=args.mask_size,
+                                    normalize_rew=args.normalize_rew,
+                                    mask_all=args.mask_all)
+
+            obs = envs.reset()
+            # obs_sum = obs
+            # plot mazes
+            # plt.imshow(obs[0].transpose(0, 2).cpu().numpy())
+            # plt.savefig("test.png")
+            # plt.show()
+
+            # action = torch.full((1, 1), 5)
+            # done = torch.full((1, 1), 0)
+            reward = (obs[0][0] == 0).sum()
+            #
+            # while not done[0]:
+            #     with torch.no_grad():
+            #
+            #         action = maxEnt_oracle(obs, action)
+            #
+            #         obs, _, done, infos = envs.step(action[0].cpu().numpy())
+            #         # print(action[0])
+            #         # plt.imshow(obs[0].transpose(0,2).cpu().numpy())
+            #         # plt.show()
+            #
+            #         next_obs_sum = obs_sum + obs
+            #         num_zero_obs_sum = (obs_sum[0] == 0).sum()
+            #         num_zero_next_obs_sum = (next_obs_sum[0] == 0).sum()
+            #         if num_zero_next_obs_sum < num_zero_obs_sum:
+            #             reward += 1
+            #
+            #         obs_sum = next_obs_sum
+
+            max_reward_seeds[eval_disp_name].append(reward)
 
 
     envs = make_ProcgenEnvs(num_envs=args.num_processes,
@@ -183,6 +184,7 @@ def main():
                             restrict_themes=args.restrict_themes,
                             use_monochrome_assets=args.use_monochrome_assets,
                             rand_seed=args.seed,
+                            center_agent=True,
                             mask_size=args.mask_size,
                             normalize_rew=args.normalize_rew,
                             mask_all=args.mask_all,
@@ -199,22 +201,23 @@ def main():
                                                    restrict_themes=args.restrict_themes,
                                                    use_monochrome_assets=args.use_monochrome_assets,
                                                    rand_seed=args.seed,
+                                                   center_agent=True,
                                                    mask_size=args.mask_size,
                                                    normalize_rew= args.normalize_rew,
                                                    mask_all=args.mask_all,
                                                    device=device)
 
-    test_start_level = args.start_level + args.num_level + 1
     eval_envs_dic['test_eval'] = make_ProcgenEnvs(num_envs=args.num_processes,
                                                   env_name=args.env_name,
                                                   start_level=test_start_level,
-                                                  num_levels=0,
+                                                  num_levels=args.num_test_level,
                                                   distribution_mode=args.distribution_mode,
                                                   use_generated_assets=args.use_generated_assets,
                                                   use_backgrounds=args.use_backgrounds,
                                                   restrict_themes=args.restrict_themes,
                                                   use_monochrome_assets=args.use_monochrome_assets,
                                                   rand_seed=args.seed,
+                                                  center_agent=True,
                                                   mask_size=args.mask_size,
                                                   normalize_rew=args.normalize_rew,
                                                   mask_all=args.mask_all,
@@ -223,13 +226,14 @@ def main():
     eval_envs_dic_nondet['test_eval_nondet'] =  make_ProcgenEnvs(num_envs=args.num_processes,
                                                      env_name=args.env_name,
                                                      start_level=test_start_level,
-                                                     num_levels=0,
+                                                     num_levels=args.num_test_level,
                                                      distribution_mode=args.distribution_mode,
                                                      use_generated_assets=args.use_generated_assets,
                                                      use_backgrounds=args.use_backgrounds,
                                                      restrict_themes=args.restrict_themes,
                                                      use_monochrome_assets=args.use_monochrome_assets,
                                                      rand_seed=args.seed,
+                                                     center_agent=True,
                                                      mask_size=args.mask_size,
                                                      normalize_rew=args.normalize_rew,
                                                      mask_all=args.mask_all,

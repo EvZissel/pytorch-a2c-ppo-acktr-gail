@@ -133,6 +133,7 @@ def make_ProcgenEnvs(num_envs,
                      restrict_themes,
                      use_monochrome_assets,
                      rand_seed,
+                     center_agent,
                      use_sequential_levels=False,
                      mask_size=0,
                      normalize_rew=False,
@@ -149,6 +150,7 @@ def make_ProcgenEnvs(num_envs,
                       restrict_themes=restrict_themes,
                       use_monochrome_assets=use_monochrome_assets,
                       rand_seed=rand_seed,
+                      center_agent=center_agent,
                       use_sequential_levels=use_sequential_levels)
 
     envs = VecExtractDictObs(envs, "rgb")

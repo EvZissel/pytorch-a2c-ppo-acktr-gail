@@ -510,6 +510,11 @@ def get_args():
         type=int,
         default=256,
         help='reset int reward count (default: 256)')
+    parser.add_argument(
+        '--center_agent',
+        action='store_true',
+        default=False,
+        help='if agent is centered')
 
 
     args = parser.parse_args()

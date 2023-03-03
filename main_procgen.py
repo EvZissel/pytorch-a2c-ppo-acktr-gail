@@ -109,6 +109,7 @@ def main():
                       restrict_themes=args.restrict_themes,
                       use_monochrome_assets=args.use_monochrome_assets,
                       rand_seed=args.seed,
+                      center_agent=args.center_agent,
                       mask_size=args.mask_size,
                       normalize_rew=args.normalize_rew,
                       mask_all=args.mask_all,
@@ -126,6 +127,7 @@ def main():
                                                       restrict_themes=args.restrict_themes,
                                                       use_monochrome_assets=args.use_monochrome_assets,
                                                       rand_seed=args.seed,
+                                                      center_agent=args.center_agent,
                                                       mask_size=args.mask_size,
                                                       normalize_rew= args.normalize_rew,
                                                       mask_all=args.mask_all,
@@ -142,6 +144,7 @@ def main():
                                                      restrict_themes=args.restrict_themes,
                                                      use_monochrome_assets=args.use_monochrome_assets,
                                                      rand_seed=args.seed,
+                                                     center_agent=args.center_agent,
                                                      mask_size=args.mask_size,
                                                      normalize_rew=args.normalize_rew,
                                                      mask_all=args.mask_all,
@@ -158,6 +161,7 @@ def main():
                                                      restrict_themes=args.restrict_themes,
                                                      use_monochrome_assets=args.use_monochrome_assets,
                                                      rand_seed=args.seed,
+                                                     center_agent=args.center_agent,
                                                      mask_size=args.mask_size,
                                                      normalize_rew=args.normalize_rew,
                                                      mask_all=args.mask_all,
@@ -330,7 +334,7 @@ def main():
                 [[0.0] if 'bad_transition' in info.keys() else [1.0]
                  for info in infos])
             rollouts.insert(obs, recurrent_hidden_states, action,
-                            action_log_prob, value, torch.from_numpy(reward).unsqueeze(1), masks, bad_masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, infos, obs)
+                            action_log_prob, value, torch.from_numpy(reward).unsqueeze(1), masks, bad_masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, infos)
 
         with torch.no_grad():
             next_value = actor_critic.get_value(
