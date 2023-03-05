@@ -508,8 +508,8 @@ def get_args():
     parser.add_argument(
         '--reset_cont',
         type=int,
-        default=256,
-        help='reset int reward count (default: 256)')
+        default=1000,
+        help='reset int reward count (default: 1000 max env steps)')
     parser.add_argument(
         '--center_agent',
         action='store_true',

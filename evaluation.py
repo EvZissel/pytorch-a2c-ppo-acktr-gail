@@ -5,6 +5,7 @@ from a2c_ppo_acktr import utils
 # from a2c_ppo_acktr.envs import make_vec_envs
 import matplotlib.pyplot as plt
 from a2c_ppo_acktr.distributions import FixedCategorical
+from torch import nn
 
 def evaluate(actor_critic, obs_rms, eval_envs_dic, env_name, seed, num_processes, num_tasks, eval_log_dir,
              device, **kwargs):
@@ -229,18 +230,18 @@ def evaluate_procgen_maxEnt(actor_critic, eval_envs_dic, env_name, num_processes
                     deterministic=deterministic,
                     reuse_masks=det_masks)
 
-            if deterministic:
-                dist_probs[:, 1] += dist_probs[:, 0]
-                dist_probs[:, 1] += dist_probs[:, 2]
-                dist_probs[:, 0] = 0
-                dist_probs[:, 2] = 0
-
-                dist_probs[:, 7] += dist_probs[:, 6]
-                dist_probs[:, 7] += dist_probs[:, 8]
-                dist_probs[:, 6] = 0
-                dist_probs[:, 8] = 0
-                pure_action = dist_probs.max(1)[1].unsqueeze(1)
-                action = pure_action
+            # if deterministic:
+            #     dist_probs[:, 1] += dist_probs[:, 0]
+            #     dist_probs[:, 1] += dist_probs[:, 2]
+            #     dist_probs[:, 0] = 0
+            #     dist_probs[:, 2] = 0
+            #
+            #     dist_probs[:, 7] += dist_probs[:, 6]
+            #     dist_probs[:, 7] += dist_probs[:, 8]
+            #     dist_probs[:, 6] = 0
+            #     dist_probs[:, 8] = 0
+            #     pure_action = dist_probs.max(1)[1].unsqueeze(1)
+            #     action = pure_action
 
             # Observe reward and next obs
             next_obs, reward, done, infos = eval_envs.step(action.squeeze().cpu().numpy())
@@ -1391,3 +1392,143 @@ def evaluate_procgen_maxEnt_L2(actor_critic, eval_envs_dic, env_name, num_proces
     #         num_zero_obs_end[i]= 1
 
     return rew_batch, int_rew_batch, done_batch, seed_batch
+
+
+def evaluate_procgen_maxEnt_avepool(actor_critic, eval_envs_dic, eval_envs_dic_full_obs, env_name, num_processes,
+                     device, steps, logger, kernel_size=3, stride=3, attention_features=False, det_masks=False, deterministic=True):
+
+    eval_envs = eval_envs_dic[env_name]
+    eval_envs_full_obs = eval_envs_dic_full_obs[env_name]
+    rew_batch = []
+    int_rew_batch = []
+    done_batch = []
+    seed_batch = []
+    down_sample_avg = nn.AvgPool2d(kernel_size, stride=stride)
+    # eval_episode_len = []
+    # eval_episode_len_buffer = []
+    # for _ in range(num_processes):
+    #     eval_episode_len_buffer.append(0)
+
+    # obs = eval_envs.reset()
+    # obs_sum = obs
+    # eval_recurrent_hidden_states = torch.zeros(
+    #     num_processes, actor_critic.recurrent_hidden_state_size, device=device)
+    # eval_masks = torch.ones(num_processes, 1, device=device)
+    if attention_features:
+        # eval_attn_masks = torch.zeros(num_processes, actor_critic.attention_size, device=device)
+        # eval_attn_masks1 = torch.zeros(num_processes, 16, device=device)
+        # eval_attn_masks2 = torch.zeros(num_processes, 32, device=device)
+        # eval_attn_masks3 = torch.zeros(num_processes, 32, device=device)
+
+        eval_attn_masks = (torch.sigmoid(actor_critic.base.linear_attention) > 0.5).float()
+        eval_attn_masks1 = (torch.sigmoid(actor_critic.base.block1.attention) > 0.5).float()
+        eval_attn_masks2 = (torch.sigmoid(actor_critic.base.block2.attention) > 0.5).float()
+        eval_attn_masks3 = (torch.sigmoid(actor_critic.base.block3.attention) > 0.5).float()
+    elif actor_critic.attention_size == 1:
+        eval_attn_masks = torch.zeros(num_processes, actor_critic.attention_size, device=device)
+        eval_attn_masks1 = torch.zeros(num_processes,  16 , device=device)
+        eval_attn_masks2 = torch.zeros(num_processes,  32 , device=device)
+        eval_attn_masks3 = torch.zeros(num_processes,  32 , device=device)
+
+    else:
+        eval_attn_masks = torch.zeros(num_processes, *actor_critic.attention_size, device=device)
+        eval_attn_masks1 = torch.zeros(num_processes,  16 , device=device)
+        eval_attn_masks2 = torch.zeros(num_processes,  32 , device=device)
+        eval_attn_masks3 = torch.zeros(num_processes,  32 , device=device)
+
+
+    # fig = plt.figure(figsize=(20, 20))
+    # columns = 5
+    # rows = 5
+    # for i in range(1, columns * rows + 1):
+    #     fig.add_subplot(rows, columns, i)
+    #     plt.imshow(obs[i].transpose())
+    # plt.show()
+
+    for t in range(steps):
+        with torch.no_grad():
+            _, action, _, dist_probs, eval_recurrent_hidden_states, _, _, _, _ = actor_critic.act(
+                    logger.obs[env_name].float().to(device),
+                    logger.eval_recurrent_hidden_states[env_name],
+                    logger.eval_masks[env_name],
+                    attn_masks=eval_attn_masks,
+                    attn_masks1=eval_attn_masks1,
+                    attn_masks2=eval_attn_masks2,
+                    attn_masks3=eval_attn_masks3,
+                    deterministic=deterministic,
+                    reuse_masks=det_masks)
+
+            # if deterministic:
+            #     dist_probs[:, 1] += dist_probs[:, 0]
+            #     dist_probs[:, 1] += dist_probs[:, 2]
+            #     dist_probs[:, 0] = 0
+            #     dist_probs[:, 2] = 0
+            #
+            #     dist_probs[:, 7] += dist_probs[:, 6]
+            #     dist_probs[:, 7] += dist_probs[:, 8]
+            #     dist_probs[:, 6] = 0
+            #     dist_probs[:, 8] = 0
+            #     pure_action = dist_probs.max(1)[1].unsqueeze(1)
+            #     action = pure_action
+
+            # Observe reward and next obs
+            next_obs, reward, done, infos = eval_envs.step(action.squeeze().cpu().numpy())
+            next_obs_full, _, _, _ = eval_envs_full_obs.step(action.squeeze().cpu().numpy())
+            if kernel_size==25:
+                next_obs_full = torch.zeros_like(logger.obs_sum[env_name])
+                next_obs_full_list = eval_envs_full_obs.env.get_info()
+                for i in range(len(done)):
+                    next_obs_full[i] = torch.tensor(next_obs_full_list[i]['rgb'] / 255).transpose(0, 2)
+
+            logger.eval_masks[env_name] = torch.tensor(
+                [[0.0] if done_ else [1.0] for done_ in done],
+                dtype=torch.float32,
+                device=device)
+            logger.eval_recurrent_hidden_states[env_name] = eval_recurrent_hidden_states
+
+            # if 'env_reward' in infos[0]:
+            #     rew_batch.append([info['env_reward'] for info in infos])
+            # else:
+            #     rew_batch.append(reward)
+            if t==0:
+                prev_seeds = np.zeros_like(reward)
+                for i in range(len(done)):
+                    prev_seeds[i] = infos[i]['prev_level_seed']
+                seed_batch.append(prev_seeds)
+
+            seeds = np.zeros_like(reward)
+            for i in range(len(done)):
+                seeds[i] = infos[i]['level_seed']
+                if done[i] == 1:
+                    logger.obs_sum[env_name][i] = next_obs_full[i].cpu()
+                    # logger.last_action[env_name][i] = torch.tensor([7])
+
+            int_reward = np.zeros_like(reward)
+            next_obs_sum = logger.obs_sum[env_name] + next_obs_full.cpu()
+            next_obs_sum_ds = down_sample_avg(next_obs_sum)
+            obs_sum_ds = down_sample_avg(logger.obs_sum[env_name])
+            for i in range(len(int_reward)):
+                num_zero_obs_sum = (obs_sum_ds[i][0] == 0).sum()
+                num_zero_next_obs_sum = (next_obs_sum_ds[i][0] == 0).sum()
+                int_reward[i] = num_zero_obs_sum - num_zero_next_obs_sum
+
+            rew_batch.append(reward)
+            int_rew_batch.append(int_reward)
+            done_batch.append(done)
+            seed_batch.append(seeds)
+
+            logger.obs[env_name] = next_obs
+            logger.obs_sum[env_name] = next_obs_sum
+            logger.last_action[env_name] = action
+
+    rew_batch = np.array(rew_batch)
+    int_rew_batch = np.array(int_rew_batch)
+    done_batch = np.array(done_batch)
+    seed_batch = np.array(seed_batch)
+    # num_zero_obs_end = np.zeros_like(reward)
+    # for i in range(len(reward)):
+    #     if (obs_sum[i][0] == 0).sum() == 0:
+    #         num_zero_obs_end[i]= 1
+
+    return rew_batch, int_rew_batch, done_batch, seed_batch
+

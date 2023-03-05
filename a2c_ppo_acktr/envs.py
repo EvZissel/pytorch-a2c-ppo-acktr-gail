@@ -138,7 +138,8 @@ def make_ProcgenEnvs(num_envs,
                      mask_size=0,
                      normalize_rew=False,
                      mask_all=False,
-                     device='cpu'):
+                     device='cpu',
+                     render_mode=None):
 
     envs = ProcgenEnv(num_envs=num_envs,
                       env_name=env_name,
@@ -151,7 +152,8 @@ def make_ProcgenEnvs(num_envs,
                       use_monochrome_assets=use_monochrome_assets,
                       rand_seed=rand_seed,
                       center_agent=center_agent,
-                      use_sequential_levels=use_sequential_levels)
+                      use_sequential_levels=use_sequential_levels,
+                      render_mode=render_mode)
 
     envs = VecExtractDictObs(envs, "rgb")
     if normalize_rew:

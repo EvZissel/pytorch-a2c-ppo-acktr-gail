@@ -6,7 +6,7 @@ import time
 import torch
 
 class Logger(object):
-    def __init__(self, n_envs, obs_shape, recurrent_hidden_state_size, device='cpu'):
+    def __init__(self, n_envs, obs_shape, obs_full_shape, recurrent_hidden_state_size, device='cpu'):
         self.start_time = time.time()
         self.n_envs = n_envs
 
@@ -35,8 +35,8 @@ class Logger(object):
             self.obs_vec['test_eval_nondet'].append([])
 
         self.obs['train_eval'] = torch.zeros(self.n_envs, *obs_shape)
-        self.obs_sum['train_eval'] = torch.zeros(self.n_envs, *obs_shape)
-        self.obs0['train_eval'] = torch.zeros(self.n_envs, *obs_shape)
+        self.obs_sum['train_eval'] = torch.zeros(self.n_envs, *obs_full_shape)
+        self.obs0['train_eval'] = torch.zeros(self.n_envs, *obs_full_shape)
         self.env_steps['train_eval'] = torch.ones(self.n_envs, 1)
         self.eval_recurrent_hidden_states['train_eval'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
         self.eval_recurrent_hidden_states1['train_eval'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
@@ -46,8 +46,8 @@ class Logger(object):
         self.last_action['train_eval'] = torch.full([n_envs, 1], 7, device=device)
 
         self.obs['test_eval'] = torch.zeros(self.n_envs, *obs_shape)
-        self.obs_sum['test_eval'] = torch.zeros(self.n_envs, *obs_shape)
-        self.obs0['test_eval'] = torch.zeros(self.n_envs, *obs_shape)
+        self.obs_sum['test_eval'] = torch.zeros(self.n_envs, *obs_full_shape)
+        self.obs0['test_eval'] = torch.zeros(self.n_envs, *obs_full_shape)
         self.env_steps['test_eval'] = torch.ones(self.n_envs, 1)
         self.eval_recurrent_hidden_states['test_eval'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
         self.eval_recurrent_hidden_states1['test_eval'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
@@ -66,8 +66,8 @@ class Logger(object):
         # self.last_action['train_eval_nondet'] = torch.full([n_envs, 1], 7, device=device)
 
         self.obs['test_eval_nondet'] = torch.zeros(self.n_envs, *obs_shape)
-        self.obs_sum['test_eval_nondet'] = torch.zeros(self.n_envs, *obs_shape)
-        self.obs0['test_eval_nondet'] = torch.zeros(self.n_envs, *obs_shape)
+        self.obs_sum['test_eval_nondet'] = torch.zeros(self.n_envs, *obs_full_shape)
+        self.obs0['test_eval_nondet'] = torch.zeros(self.n_envs, *obs_full_shape)
         self.env_steps['test_eval_nondet'] = torch.ones(self.n_envs, 1)
         self.eval_recurrent_hidden_states['test_eval_nondet'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
         self.eval_recurrent_hidden_states1['test_eval_nondet'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
@@ -304,8 +304,12 @@ class Logger(object):
 
 
 class maxEnt_Logger(Logger):
-    def __init__(self, n_envs, max_reward_seeds, start_train_test, obs_shape, recurrent_hidden_state_size, device='cpu'):
-        super(maxEnt_Logger, self).__init__(n_envs, obs_shape, recurrent_hidden_state_size, device)
+    def __init__(self, n_envs, max_reward_seeds, start_train_test, obs_shape, obs_full_shape, recurrent_hidden_state_size, device='cpu'):
+        super(maxEnt_Logger, self).__init__(n_envs, obs_shape, obs_full_shape, recurrent_hidden_state_size, device)
+
+        self.obs_full = {}
+        self.obs_full['train_eval'] = torch.zeros(self.n_envs, *obs_full_shape)
+        self.obs_full['test_eval'] = torch.zeros(self.n_envs, *obs_full_shape)
 
         self.max_reward_seeds = max_reward_seeds
         self.start_train_test = start_train_test

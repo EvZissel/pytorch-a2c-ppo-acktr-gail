@@ -9,7 +9,7 @@ def _flatten_helper(T, N, _tensor):
 
 
 class RolloutStorage(object):
-    def __init__(self, num_steps, num_processes, obs_shape, action_space,
+    def __init__(self, num_steps, num_processes, obs_shape, obs_shape_full, action_space,
                  recurrent_hidden_state_size, att_size=0, attention_features=False, device="cpu"):
         self.obs = torch.zeros(num_steps + 1, num_processes, *obs_shape)
         self.recurrent_hidden_states = torch.zeros(
@@ -47,8 +47,9 @@ class RolloutStorage(object):
         self.step = 0
         self.num_processes = num_processes
         self.device = device
-        self.obs_sum = torch.zeros(num_processes, *obs_shape)
-        self.obs0 = torch.zeros(num_processes, *obs_shape)
+        self.obs_sum = torch.zeros(num_processes, *obs_shape_full)
+        self.obs0 = torch.zeros(num_processes, *obs_shape_full)
+        self.obs_full = torch.zeros(num_processes, *obs_shape_full)
         self.step_env = torch.ones(num_processes, 1)
 
     def to(self, device):
@@ -63,11 +64,12 @@ class RolloutStorage(object):
         self.masks = self.masks.to(device)
         self.bad_masks = self.bad_masks.to(device)
         self.obs_sum = self.obs_sum.to(device)
-        self.obs0 = self.obs_sum.to(device)
+        self.obs0 = self.obs0.to(device)
+        self.obs_full = self.obs_full.to(device)
         self.step_env = self.step_env.to(device)
 
     def insert(self, obs, recurrent_hidden_states, actions, action_log_probs,
-               value_preds, rewards, masks, bad_masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, info):
+               value_preds, rewards, masks, bad_masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, info, obs_full):
         self.obs[self.step + 1].copy_(obs)
         self.recurrent_hidden_states[self.step +
                                      1].copy_(recurrent_hidden_states)
@@ -84,7 +86,8 @@ class RolloutStorage(object):
         self.attn_masks2[self.step + 1].copy_(attn_masks2)
         self.attn_masks3[self.step + 1].copy_(attn_masks3)
         self.info_batch.append(info)
-        self.obs_sum += obs.cpu()
+        self.obs_sum += obs_full.cpu()
+        self.obs_full.copy_(obs_full)
         self.step_env += 1
 
         self.step = (self.step + 1) % self.num_steps
