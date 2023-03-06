@@ -199,7 +199,7 @@ def main():
 
     # rollout storage for agent
     rollouts = RolloutStorage(args.num_steps, args.num_processes,
-                              envs.observation_space.shape, envs.action_space,
+                              envs.observation_space.shape, envs.observation_space.shape, envs.action_space,
                               actor_critic.recurrent_hidden_state_size, args.mask_size, device=device)
 
     # Load previous model
@@ -230,7 +230,7 @@ def main():
         actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch)), map_location=device)
         actor_critic.load_state_dict(actor_critic_weighs['state_dict'])
 
-    logger = Logger(args.num_processes, envs.observation_space.shape, actor_critic.recurrent_hidden_state_size, device=device)
+    logger = Logger(args.num_processes, envs.observation_space.shape, envs.observation_space.shape, actor_critic.recurrent_hidden_state_size, device=device)
 
     obs = envs.reset()
     # rollouts.obs[0].copy_(torch.FloatTensor(obs))
@@ -334,7 +334,7 @@ def main():
                 [[0.0] if 'bad_transition' in info.keys() else [1.0]
                  for info in infos])
             rollouts.insert(obs, recurrent_hidden_states, action,
-                            action_log_prob, value, torch.from_numpy(reward).unsqueeze(1), masks, bad_masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, infos)
+                            action_log_prob, value, torch.from_numpy(reward).unsqueeze(1), masks, bad_masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, infos, obs)
 
         with torch.no_grad():
             next_value = actor_critic.get_value(

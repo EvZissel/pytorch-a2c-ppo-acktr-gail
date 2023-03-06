@@ -124,7 +124,7 @@ def main():
         'train_eval': args.start_level,
         'test_eval': test_start_level
     }
-    down_sample_avg = nn.AvgPool2d(3, stride=3)
+    down_sample_avg = nn.AvgPool2d(args.kernel_size, stride=args.stride)
     for eval_disp_name in EVAL_ENVS:
         for i in range(args.num_test_level):
             envs = make_ProcgenEnvs(num_envs=1,
@@ -456,7 +456,6 @@ def main():
                     rollouts.obs0[i].copy_(obs_full[i].cpu())
                     rollouts.step_env[i] = 0
                     # rollouts.diff_obs[step][i].copy_(torch.zeros_like(obs[i]).cpu())
-
                 else:
                     num_zero_obs_sum = (obs_sum[i][0] == 0).sum()
                     num_zero_next_obs_sum = (next_obs_sum[i][0] == 0).sum()
@@ -542,9 +541,7 @@ def main():
 
             for eval_disp_name in EVAL_ENVS:
                 eval_dic_rew[eval_disp_name], eval_dic_int_rew[eval_disp_name], eval_dic_done[eval_disp_name], eval_dic_seeds[eval_disp_name] = evaluate_procgen_maxEnt_avepool(actor_critic, eval_envs_dic, eval_envs_dic_full_obs, eval_disp_name,
-                                                  args.num_processes, device, args.num_steps, logger)
-
-
+                                                  args.num_processes, device, args.num_steps, logger, kernel_size=args.kernel_size, stride=args.stride)
 
                 # log_dict[eval_disp_name].append([(j+1) * args.num_processes * args.num_steps, eval_dic_rew[eval_disp_name]])
                 # printout += eval_disp_name + ' ' + str(np.mean(eval_dic_rew[eval_disp_name])) + ' '
@@ -557,7 +554,6 @@ def main():
             # eval_test_nondet_rew, eval_test_nondet_int_rew, eval_test_nondet_done, eval_test_nondet_seeds = evaluate_procgen_maxEnt_L2(actor_critic, eval_envs_dic_nondet, 'test_eval_nondet',
             #                                       args.num_processes, device, args.num_steps, logger, args.eps_diff_NN, args.eps_NN, args.num_buffer, args.reset_cont, deterministic=False)
             #     # wandb.log({"mun_maxEnt/nondet": np.mean(num_zero_obs_end_nondet)}, step=(j + 1) * args.num_processes * args.num_steps)
-
 
             logger.feed_eval(eval_dic_int_rew['train_eval'], eval_dic_done['train_eval'],eval_dic_int_rew['test_eval'], eval_dic_done['test_eval'],
                              eval_dic_seeds['train_eval'], eval_dic_seeds['test_eval'], eval_dic_rew['train_eval'], eval_dic_rew['test_eval'], eval_dic_rew['test_eval'], eval_dic_done['test_eval'])
@@ -602,7 +598,6 @@ def main():
             #                           (j + 1) * args.num_processes * args.num_steps)
             # summary_writer.add_scalars('eval_max_len', {'train': np.max(episode_len)},
             #                           (j + 1) * args.num_processes * args.num_steps)
-
 
             for key, value in episode_statistics.items():
                 if isinstance(value, dict):

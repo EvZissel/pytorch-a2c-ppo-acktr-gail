@@ -27,7 +27,7 @@ EVAL_ENVS = ['train_eval','test_eval']
 # num_processes = 600
 env_name = "jumper"
 start_level = 0
-num_level = 10
+num_level = 1
 distribution_mode = "easy"
 seed = 1
 normalize_rew = False
@@ -42,11 +42,11 @@ class VideoRecorderprocess(VideoRecorderWrapper):
 
     def _process_frame(self, frame: np.ndarray) -> np.ndarray:
         obs = frame
-        # indexes = np.stack([(obs[:, :, 2] == 255), (obs[:, :, 2] == 255), (obs[:, :, 2] == 255)], axis=2)
-        indexes = (obs[:, :, 0] == 63)*(obs[:, :, 1] == 255)*(obs[:, :, 2] == 63)
-        obs[:, :, 0] = (obs[:, :, 0] * (1 - indexes))
-        obs[:, :, 1] = (obs[:, :, 1] * (1 - indexes))
-        obs[:, :, 2] = (obs[:, :, 2] * (1 - indexes))
+        # indexes = (obs[:, :, 0] == 63)*(obs[:, :, 1] == 255)*(obs[:, :, 2] == 63)
+        # obs[:, :, 0] = (obs[:, :, 0] * (1 - indexes))
+        # obs[:, :, 1] = (obs[:, :, 1] * (1 - indexes))
+        # obs[:, :, 2] = (obs[:, :, 2] * (1 - indexes))
+        #
         # # obs[50:55,43:47,0] = 127
         # # obs[50:55,43:47,1] = 127
         # # obs[50:55,43:47,2] = 255
@@ -68,7 +68,7 @@ class VideoRecorderprocess(VideoRecorderWrapper):
         return obs
 
 # test_start_level = 201 #bi maze
-test_start_level = 3
+test_start_level = 201
 # test_env  = ProcgenConatEnvs(env_name=env_name,
 #                              num_envs=num_level,
 #                              start_level=test_start_level,
@@ -90,38 +90,25 @@ test_env = ProcgenGym3Env(num=1,
                           num_levels=num_level,
                           distribution_mode=distribution_mode,
                           render_mode="rgb_array",
-                          use_generated_assets=False,
+                          use_generated_assets=True,
                           center_agent=True,
                           use_backgrounds=False,
                           restrict_themes=True,
                           use_monochrome_assets=True,
                           rand_seed=seed)
 
-test_env2 = ProcgenGym3Env(num=1,
+test_env_full_obs = ProcgenGym3Env(num=1,
                           env_name=env_name,
                           start_level=test_start_level,
                           num_levels=num_level,
                           distribution_mode=distribution_mode,
                           render_mode="rgb_array",
-                          use_generated_assets=False,
+                          use_generated_assets=True,
                           center_agent=False,
                           use_backgrounds=False,
                           restrict_themes=True,
                           use_monochrome_assets=True,
                           rand_seed=seed)
-# test_env = ProcgenGym3Env(num=1,
-#                           env_name=env_name,
-#                           center_agent=False,
-#                           use_generated_assets=True,
-#                           use_backgrounds=False,
-#                           restrict_themes=True,
-#                           use_monochrome_assets=True,
-#                           distribution_mode=distribution_mode,
-#                           paint_vel_info=True,
-#                           start_level=test_start_level,
-#                           num_levels=num_level,
-#                           render_mode="rgb_array"
-#                           )
 
 test_env = VideoRecorderprocess(env=test_env, directory="./videos", info_key="rgb", prefix=str(test_start_level), fps=5, render=True)
 
@@ -228,7 +215,7 @@ saved_epoch = 3050
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_2865_num_env_200_entro_0.01_gama_0.5_07-02-2023_19-40-00_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_58967_num_env_200_entro_0.01_gama_0.5_04-02-2023_15-46-16_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_3569_num_env_200_entro_0.01_gama_0.5_08-02-2023_23-48-07_original"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_3569_num_env_200_entro_0.01_gama_0.9_24-02-2023_19-54-04"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_6589_num_env_200_entro_0.01_gama_0.9_04-03-2023_01-08-22"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
@@ -316,37 +303,45 @@ eval_attn_masks1 = torch.zeros(1, 16, device=device)
 eval_attn_masks2 = torch.zeros(1, 32, device=device)
 eval_attn_masks3 = torch.zeros(1, 32, device=device)
 
-down_sample_avg = nn.AvgPool2d(3, stride=3)
+down_sample_avg = nn.AvgPool2d(1, stride=1)
 actor_critic_maxEnt.eval()
 # actor_critic1.eval()
 # actor_critic2.eval()
 # actor_critic3.eval()
 # actor_critic4.eval()
 rew, obs, first = test_env.observe()
+rew_full_obs, obs_full_obs, first_full_obs = test_env_full_obs.observe()
 # states = test_env.callmethod("get_state")
 # test_env2.callmethod("set_state", states)
-rew2, obs2, first2 = test_env2.observe()
+# rew2, obs2, first2 = test_env2.observe()
 
 
 
 obs = obs['rgb'].transpose(0, 3, 1, 2)
-obs2 = obs2['rgb'].transpose(0, 3, 1, 2)
+obs2 = obs_full_obs['rgb'].transpose(0, 3, 1, 2)
 # obs0 = obs2[0]
 # indexes = (obs0[0, :, :] == 63) * (obs0[1, :, :] == 255) * (obs0[2, :, :] == 63)
 # obs0[0, :, :]  = (obs0[0, :, :] * (~indexes))
 # obs0[1, :, :]  = (obs0[1, :, :] * (~indexes))
 # obs0[2, :, :]  = (obs0[2, :, :] * (~indexes))
-obs2 = torch.tensor(obs2)
-myobj = plt.imshow(obs2[0].transpose(0, 2).transpose(0, 1))
-plt.show()
+# obs2 = torch.tensor(obs2)
+# myobj = plt.imshow(obs2[0].transpose(0, 2).transpose(0, 1))
+# plt.show()
 
 obs = torch.FloatTensor(obs / 255)
 obs2 = torch.FloatTensor(obs2 / 255)
+myobj = plt.imshow(obs2[0][0])
+plt.show()
 # obs = torch.FloatTensor(obs.transpose(0, 3, 1, 2) / 255)
 obs2 = down_sample_avg(obs2)
 obs_sum = obs2[0][0]
 Oracle = (obs_sum == 0).sum()
+print('Oracle: {}'.format(Oracle))
 obs_stack = obs.clone()
+
+myobj = plt.imshow(obs_sum>0.0001)
+plt.show()
+
 # Change reward location
 # obs = obs['rgb']
 # indexes = np.stack([(obs[:,:,2] == 255), (obs[:,:,2] == 255), (obs[:,:,2]== 255)], axis=2)
@@ -387,8 +382,8 @@ m = FixedCategorical(torch.tensor([ 0.55, 0.25, 0.025, 0.025, 0.025, 0.025, 0.02
 # m = m = FixedCategorical(torch.tensor([ 0.55, 0.25, 0.045, 0.025, 0.025, 0.025, 0.015, 0.015, 0.0125, 0.0125, 0.0125, 0.0125]))
 rand_policy = FixedCategorical(torch.tensor([ 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 1-14*0.067]))
 maxEnt_steps = 0
-# while not done[0] and iter<1000:
-while iter<1500:
+while not done[0] and iter<1000:
+# while iter<1000:
     iter +=1
     with torch.no_grad():
         # obs = torch.FloatTensor(obs).to(device=device)
@@ -690,8 +685,8 @@ while iter<1500:
 
     # if iter < 100:
     #     action = pure_action1
-    test_env.act(action1[0].cpu().numpy())
-    test_env2.act(action1[0].cpu().numpy())
+    test_env.act(action_maxEnt[0].cpu().numpy())
+    test_env_full_obs.act(action_maxEnt[0].cpu().numpy())
     # steps_remaining -= 1
 
 
@@ -707,7 +702,7 @@ while iter<1500:
 
     # states = test_env.callmethod("get_state")
     # test_env2.callmethod("set_state", states)
-    rew2, obs2, first2 = test_env2.observe()
+    rew2, obs2, first2 = test_env_full_obs.observe()
 
     obs = obs['rgb'].transpose(0, 3, 1, 2)
     obs2 = obs2['rgb'].transpose(0, 3, 1, 2)
@@ -717,13 +712,14 @@ while iter<1500:
     # obs0[0, :, :] = (obs0[0, :, :] * (~indexes))
     # obs0[1, :, :] = (obs0[1, :, :] * (~indexes))
     # obs0[2, :, :] = (obs0[2, :, :] * (~indexes))
-    obs2 = torch.tensor(obs2)
-    myobj = plt.imshow(obs2[0].transpose(0, 2).transpose(0, 1))
-    plt.show()
+    # obs2 = torch.tensor(obs2)
+    # myobj = plt.imshow(obs2[0].transpose(0, 2).transpose(0, 1))
+    # plt.show()
 
     obs = torch.FloatTensor(obs / 255)
     obs2 = torch.FloatTensor(obs2 / 255)
     obs2 = down_sample_avg(obs2)
+
 
     # norm2_dis = (obs_stack - obs).reshape(obs_stack.size(0),-1).pow(2).sum(1)
     # int_reward = 1 * (norm2_dis.min() > 100)
@@ -744,6 +740,9 @@ while iter<1500:
     else:
         novel = False
     int_reward_sum +=  num_zero_obs_sum - num_zero_next_obs_sum
+
+    myobj = plt.imshow(obs_sum>0.0001)
+    plt.show()
 
 
 

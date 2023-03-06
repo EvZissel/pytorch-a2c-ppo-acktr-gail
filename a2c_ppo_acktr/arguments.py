@@ -515,7 +515,16 @@ def get_args():
         action='store_true',
         default=False,
         help='if agent is centered')
-
+    parser.add_argument(
+        '--kernel_size',
+        type=int,
+        default=3,
+        help='average pool kernel size (default: 3)')
+    parser.add_argument(
+        '--stride',
+        type=int,
+        default=3,
+        help='average pool stride size (default: 3)')
 
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
