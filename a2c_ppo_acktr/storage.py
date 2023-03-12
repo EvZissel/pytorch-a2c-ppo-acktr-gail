@@ -86,7 +86,8 @@ class RolloutStorage(object):
         self.attn_masks2[self.step + 1].copy_(attn_masks2)
         self.attn_masks3[self.step + 1].copy_(attn_masks3)
         self.info_batch.append(info)
-        self.obs_sum += obs_full.cpu()
+        next_obs_diff = 1 * ((obs_full.cpu() - self.obs_full).abs() > 1e-5)
+        self.obs_sum += next_obs_diff
         self.obs_full.copy_(obs_full)
         self.step_env += 1
 

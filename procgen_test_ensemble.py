@@ -108,7 +108,7 @@ def main():
                       use_backgrounds=args.use_backgrounds,
                       restrict_themes=args.restrict_themes,
                       use_monochrome_assets=args.use_monochrome_assets,
-                      center_agent=False,
+                      center_agent=args.center_agent,
                       rand_seed=args.seed,
                       mask_size=args.mask_size,
                       normalize_rew=args.normalize_rew,
@@ -126,7 +126,7 @@ def main():
                                                       use_backgrounds=args.use_backgrounds,
                                                       restrict_themes=args.restrict_themes,
                                                       use_monochrome_assets=args.use_monochrome_assets,
-                                                      center_agent=False,
+                                                      center_agent=args.center_agent,
                                                       rand_seed=args.seed,
                                                       mask_size=args.mask_size,
                                                       normalize_rew= args.normalize_rew,
@@ -143,7 +143,7 @@ def main():
                                                      use_backgrounds=args.use_backgrounds,
                                                      restrict_themes=args.restrict_themes,
                                                      use_monochrome_assets=args.use_monochrome_assets,
-                                                     center_agent=False,
+                                                     center_agent=args.center_agent,
                                                      rand_seed=args.seed,
                                                      mask_size=args.mask_size,
                                                      normalize_rew=args.normalize_rew,
@@ -160,7 +160,7 @@ def main():
                                                      use_backgrounds=args.use_backgrounds,
                                                      restrict_themes=args.restrict_themes,
                                                      use_monochrome_assets=args.use_monochrome_assets,
-                                                     center_agent=False,
+                                                     center_agent=args.center_agent,
                                                      rand_seed=args.seed,
                                                      mask_size=args.mask_size,
                                                      normalize_rew=args.normalize_rew,
@@ -247,7 +247,7 @@ def main():
     #                           actor_critic.recurrent_hidden_state_size, args.mask_size, device=device)
 
     rollouts_maxEnt = RolloutStorage(args.num_steps, args.num_processes,
-                              envs.observation_space.shape, envs.action_space,
+                              envs.observation_space.shape, envs.observation_space.shape, envs.action_space,
                               actor_critic_maxEnt.recurrent_hidden_state_size, args.mask_size, device=device)
 
     # Load previous model
@@ -297,7 +297,7 @@ def main():
         actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch_maxEnt)), map_location=device)
         actor_critic_maxEnt.load_state_dict(actor_critic_weighs['state_dict'])
 
-    logger = Logger(args.num_processes, envs.observation_space.shape, actor_critic_maxEnt.recurrent_hidden_state_size, device=device)
+    logger = Logger(args.num_processes, envs.observation_space.shape, envs.observation_space.shape, actor_critic_maxEnt.recurrent_hidden_state_size, device=device)
 
     obs = envs.reset()
     # rollouts.obs[0].copy_(torch.FloatTensor(obs))

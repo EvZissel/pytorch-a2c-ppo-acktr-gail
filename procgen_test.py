@@ -20,7 +20,7 @@ EVAL_ENVS = ['train_eval','test_eval']
 
 # num_processes = 600
 env_name = "jumper"
-start_level = 0
+start_level = 2
 num_level = 1
 # num_level_test = 128
 distribution_mode = "easy"
@@ -56,25 +56,95 @@ test_env2 = ProcgenGym3Env(num=1,
                           use_monochrome_assets=False)
 
 
-rew, obs, first = test_env.observe()
+rew, obs, first = test_env2.observe()
 obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = torch.tensor(obs).float()
+obs0 = obs.clone()
+obs_sum = obs.clone()
+num_steps = 1
+average_obs = (obs_sum/num_steps).int()
+diff_obs = average_obs-obs0
 
-obs = torch.tensor(obs)
+
 myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1))
 plt.show()
-myobj = plt.imshow(test_env.get_info()[0]['rgb'])
+
+
+myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1))
+plt.show()
+# myobj = plt.imshow(test_env.get_info()[0]['rgb'])
+# plt.show()
+
+action = np.array([7])
+test_env2.act(action)
+
+rew, obs, first = test_env2.observe()
+obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = torch.tensor(obs).float()
+obs_sum += obs
+num_steps += 1
+average_obs = (obs_sum/num_steps)
+diff_obs = torch.tensor((average_obs - obs0))
+
+myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1))
+plt.show()
+# myobj = plt.imshow(test_env.get_info()[0]['rgb'])
+# plt.show()
+myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1))
 plt.show()
 
 action = np.array([7])
-test_env.act(action)
+test_env2.act(action)
 
-rew, obs, first = test_env.observe()
+rew, obs, first = test_env2.observe()
 obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = torch.tensor(obs).float()
+obs_sum += obs
+num_steps += 1
+average_obs = (obs_sum/num_steps)
+diff_obs = torch.tensor((average_obs - obs0))
 
-obs = torch.tensor(obs)
+
 myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1))
 plt.show()
-myobj = plt.imshow(test_env.get_info()[0]['rgb'])
+
+myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1))
+plt.show()
+
+action = np.array([7])
+test_env2.act(action)
+
+rew, obs, first = test_env2.observe()
+obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = torch.tensor(obs)
+obs_sum += obs
+num_steps += 1
+average_obs = (obs_sum/num_steps).int()
+diff_obs = torch.tensor((average_obs - obs0))
+
+
+myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1))
+plt.show()
+
+myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1))
+plt.show()
+
+action = np.array([7])
+test_env2.act(action)
+
+rew, obs, first = test_env2.observe()
+obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = torch.tensor(obs)
+obs_sum += obs
+num_steps += 1
+average_obs = (obs_sum/num_steps).int()
+diff_obs = torch.tensor((average_obs - obs0))
+
+
+myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1))
+plt.show()
+
+myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1))
 plt.show()
 
 print('stop')

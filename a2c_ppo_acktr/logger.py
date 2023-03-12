@@ -21,6 +21,10 @@ class Logger(object):
         self.eval_masks = {}
         self.last_action = {}
 
+        self.obs_full = {}
+        self.obs_full['train_eval'] = torch.zeros(self.n_envs, *obs_full_shape)
+        self.obs_full['test_eval'] = torch.zeros(self.n_envs, *obs_full_shape)
+
         self.obs_vec = {}
         self.obs_vec['train_eval'] = []
         for i in range(n_envs):
@@ -307,9 +311,6 @@ class maxEnt_Logger(Logger):
     def __init__(self, n_envs, max_reward_seeds, start_train_test, obs_shape, obs_full_shape, recurrent_hidden_state_size, device='cpu'):
         super(maxEnt_Logger, self).__init__(n_envs, obs_shape, obs_full_shape, recurrent_hidden_state_size, device)
 
-        self.obs_full = {}
-        self.obs_full['train_eval'] = torch.zeros(self.n_envs, *obs_full_shape)
-        self.obs_full['test_eval'] = torch.zeros(self.n_envs, *obs_full_shape)
 
         self.max_reward_seeds = max_reward_seeds
         self.start_train_test = start_train_test
