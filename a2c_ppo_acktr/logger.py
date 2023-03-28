@@ -24,11 +24,17 @@ class Logger(object):
         self.obs_full = {}
         self.obs_full['train_eval'] = torch.zeros(self.n_envs, *obs_full_shape)
         self.obs_full['test_eval'] = torch.zeros(self.n_envs, *obs_full_shape)
+        self.obs_full['test_eval_nondet'] = torch.zeros(self.n_envs, *obs_full_shape)
+        self.obs_full['train_eval_nondet'] = torch.zeros(self.n_envs, *obs_full_shape)
 
         self.obs_vec = {}
         self.obs_vec['train_eval'] = []
         for i in range(n_envs):
             self.obs_vec['train_eval'].append([])
+
+        self.obs_vec['train_eval_nondet'] = []
+        for i in range(n_envs):
+            self.obs_vec['train_eval_nondet'].append([])
 
         self.obs_vec['test_eval'] = []
         for i in range(n_envs):
@@ -39,7 +45,7 @@ class Logger(object):
             self.obs_vec['test_eval_nondet'].append([])
 
         self.obs['train_eval'] = torch.zeros(self.n_envs, *obs_shape)
-        self.obs_sum['train_eval'] = torch.zeros(self.n_envs, *obs_full_shape)
+        self.obs_sum['train_eval'] = torch.zeros(self.n_envs, *obs_full_shape, device=device)
         self.obs0['train_eval'] = torch.zeros(self.n_envs, *obs_full_shape)
         self.env_steps['train_eval'] = torch.ones(self.n_envs, 1)
         self.eval_recurrent_hidden_states['train_eval'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
@@ -50,7 +56,7 @@ class Logger(object):
         self.last_action['train_eval'] = torch.full([n_envs, 1], 7, device=device)
 
         self.obs['test_eval'] = torch.zeros(self.n_envs, *obs_shape)
-        self.obs_sum['test_eval'] = torch.zeros(self.n_envs, *obs_full_shape)
+        self.obs_sum['test_eval'] = torch.zeros(self.n_envs, *obs_full_shape, device=device)
         self.obs0['test_eval'] = torch.zeros(self.n_envs, *obs_full_shape)
         self.env_steps['test_eval'] = torch.ones(self.n_envs, 1)
         self.eval_recurrent_hidden_states['test_eval'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
@@ -60,17 +66,21 @@ class Logger(object):
         self.eval_masks['test_eval'] = torch.ones(self.n_envs, 1, device=device)
         self.last_action['test_eval'] = torch.full([n_envs, 1], 7, device=device)
 
-        # self.obs['train_eval_nondet'] = torch.zeros(self.n_envs, *obs_shape)
-        # self.obs_sum['train_eval_nondet'] = torch.zeros(self.n_envs, *obs_shape)
-        # self.eval_recurrent_hidden_states['train_eval_nondet'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
-        # self.eval_recurrent_hidden_states1['train_eval_nondet'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
-        # self.eval_recurrent_hidden_states2['train_eval_nondet'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
-        # self.eval_recurrent_hidden_states_maxEnt['train_eval_nondet'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
-        # self.eval_masks['train_eval_nondet'] = torch.ones(self.n_envs, 1, device=device)
-        # self.last_action['train_eval_nondet'] = torch.full([n_envs, 1], 7, device=device)
+
+        self.obs['train_eval_nondet'] = torch.zeros(self.n_envs, *obs_shape)
+        self.obs_sum['train_eval_nondet'] = torch.zeros(self.n_envs, *obs_full_shape, device=device)
+        self.obs0['train_eval_nondet'] = torch.zeros(self.n_envs, *obs_full_shape)
+        self.env_steps['train_eval_nondet'] = torch.ones(self.n_envs, 1)
+        self.eval_recurrent_hidden_states['train_eval_nondet'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
+        self.eval_recurrent_hidden_states1['train_eval_nondet'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
+        self.eval_recurrent_hidden_states2['train_eval_nondet'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
+        self.eval_recurrent_hidden_states_maxEnt['train_eval_nondet'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
+        self.eval_masks['train_eval_nondet'] = torch.ones(self.n_envs, 1, device=device)
+        self.last_action['train_eval_nondet'] = torch.full([n_envs, 1], 7, device=device)
+
 
         self.obs['test_eval_nondet'] = torch.zeros(self.n_envs, *obs_shape)
-        self.obs_sum['test_eval_nondet'] = torch.zeros(self.n_envs, *obs_full_shape)
+        self.obs_sum['test_eval_nondet'] = torch.zeros(self.n_envs, *obs_full_shape, device=device)
         self.obs0['test_eval_nondet'] = torch.zeros(self.n_envs, *obs_full_shape)
         self.env_steps['test_eval_nondet'] = torch.ones(self.n_envs, 1)
         self.eval_recurrent_hidden_states['test_eval_nondet'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
@@ -79,7 +89,6 @@ class Logger(object):
         self.eval_recurrent_hidden_states_maxEnt['test_eval_nondet'] = torch.zeros(self.n_envs, recurrent_hidden_state_size, device=device)
         self.eval_masks['test_eval_nondet'] = torch.ones(self.n_envs, 1, device=device)
         self.last_action['test_eval_nondet'] = torch.full([n_envs, 1], 7, device=device)
-
 
         self.episode_rewards = []
         self.episode_rewards_val = []
@@ -315,26 +324,27 @@ class maxEnt_Logger(Logger):
         self.max_reward_seeds = max_reward_seeds
         self.start_train_test = start_train_test
 
-        self.episode_rewards_test_vs_oracle = []
-        self.episode_rewards_train_vs_oracle = []
         self.episode_rewards_train_ext = []
         self.episode_rewards_test_ext = []
         for _ in range(self.n_envs):
-            self.episode_rewards_train_vs_oracle.append([])
-            self.episode_rewards_test_vs_oracle.append([])
             self.episode_rewards_train_ext.append([])
             self.episode_rewards_test_ext.append([])
 
         self.episode_reward_buffer_train_vs_oracle = deque(maxlen=self.n_envs)
         self.episode_reward_buffer_train_completed = deque(maxlen=self.n_envs)
+        self.episode_reward_buffer_train_vs_oracle_nondet = deque(maxlen=self.n_envs)
+        self.episode_reward_buffer_train_completed_nondet = deque(maxlen=self.n_envs)
         self.episode_reward_buffer_test_vs_oracle  = deque(maxlen=self.n_envs)
         self.episode_reward_buffer_test_completed  = deque(maxlen=self.n_envs)
+        self.episode_reward_buffer_test_vs_oracle_nondet  = deque(maxlen=self.n_envs)
+        self.episode_reward_buffer_test_completed_nondet  = deque(maxlen=self.n_envs)
         self.episode_reward_buffer_train_ext       = deque(maxlen=self.n_envs)
         self.episode_reward_buffer_test_ext        = deque(maxlen=self.n_envs)
 
 
     def feed_eval(self, rew_batch_train, done_batch_train, rew_batch_test, done_batch_test, seeds_batch_train, seeds_batch_test,
-                  rew_batch_train_ext, rew_batch_test_ext, rew_batch_test_nondet, done_batch_test_nondet):
+                  rew_batch_train_ext, rew_batch_test_ext, rew_batch_test_nondet, done_batch_test_nondet, seeds_batch_test_nondet=None,
+                  rew_batch_train_nondet=None, done_batch_train_nondet=None, seeds_batch_train_nondet=None):
 
         steps = rew_batch_train.shape[0]
         rew_batch_train = rew_batch_train.T
@@ -345,8 +355,14 @@ class maxEnt_Logger(Logger):
         rew_batch_test_ext = rew_batch_test_ext.T
         done_batch_test = done_batch_test.T
         seeds_batch_test = seeds_batch_test.T
+        seeds_batch_test_nondet = seeds_batch_test_nondet.T
         rew_batch_test_nondet = rew_batch_test_nondet.T
         done_batch_test_nondet = done_batch_test_nondet.T
+        if rew_batch_train_nondet is not None:
+            seeds_batch_train_nondet = seeds_batch_train_nondet.T
+            rew_batch_train_nondet = rew_batch_train_nondet.T
+            done_batch_train_nondet = done_batch_train_nondet.T
+
 
         for i in range(self.n_envs):
             for j in range(steps):
@@ -355,6 +371,8 @@ class maxEnt_Logger(Logger):
                 self.episode_rewards_train[i].append(rew_batch_train[i][j])
                 self.episode_rewards_train_ext[i].append(rew_batch_train_ext[i][j])
                 self.episode_rewards_test_nondet[i].append(rew_batch_test_nondet[i][j])
+                if rew_batch_train_nondet is not None:
+                    self.episode_rewards_train_nondet[i].append(rew_batch_train_nondet[i][j])
                 if done_batch_train[i][j]:
                     train_seed = seeds_batch_train[i][j]
                     max_reward_train_seeds = self.max_reward_seeds['train_eval'][int(train_seed) - self.start_train_test['train_eval']]
@@ -386,11 +404,31 @@ class maxEnt_Logger(Logger):
                     self.episode_rewards_test_ext[i] = []
                     self.num_episodes_test += 1
                 if done_batch_test_nondet[i][j]:
+                    test_seed_nondet = seeds_batch_test_nondet[i][j]
+                    max_reward_test_seeds_nondet = self.max_reward_seeds['test_eval'][int(test_seed_nondet) - self.start_train_test['test_eval']]
                     self.episode_len_buffer_test_nondet.append(len(self.episode_rewards_test_nondet[i]))
                     self.episode_reward_buffer_test_nondet.append(np.sum(self.episode_rewards_test_nondet[i]))
+                    test_vs_oracle_nondet = np.sum(self.episode_rewards_test_nondet[i]) / (max_reward_test_seeds_nondet + 1e-4)
+                    if test_vs_oracle_nondet > 1:
+                        print("bug! test nondet sum reward is {} ".format(test_vs_oracle_nondet))
+                        test_vs_oracle_nondet = 0
+                    self.episode_reward_buffer_test_vs_oracle_nondet.append(test_vs_oracle_nondet)
+                    self.episode_reward_buffer_test_completed_nondet.append(1*(np.sum(self.episode_rewards_test_nondet[i]) == max_reward_test_seeds_nondet))
                     self.episode_rewards_test_nondet[i] = []
                     self.num_episodes_test_nondet += 1
-
+                if done_batch_train_nondet is not None and done_batch_train_nondet[i][j]:
+                    train_seed_nondet = seeds_batch_train_nondet[i][j]
+                    max_reward_train_seeds_nondet = self.max_reward_seeds['train_eval'][int(train_seed_nondet) - self.start_train_test['train_eval']]
+                    self.episode_len_buffer_train_nondet.append(len(self.episode_rewards_train_nondet[i]))
+                    self.episode_reward_buffer_train_nondet.append(np.sum(self.episode_rewards_train_nondet[i]))
+                    train_vs_oracle_nondet = np.sum(self.episode_rewards_train_nondet[i]) / (max_reward_train_seeds_nondet + 1e-4)
+                    if train_vs_oracle_nondet > 1:
+                        print("bug! reain nondet sum reward is {} ".format(train_vs_oracle_nondet))
+                        train_vs_oracle_nondet = 0
+                    self.episode_reward_buffer_train_vs_oracle_nondet.append(train_vs_oracle_nondet)
+                    self.episode_reward_buffer_train_completed_nondet.append(1*(np.sum(self.episode_rewards_train_nondet[i]) == max_reward_train_seeds_nondet))
+                    self.episode_rewards_train_nondet[i] = []
+                    self.num_episodes_train_nondet += 1
         # print('debug')
 
     def get_episode_statistics(self):
@@ -405,7 +443,9 @@ class maxEnt_Logger(Logger):
                                                           'test_ext': np.max(self.episode_reward_buffer_test_ext),
                                                           'test_vs_oracle': np.max(self.episode_reward_buffer_test_vs_oracle),
                                                           'test_completed': np.max(self.episode_reward_buffer_test_completed),
-                                                          'test_nondet': np.max(self.episode_reward_buffer_test_nondet)}
+                                                          'test_nondet': np.max(self.episode_reward_buffer_test_nondet),
+                                                          'test_vs_oracle_nondet': np.max(self.episode_reward_buffer_test_vs_oracle_nondet),
+                                                          'test_completed_nondet': np.max(self.episode_reward_buffer_test_completed_nondet)}
             episode_statistics['Rewards/mean_episodes'] = {'train': np.mean(self.episode_reward_buffer),
                                                            'train_eval': np.mean(self.episode_reward_buffer_train),
                                                            'train_eval_ext': np.mean(self.episode_reward_buffer_train_ext),
@@ -415,7 +455,9 @@ class maxEnt_Logger(Logger):
                                                            'test_ext': np.mean(self.episode_reward_buffer_test_ext),
                                                            'test_vs_oracle': np.mean(self.episode_reward_buffer_test_vs_oracle),
                                                            'test_completed': np.mean(self.episode_reward_buffer_test_completed),
-                                                           'test_nondet': np.mean(self.episode_reward_buffer_test_nondet)}
+                                                           'test_nondet': np.mean(self.episode_reward_buffer_test_nondet),
+                                                           'test_vs_oracle_nondet': np.mean(self.episode_reward_buffer_test_vs_oracle_nondet),
+                                                           'test_completed_nondet': np.mean(self.episode_reward_buffer_test_completed_nondet)}
             episode_statistics['Rewards/min_episodes'] = {'train': np.min(self.episode_reward_buffer),
                                                           'train_eval': np.min(self.episode_reward_buffer_train),
                                                           'train_eval_ext': np.min(self.episode_reward_buffer_train_ext),
@@ -425,7 +467,9 @@ class maxEnt_Logger(Logger):
                                                           'test_ext': np.min(self.episode_reward_buffer_test_ext),
                                                           'test_vs_oracle': np.min(self.episode_reward_buffer_test_vs_oracle),
                                                           'test_completed': np.min(self.episode_reward_buffer_test_completed),
-                                                          'test_nondet': np.min(self.episode_reward_buffer_test_nondet)}
+                                                          'test_nondet': np.min(self.episode_reward_buffer_test_nondet),
+                                                          'test_vs_oracle_nondet': np.min(self.episode_reward_buffer_test_vs_oracle_nondet),
+                                                          'test_completed_nondet': np.min(self.episode_reward_buffer_test_completed_nondet)}
 
             episode_statistics['Len/max_episodes'] = {'train': np.max(self.episode_len_buffer),
                                                       'train_eval': np.max(self.episode_len_buffer_train),
@@ -473,26 +517,44 @@ class maxEnt_Logger(Logger):
                                                       'train_eval_ext': np.max(self.episode_reward_buffer_train_ext),
                                                       'train_eval_vs_oracle': np.max(self.episode_reward_buffer_train_vs_oracle),
                                                       'train_eval_completed': np.max(self.episode_reward_buffer_train_completed),
+                                                      'train_nondet': np.max(self.episode_reward_buffer_train_nondet),
+                                                      'train_vs_oracle_nondet': np.max(self.episode_reward_buffer_train_vs_oracle_nondet),
+                                                      'train_completed_nondet': np.max(self.episode_reward_buffer_train_completed_nondet),
                                                       'test': np.max(self.episode_reward_buffer_test),
                                                       'test_ext': np.max(self.episode_reward_buffer_test_ext),
                                                       'test_vs_oracle': np.max(self.episode_reward_buffer_test_vs_oracle),
-                                                      'test_completed': np.max(self.episode_reward_buffer_test_completed)}
+                                                      'test_completed': np.max(self.episode_reward_buffer_test_completed),
+                                                      'test_nondet': np.max(self.episode_reward_buffer_test_nondet),
+                                                      'test_vs_oracle_nondet': np.max(self.episode_reward_buffer_test_vs_oracle_nondet),
+                                                      'test_completed_nondet': np.max( self.episode_reward_buffer_test_completed_nondet)}
         episode_statistics['Rewards/mean_episodes'] = {'train_eval': np.mean(self.episode_reward_buffer_train),
                                                        'train_eval_ext': np.mean(self.episode_reward_buffer_train_ext),
                                                        'train_eval_vs_oracle': np.mean(self.episode_reward_buffer_train_vs_oracle),
                                                        'train_eval_completed': np.mean(self.episode_reward_buffer_train_completed),
+                                                       'train_nondet': np.mean(self.episode_reward_buffer_train_nondet),
+                                                       'train_vs_oracle_nondet': np.mean(self.episode_reward_buffer_train_vs_oracle_nondet),
+                                                       'train_completed_nondet': np.mean(self.episode_reward_buffer_train_completed_nondet),
                                                        'test': np.mean(self.episode_reward_buffer_test),
                                                        'test_ext': np.mean(self.episode_reward_buffer_test_ext),
                                                        'test_vs_oracle': np.mean(self.episode_reward_buffer_test_vs_oracle),
-                                                       'test_completed': np.mean(self.episode_reward_buffer_test_completed)}
+                                                       'test_completed': np.mean(self.episode_reward_buffer_test_completed),
+                                                       'test_nondet': np.mean(self.episode_reward_buffer_test_nondet),
+                                                       'test_vs_oracle_nondet': np.mean(self.episode_reward_buffer_test_vs_oracle_nondet),
+                                                       'test_completed_nondet': np.mean(self.episode_reward_buffer_test_completed_nondet)}
         episode_statistics['Rewards/min_episodes'] = {'train_eval': np.min(self.episode_reward_buffer_train),
                                                       'train_eval_ext': np.min(self.episode_reward_buffer_train_ext),
                                                       'train_eval_vs_oracle': np.min(self.episode_reward_buffer_train_vs_oracle),
                                                       'train_eval_completed': np.min(self.episode_reward_buffer_train_completed),
+                                                      'train_nondet': np.min(self.episode_reward_buffer_train_nondet),
+                                                      'train_vs_oracle_nondet': np.min(self.episode_reward_buffer_train_vs_oracle_nondet),
+                                                      'train_completed_nondet': np.min(self.episode_reward_buffer_train_completed_nondet),
                                                       'test': np.min(self.episode_reward_buffer_test),
                                                       'test_ext': np.min(self.episode_reward_buffer_test_ext),
                                                       'test_vs_oracle': np.min(self.episode_reward_buffer_test_vs_oracle),
-                                                      'test_completed': np.min(self.episode_reward_buffer_test_completed)}
+                                                      'test_completed': np.min(self.episode_reward_buffer_test_completed),
+                                                      'test_nondet': np.min(self.episode_reward_buffer_test_nondet),
+                                                      'test_vs_oracle_nondet': np.min(self.episode_reward_buffer_test_vs_oracle_nondet),
+                                                      'test_completed_nondet': np.min(self.episode_reward_buffer_test_completed_nondet)}
 
         episode_statistics['Len/max_episodes'] = {'train_eval': np.max(self.episode_len_buffer_train),
                                                   'test': np.max(self.episode_len_buffer_test)}

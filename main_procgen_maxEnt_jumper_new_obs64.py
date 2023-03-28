@@ -55,11 +55,16 @@ def main():
         logdir_ = logdir_ + '_mask_' + str(args.mask_size)
     if not args.use_generated_assets and args.use_backgrounds and not args.restrict_themes and not args.use_monochrome_assets:
         logdir_ = logdir_ + '_original'
+    if args.lr < 1e-10:
+        logdir_ = logdir_ + '_evalOnly'
 
     logdir = os.path.join(os.path.expanduser(args.log_dir), logdir_)
     utils.cleanup_log_dir(logdir)
 
-    wandb.init(project=args.env_name + "_PPO_maximum_entropy", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
+    if args.distribution_mode == "hard":
+        wandb.init(project=args.env_name + "_PPO_maximum_entropy_hard", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
+    else:
+        wandb.init(project=args.env_name + "_PPO_maximum_entropy", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
 
     # Ugly but simple logging
     log_dict = {
@@ -241,21 +246,21 @@ def main():
                                                   mask_all=args.mask_all,
                                                   device=device)
     # eval_envs_dic_nondet = {}
-    # eval_envs_dic_nondet['test_eval_nondet'] =  make_ProcgenEnvs(num_envs=args.num_processes,
-    #                                                  env_name=args.env_name,
-    #                                                  start_level=test_start_level,
-    #                                                  num_levels=args.num_test_level,
-    #                                                  distribution_mode=args.distribution_mode,
-    #                                                  use_generated_assets=args.use_generated_assets,
-    #                                                  use_backgrounds=args.use_backgrounds,
-    #                                                  restrict_themes=args.restrict_themes,
-    #                                                  use_monochrome_assets=args.use_monochrome_assets,
-    #                                                  rand_seed=args.seed,
-    #                                                  center_agent=True,
-    #                                                  mask_size=args.mask_size,
-    #                                                  normalize_rew=args.normalize_rew,
-    #                                                  mask_all=args.mask_all,
-    #                                                  device=device)
+    # eval_envs_dic_nondet['test_eval_nondet'] = make_ProcgenEnvs(num_envs=args.num_processes,
+    #                                               env_name=args.env_name,
+    #                                               start_level=test_start_level,
+    #                                               num_levels=args.num_test_level,
+    #                                               distribution_mode=args.distribution_mode,
+    #                                               use_generated_assets=args.use_generated_assets,
+    #                                               use_backgrounds=args.use_backgrounds,
+    #                                               restrict_themes=args.restrict_themes,
+    #                                               use_monochrome_assets=args.use_monochrome_assets,
+    #                                               rand_seed=args.seed,
+    #                                               center_agent=True,
+    #                                               mask_size=args.mask_size,
+    #                                               normalize_rew=args.normalize_rew,
+    #                                               mask_all=args.mask_all,
+    #                                               device=device)
 
     # Test envs full observation
     eval_envs_dic_full_obs = {}
@@ -551,12 +556,12 @@ def main():
                 # wandb.log({"mun_maxEnt_vs_oracle/"+eval_disp_name: np.mean(num_zero_obs_end[eval_disp_name])/np.mean(num_zero_obs_end_oracle[eval_disp_name])}, step=(j + 1) * args.num_processes * args.num_steps)
 
             # # if ((args.eval_nondet_interval is not None and j % args.eval_nondet_interval == 0) or j == args.continue_from_epoch):
-            # eval_test_nondet_rew, eval_test_nondet_int_rew, eval_test_nondet_done, eval_test_nondet_seeds = evaluate_procgen_maxEnt_L2(actor_critic, eval_envs_dic_nondet, 'test_eval_nondet',
+            # eval_test_nondet_rew, eval_test_nondet_int_rew, eval_test_nondet_done, eval_test_nondet_seeds = evaluate_procgen_maxEnt_avepool(actor_critic, eval_envs_dic_nondet, 'test_eval_nondet',
             #                                       args.num_processes, device, args.num_steps, logger, args.eps_diff_NN, args.eps_NN, args.num_buffer, args.reset_cont, deterministic=False)
             #     # wandb.log({"mun_maxEnt/nondet": np.mean(num_zero_obs_end_nondet)}, step=(j + 1) * args.num_processes * args.num_steps)
 
             logger.feed_eval(eval_dic_int_rew['train_eval'], eval_dic_done['train_eval'],eval_dic_int_rew['test_eval'], eval_dic_done['test_eval'],
-                             eval_dic_seeds['train_eval'], eval_dic_seeds['test_eval'], eval_dic_rew['train_eval'], eval_dic_rew['test_eval'], eval_dic_rew['test_eval'], eval_dic_done['test_eval'])
+                             eval_dic_seeds['train_eval'], eval_dic_seeds['test_eval'], eval_dic_rew['train_eval'], eval_dic_rew['test_eval'], eval_dic_rew['test_eval'], eval_dic_done['test_eval'], eval_dic_seeds['test_eval'])
             episode_statistics = logger.get_episode_statistics()
             print(printout)
             print(episode_statistics)
