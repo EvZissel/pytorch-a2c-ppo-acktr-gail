@@ -199,6 +199,30 @@ def get_args():
         default="",
         help='directory to save agent logs (default: "")')
     parser.add_argument(
+        '--save-dir4',
+        default="",
+        help='directory to save agent logs (default: "")')
+    parser.add_argument(
+        '--save-dir5',
+        default="",
+        help='directory to save agent logs (default: "")')
+    parser.add_argument(
+        '--save-dir6',
+        default="",
+        help='directory to save agent logs (default: "")')
+    parser.add_argument(
+        '--save-dir7',
+        default="",
+        help='directory to save agent logs (default: "")')
+    parser.add_argument(
+        '--save-dir8',
+        default="",
+        help='directory to save agent logs (default: "")')
+    parser.add_argument(
+        '--save-dir9',
+        default="",
+        help='directory to save agent logs (default: "")')
+    parser.add_argument(
         '--save-dir_maxEnt',
         default="",
         help='directory to save agent logs (default: "")')
@@ -331,6 +355,36 @@ def get_args():
         help='load previous training (from model save dir)')
     parser.add_argument(
         '--saved_epoch3',
+        type=int,
+        default=0,
+        help='load previous training (from model save dir)')
+    parser.add_argument(
+        '--saved_epoch4',
+        type=int,
+        default=0,
+        help='load previous training (from model save dir)')
+    parser.add_argument(
+        '--saved_epoch5',
+        type=int,
+        default=0,
+        help='load previous training (from model save dir)')
+    parser.add_argument(
+        '--saved_epoch6',
+        type=int,
+        default=0,
+        help='load previous training (from model save dir)')
+    parser.add_argument(
+        '--saved_epoch7',
+        type=int,
+        default=0,
+        help='load previous training (from model save dir)')
+    parser.add_argument(
+        '--saved_epoch8',
+        type=int,
+        default=0,
+        help='load previous training (from model save dir)')
+    parser.add_argument(
+        '--saved_epoch9',
         type=int,
         default=0,
         help='load previous training (from model save dir)')
@@ -525,6 +579,17 @@ def get_args():
         type=int,
         default=3,
         help='average pool stride size (default: 3)')
+    parser.add_argument(
+        '--num_ensemble',
+        type=int,
+        default=4,
+        help='number of ensemble networks (default: 4)')
+    parser.add_argument(
+        '--num_agree',
+        type=int,
+        default=4,
+        help='number of networks that should agree (default: 4)')
+
 
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()

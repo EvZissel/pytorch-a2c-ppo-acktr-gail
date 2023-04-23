@@ -9,16 +9,16 @@ num_env_origin = [200, 500, 1000, 5000]
 
 
 # train results
-train_seed_9658  = np.array([9.67, 9.74, 9.813, 9.893])
-train_seed_3256  = np.array([9.857, 9.892, 9.764, 9.787])
-train_seed_0     = np.array([9.686, 9.883, 9.842, 9.424])
-train_seed_28965 = np.array([9.802, 9.691, 9.922, 9.645])
+train_seed_9658  = np.array([9.67, 9.74, 9.813, 9.893]) #TODO: need to update
+train_seed_3256  = np.array([9.857, 9.892, 9.764, 9.787])#TODO: need to update
+train_seed_0     = np.array([9.686, 9.883, 9.842, 9.424])#TODO: need to update
+train_seed_28965 = np.array([9.802, 9.691, 9.922, 9.645])#TODO: need to update
 
 # test results
-test_seed_9658  = np.array([5.847, 7.936, 8.673, 9.534])
-test_seed_3256  = np.array([5.789, 7.64, 8.468, 9.538])
-test_seed_0     = np.array([6.334, 8.015, 8.887, 9.191])
-test_seed_28965 = np.array([6.003, 7.855, 8.828, 9.332])
+test_seed_9658  = np.array([5.847, 7.936, 8.673, 9.534])#TODO: need to update
+test_seed_3256  = np.array([5.789, 7.64, 8.468, 9.538])#TODO: need to update
+test_seed_0     = np.array([6.334, 8.015, 8.887, 9.191])#TODO: need to update
+test_seed_28965 = np.array([6.003, 7.855, 8.828, 9.332])#TODO: need to update
 
 train_average = np.mean([train_seed_9658, train_seed_3256, train_seed_0, train_seed_28965], axis=0)
 train_stddev = np.std([train_seed_9658, train_seed_3256, train_seed_0, train_seed_28965], axis=0)

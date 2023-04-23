@@ -847,10 +847,10 @@ def evaluate_procgen_LEEP(actor_critic_0, actor_critic_1, actor_critic_2, actor_
     return rew_batch, int_rew_batch, done_batch, seed_batch
 
 
-def evaluate_procgen_ensemble(actor_critic, actor_critic_1, actor_critic_2, actor_critic_3, actor_critic_maxEnt,
+def evaluate_procgen_ensemble(actor_critic, actor_critic_1, actor_critic_2, actor_critic_3, actor_critic_4, actor_critic_5, actor_critic_6, actor_critic_7, actor_critic_8, actor_critic_9, actor_critic_maxEnt,
                               eval_envs_dic, env_name, num_processes,
                               device, steps, logger, attention_features=False, det_masks=False, deterministic=True,
-                              num_detEnt=0, rand_act=False):
+                              num_detEnt=0, rand_act=False,num_ensemble=4, num_agree=4):
     eval_envs = eval_envs_dic[env_name]
     rew_batch = []
     done_batch = []
@@ -900,7 +900,10 @@ def evaluate_procgen_ensemble(actor_critic, actor_critic_1, actor_critic_2, acto
     # env_steps = torch.zeros(num_processes,1,device=device)
     is_novel = torch.ones(num_processes, 1, dtype=torch.bool, device=device)
     m = FixedCategorical(
-        torch.tensor([0.55, 0.25, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025]).repeat(num_processes, 1))
+        torch.tensor([0.55, 0.25, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025]).repeat(num_processes, 1)) #worked for maze
+    # m = FixedCategorical(torch.tensor(
+    #     [0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067,
+    #      1 - 14 * 0.067]).repeat(num_processes, 1))
     # m = FixedCategorical(torch.tensor([0.75, 0.15, 0.05, 0.05]).repeat(num_processes, 1))
     rand_action = FixedCategorical(torch.tensor(
         [0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067,
@@ -1040,26 +1043,130 @@ def evaluate_procgen_ensemble(actor_critic, actor_critic_1, actor_critic_2, acto
             # is_not_maxEnt = (pure_action == pure_action1) * (pure_action == pure_action2) * (prob_pure_action > 0.5) * (prob_pure_action1 > 0.5) * (prob_pure_action2 > 0.5)
 
             # env_steps = env_steps+1
+
+            if num_ensemble > 4:
+                _, action4, _, dist_probs4, eval_recurrent_hidden_states4, _, _, _, _ = actor_critic_4.act(
+                    logger.obs[env_name].float().to(device),
+                    torch.zeros(num_processes, actor_critic.recurrent_hidden_state_size, device=device),
+                    logger.eval_masks[env_name],
+                    attn_masks=eval_attn_masks,
+                    attn_masks1=eval_attn_masks1,
+                    attn_masks2=eval_attn_masks2,
+                    attn_masks3=eval_attn_masks3,
+                    deterministic=deterministic,
+                    reuse_masks=det_masks)
+
+                _, action5, _, dist_probs5, eval_recurrent_hidden_states5, _, _, _, _ = actor_critic_5.act(
+                    logger.obs[env_name].float().to(device),
+                    torch.zeros(num_processes, actor_critic.recurrent_hidden_state_size, device=device),
+                    logger.eval_masks[env_name],
+                    attn_masks=eval_attn_masks,
+                    attn_masks1=eval_attn_masks1,
+                    attn_masks2=eval_attn_masks2,
+                    attn_masks3=eval_attn_masks3,
+                    deterministic=deterministic,
+                    reuse_masks=det_masks)
+
+            if num_ensemble > 6:
+                _, action6, _, dist_probs6, eval_recurrent_hidden_states6, _, _, _, _ = actor_critic_6.act(
+                    logger.obs[env_name].float().to(device),
+                    torch.zeros(num_processes, actor_critic.recurrent_hidden_state_size, device=device),
+                    logger.eval_masks[env_name],
+                    attn_masks=eval_attn_masks,
+                    attn_masks1=eval_attn_masks1,
+                    attn_masks2=eval_attn_masks2,
+                    attn_masks3=eval_attn_masks3,
+                    deterministic=deterministic,
+                    reuse_masks=det_masks)
+
+                _, action7, _, dist_probs7, eval_recurrent_hidden_states7, _, _, _, _ = actor_critic_7.act(
+                    logger.obs[env_name].float().to(device),
+                    torch.zeros(num_processes, actor_critic.recurrent_hidden_state_size, device=device),
+                    logger.eval_masks[env_name],
+                    attn_masks=eval_attn_masks,
+                    attn_masks1=eval_attn_masks1,
+                    attn_masks2=eval_attn_masks2,
+                    attn_masks3=eval_attn_masks3,
+                    deterministic=deterministic,
+                    reuse_masks=det_masks)
+
+            if num_ensemble > 8:
+                _, action8, _, dist_probs8, eval_recurrent_hidden_states8, _, _, _, _ = actor_critic_8.act(
+                    logger.obs[env_name].float().to(device),
+                    torch.zeros(num_processes, actor_critic.recurrent_hidden_state_size, device=device),
+                    logger.eval_masks[env_name],
+                    attn_masks=eval_attn_masks,
+                    attn_masks1=eval_attn_masks1,
+                    attn_masks2=eval_attn_masks2,
+                    attn_masks3=eval_attn_masks3,
+                    deterministic=deterministic,
+                    reuse_masks=det_masks)
+
+                _, action9, _, dist_probs9, eval_recurrent_hidden_states9, _, _, _, _ = actor_critic_9.act(
+                    logger.obs[env_name].float().to(device),
+                    torch.zeros(num_processes, actor_critic.recurrent_hidden_state_size, device=device),
+                    logger.eval_masks[env_name],
+                    attn_masks=eval_attn_masks,
+                    attn_masks1=eval_attn_masks1,
+                    attn_masks2=eval_attn_masks2,
+                    attn_masks3=eval_attn_masks3,
+                    deterministic=deterministic,
+                    reuse_masks=det_masks)
+
             maxEnt_steps = maxEnt_steps - 1
-            is_maxEnt_steps_limit = (maxEnt_steps <= 0)
+            # is_maxEnt_steps_limit = (maxEnt_steps <= 0)
             # is_equal = (pure_action0 == pure_action1) * (pure_action0 == pure_action2) * (pure_action0 == pure_action3)
             # is_equal = (pure_action0 == pure_action1)
-            is_equal = (action0 == action1) * (action0 == action2) * (action0 == action3)
+            # is_equal = (action0 == action1) * (action0 == action2) * (action0 == action3)
             # is_equal = (action0 == action1) * (action0 == action2) * (action0 == action3)
             # step_count = (step_count+1)*is_equal
             # is_maxEnt = (step_count<10)
             # is_pure_action = is_novel*is_equal
-            is_pure_action = is_equal * is_maxEnt_steps_limit
-            maxEnt_steps = (m.sample() + 1).to(device) * is_pure_action + maxEnt_steps * (~is_pure_action)
-            # maxEnt_steps = (3*torch.ones(num_processes,1, device=device))*is_pure_action + maxEnt_steps*(~is_pure_action)
-            if num_detEnt > 0:
-                maxEnt_steps = (num_detEnt * torch.ones(num_processes, 1, device=device)).to(
-                    device) * is_pure_action + maxEnt_steps * (~is_pure_action)
 
-            action = action0 * is_pure_action + action_maxEnt * (~is_pure_action)
+            cardinal_left = 1*(action0 == 0)+1*(action0 == 1) + 1*(action0 == 2) + 1*(action1 == 0)+1*(action1 == 1) + 1*(action1 == 2) + 1*(action2 == 0)+1*(action2 == 1) + 1*(action2 == 2)\
+                            + 1 * (action3 == 0) + 1 * (action3 == 1) + 1 * (action3 == 2)
+            cardinal_right  = 1*(action0 == 6)+1*(action0 == 7) + 1*(action0 == 8) + 1*(action1 == 6)+1*(action1 == 7) + 1*(action1 == 8) + 1*(action2 == 6)+1*(action2 == 7) + 1*(action2 == 8)\
+                            + 1 * (action3 == 6) + 1 * (action3 == 7) + 1 * (action3 == 8)
+            cardinal_down  = 1*(action0 == 3) + 1*(action1 == 3) + 1*(action2 == 3) + 1*(action3 == 3)
+            cardinal_up  = 1*(action0 == 5) + 1*(action1 == 5) + 1*(action2 == 5) + 1*(action3 == 5)
+            if num_ensemble > 4:
+                cardinal_left += 1 * (action4 == 0) + 1 * (action4 == 1) + 1 * (action4 == 2) + 1 * (action5 == 0) + 1 * (action5 == 1) + 1 * (action5 == 2)
+                cardinal_right += 1 * (action4 == 6) + 1 * (action4 == 7) + 1 * (action4 == 8) + 1 * (action5 == 6) + 1 * (action5 == 7) + 1 * (action5 == 8)
+                cardinal_down += 1 * (action4 == 3) + 1 * (action5 == 3)
+                cardinal_up += 1 * (action4 == 5) + 1 * (action5 == 5)
+            if num_ensemble > 6:
+                cardinal_left += 1 * (action6 == 0) + 1 * (action6 == 1) + 1 * (action6 == 2) + 1 * (action7 == 0) + 1 * (action7 == 1) + 1 * (action7 == 2)
+                cardinal_right += 1 * (action6 == 6) + 1 * (action6 == 7) + 1 * (action6 == 8) + 1 * (action7 == 6) + 1 * (action7 == 7) + 1 * (action7 == 8)
+                cardinal_down += 1 * (action6 == 3) + 1 * (action7 == 3)
+                cardinal_up += 1 * (action6 == 5) + 1 * (action7 == 5)
+            if num_ensemble > 8:
+                cardinal_left += 1 * (action8 == 0) + 1 * (action8 == 1) + 1 * (action8 == 2) + 1 * (action9 == 0) + 1 * (action9 == 1) + 1 * (action9 == 2)
+                cardinal_right += 1 * (action8 == 6) + 1 * (action8 == 7) + 1 * (action8 == 8) + 1 * (action9 == 6) + 1 * (action9 == 7) + 1 * (action9 == 8)
+                cardinal_down += 1 * (action8 == 3) + 1 * (action9 == 3)
+                cardinal_up += 1 * (action8 == 5) + 1 * (action9 == 5)
+
+            directions = torch.cat((cardinal_up, cardinal_right, cardinal_down, cardinal_left), dim=1)
+            cardinal_value = torch.max(directions, dim=1)[0]
+            cardinal_index = torch.max(directions, dim=1)[1]
+            is_equal = (cardinal_value == 4).unsqueeze(1)
+            lookup = torch.tensor([5, 7, 3, 1], device=device)
+            action_NN = lookup[cardinal_index].unsqueeze(1)
+
+            # is_pure_action = is_equal * is_maxEnt_steps_limit
+            # maxEnt_steps = (m.sample() + 1).to(device) * is_pure_action + maxEnt_steps * (~is_pure_action)
+            maxEnt_steps_sample = (~is_equal)*(maxEnt_steps<=0)
+            maxEnt_steps = (m.sample() + 1).to(device)*maxEnt_steps_sample + maxEnt_steps*(~maxEnt_steps_sample)
+
+            is_action = is_equal*(maxEnt_steps<=0)
+
+
+            if num_detEnt > 0:
+                maxEnt_steps = (num_detEnt * torch.ones(num_processes, 1, device=device)).to(device)*maxEnt_steps_sample + maxEnt_steps*(~maxEnt_steps_sample)
+
+            action = action_NN * is_action + action_maxEnt * (~is_action)
 
             if rand_act:
-                action = action0 * is_pure_action + rand_action.sample().to(device) * (~is_pure_action)
+                action = action_NN * is_action + rand_action.sample().to(device) * (~is_action)
             # action = pure_action*(~is_maxEnt) + pure_action_maxEnt*is_maxEnt
             # is_stuck = (env_steps > 100)
             # action = action*is_stuck + pure_action2*(~is_stuck)
@@ -1104,21 +1211,21 @@ def evaluate_procgen_ensemble(actor_critic, actor_critic_1, actor_critic_2, acto
             rew_batch.append(reward)
             done_batch.append(done)
 
-            if t == 498:
-                print("stop")
-
-            is_novel = torch.zeros(num_processes, 1, dtype=torch.bool, device=device)
-            for i in range(len(done)):
-                if done[i] == 1:
-                    logger.obs_sum[env_name][i] = next_obs[i].cpu()
-                    is_novel[i] = True
-
-            next_obs_sum = logger.obs_sum[env_name] + next_obs.cpu()
-            for i in range(len(is_novel)):
-                num_zero_obs_sum = (logger.obs_sum[env_name][i][0] == 0).sum()
-                num_zero_next_obs_sum = (next_obs_sum[i][0] == 0).sum()
-                if num_zero_next_obs_sum < num_zero_obs_sum:
-                    is_novel[i] = True
+            # if t == 498:
+            #     print("stop")
+            #
+            # is_novel = torch.zeros(num_processes, 1, dtype=torch.bool, device=device)
+            # for i in range(len(done)):
+            #     if done[i] == 1:
+            #         logger.obs_sum[env_name][i] = next_obs[i].cpu()
+            #         is_novel[i] = True
+            #
+            # next_obs_sum = logger.obs_sum[env_name] + next_obs.cpu()
+            # for i in range(len(is_novel)):
+            #     num_zero_obs_sum = (logger.obs_sum[env_name][i][0] == 0).sum()
+            #     num_zero_next_obs_sum = (next_obs_sum[i][0] == 0).sum()
+            #     if num_zero_next_obs_sum < num_zero_obs_sum:
+            #         is_novel[i] = True
 
             # for i, info in enumerate(infos):
             #     eval_episode_len_buffer[i] += 1
@@ -1128,7 +1235,7 @@ def evaluate_procgen_ensemble(actor_critic, actor_critic_1, actor_critic_2, acto
             #         eval_episode_len_buffer[i] = 0
 
             logger.obs[env_name] = next_obs
-            logger.obs_sum[env_name] = next_obs_sum
+            # logger.obs_sum[env_name] = next_obs_sum
 
     rew_batch = np.array(rew_batch)
     done_batch = np.array(done_batch)

@@ -190,7 +190,7 @@ def main():
         eval_envs_dic['train_eval'].action_space,
         base=ImpalaModel,
         base_kwargs={'recurrent': False,'hidden_size': args.recurrent_hidden_size})
-        # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
+    # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
     actor_critic2.to(device)
 
     actor_critic3 = Policy(
@@ -198,8 +198,50 @@ def main():
         eval_envs_dic['train_eval'].action_space,
         base=ImpalaModel,
         base_kwargs={'recurrent': False,'hidden_size': args.recurrent_hidden_size})
-        # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
+    # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
     actor_critic3.to(device)
+
+    actor_critic4 = Policy(
+        eval_envs_dic['train_eval'].observation_space.shape,
+        eval_envs_dic['train_eval'].action_space,
+        base=ImpalaModel,
+        base_kwargs={'recurrent': False, 'hidden_size': args.recurrent_hidden_size})
+    actor_critic4.to(device)
+
+    actor_critic5 = Policy(
+        eval_envs_dic['train_eval'].observation_space.shape,
+        eval_envs_dic['train_eval'].action_space,
+        base=ImpalaModel,
+        base_kwargs={'recurrent': False, 'hidden_size': args.recurrent_hidden_size})
+    actor_critic5.to(device)
+
+    actor_critic6 = Policy(
+        eval_envs_dic['train_eval'].observation_space.shape,
+        eval_envs_dic['train_eval'].action_space,
+        base=ImpalaModel,
+        base_kwargs={'recurrent': False, 'hidden_size': args.recurrent_hidden_size})
+    actor_critic6.to(device)
+
+    actor_critic7 = Policy(
+        eval_envs_dic['train_eval'].observation_space.shape,
+        eval_envs_dic['train_eval'].action_space,
+        base=ImpalaModel,
+        base_kwargs={'recurrent': False, 'hidden_size': args.recurrent_hidden_size})
+    actor_critic7.to(device)
+
+    actor_critic8 = Policy(
+        eval_envs_dic['train_eval'].observation_space.shape,
+        eval_envs_dic['train_eval'].action_space,
+        base=ImpalaModel,
+        base_kwargs={'recurrent': False, 'hidden_size': args.recurrent_hidden_size})
+    actor_critic8.to(device)
+
+    actor_critic9 = Policy(
+        eval_envs_dic['train_eval'].observation_space.shape,
+        eval_envs_dic['train_eval'].action_space,
+        base=ImpalaModel,
+        base_kwargs={'recurrent': False, 'hidden_size': args.recurrent_hidden_size})
+    actor_critic9.to(device)
 
     actor_critic_maxEnt = Policy(
         eval_envs_dic['train_eval'].observation_space.shape,
@@ -297,6 +339,39 @@ def main():
         actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch_maxEnt)), map_location=device)
         actor_critic_maxEnt.load_state_dict(actor_critic_weighs['state_dict'])
 
+    if args.num_ensemble > 4:
+        if (args.saved_epoch4 > 0) and args.save_dir4 != "":
+            save_path = args.save_dir4
+            actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch4)),map_location=device)
+            actor_critic4.load_state_dict(actor_critic_weighs['state_dict'])
+
+        if (args.saved_epoch5 > 0) and args.save_dir5 != "":
+            save_path = args.save_dir5
+            actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch5)),map_location=device)
+            actor_critic5.load_state_dict(actor_critic_weighs['state_dict'])
+
+    if args.num_ensemble > 6:
+        if (args.saved_epoch6 > 0) and args.save_dir6 != "":
+            save_path = args.save_dir6
+            actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch6)),map_location=device)
+            actor_critic6.load_state_dict(actor_critic_weighs['state_dict'])
+
+        if (args.saved_epoch7 > 0) and args.save_dir7 != "":
+            save_path = args.save_dir7
+            actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch7)),map_location=device)
+            actor_critic7.load_state_dict(actor_critic_weighs['state_dict'])
+
+    if args.num_ensemble > 8:
+        if (args.saved_epoch8 > 0) and args.save_dir8 != "":
+            save_path = args.save_dir8
+            actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch8)),map_location=device)
+            actor_critic8.load_state_dict(actor_critic_weighs['state_dict'])
+
+        if (args.saved_epoch9 > 0) and args.save_dir9 != "":
+            save_path = args.save_dir9
+            actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch9)),map_location=device)
+            actor_critic9.load_state_dict(actor_critic_weighs['state_dict'])
+
     logger = Logger(args.num_processes, envs.observation_space.shape, envs.observation_space.shape, actor_critic_maxEnt.recurrent_hidden_state_size, device=device)
 
     obs = envs.reset()
@@ -360,9 +435,10 @@ def main():
     #         param.requires_grad = False
     #
     is_novel = torch.ones(args.num_processes,1,dtype=torch.bool, device=device)
-    m = FixedCategorical(torch.tensor([0.55, 0.25, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025]).repeat(args.num_processes, 1))
+    m = FixedCategorical(torch.tensor([0.55, 0.25, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025]).repeat(args.num_processes, 1)) # worked for maze
     # m = FixedCategorical(torch.tensor([0.75, 0.15, 0.05, 0.05]).repeat(num_processes, 1))
-    rand_action = FixedCategorical(torch.tensor([ 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 1-14*0.067]).repeat(args.num_processes, 1))
+    # rand_action = FixedCategorical(torch.tensor([ 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 1-14*0.067]).repeat(args.num_processes, 1))
+    # m = FixedCategorical(torch.tensor([ 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 1-14*0.067]).repeat(args.num_processes, 1))
     maxEnt_steps = torch.zeros(args.num_processes,1, device=device)
 
 
@@ -415,21 +491,88 @@ def main():
                     rollouts_maxEnt.attn_masks1[step].to(device), rollouts_maxEnt.attn_masks2[step].to(device),
                     rollouts_maxEnt.attn_masks3[step].to(device))
 
+                if args.num_ensemble > 4:
+                    value, action4, action_log_prob, _, recurrent_hidden_states2, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic4.act(
+                        rollouts_maxEnt.obs[step].to(device), rollouts_maxEnt.recurrent_hidden_states[step].to(device),
+                        rollouts_maxEnt.masks[step].to(device), rollouts_maxEnt.attn_masks[step].to(device),
+                        rollouts_maxEnt.attn_masks1[step].to(device), rollouts_maxEnt.attn_masks2[step].to(device),
+                        rollouts_maxEnt.attn_masks3[step].to(device))
+
+                    value, action5, action_log_prob, _, recurrent_hidden_states3, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic5.act(
+                        rollouts_maxEnt.obs[step].to(device), rollouts_maxEnt.recurrent_hidden_states[step].to(device),
+                        rollouts_maxEnt.masks[step].to(device), rollouts_maxEnt.attn_masks[step].to(device),
+                        rollouts_maxEnt.attn_masks1[step].to(device), rollouts_maxEnt.attn_masks2[step].to(device),
+                        rollouts_maxEnt.attn_masks3[step].to(device))
+
+                if args.num_ensemble > 6:
+                    value, action6, action_log_prob, _, recurrent_hidden_states2, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic6.act(
+                        rollouts_maxEnt.obs[step].to(device), rollouts_maxEnt.recurrent_hidden_states[step].to(device),
+                        rollouts_maxEnt.masks[step].to(device), rollouts_maxEnt.attn_masks[step].to(device),
+                        rollouts_maxEnt.attn_masks1[step].to(device), rollouts_maxEnt.attn_masks2[step].to(device),
+                        rollouts_maxEnt.attn_masks3[step].to(device))
+
+                    value, action7, action_log_prob, _, recurrent_hidden_states3, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic7.act(
+                        rollouts_maxEnt.obs[step].to(device), rollouts_maxEnt.recurrent_hidden_states[step].to(device),
+                        rollouts_maxEnt.masks[step].to(device), rollouts_maxEnt.attn_masks[step].to(device),
+                        rollouts_maxEnt.attn_masks1[step].to(device), rollouts_maxEnt.attn_masks2[step].to(device),
+                        rollouts_maxEnt.attn_masks3[step].to(device))
+
+                if args.num_ensemble > 8:
+                    value, action8, action_log_prob, _, recurrent_hidden_states2, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic8.act(
+                        rollouts_maxEnt.obs[step].to(device), rollouts_maxEnt.recurrent_hidden_states[step].to(device),
+                        rollouts_maxEnt.masks[step].to(device), rollouts_maxEnt.attn_masks[step].to(device),
+                        rollouts_maxEnt.attn_masks1[step].to(device), rollouts_maxEnt.attn_masks2[step].to(device),
+                        rollouts_maxEnt.attn_masks3[step].to(device))
+
+                    value, action9, action_log_prob, _, recurrent_hidden_states3, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic9.act(
+                        rollouts_maxEnt.obs[step].to(device), rollouts_maxEnt.recurrent_hidden_states[step].to(device),
+                        rollouts_maxEnt.masks[step].to(device), rollouts_maxEnt.attn_masks[step].to(device),
+                        rollouts_maxEnt.attn_masks1[step].to(device), rollouts_maxEnt.attn_masks2[step].to(device),
+                        rollouts_maxEnt.attn_masks3[step].to(device))
 
             maxEnt_steps = maxEnt_steps - 1
-            is_maxEnt_steps_limit = (maxEnt_steps<=0)
             # is_equal = (pure_action0 == pure_action1) * (pure_action0 == pure_action2) * (pure_action0 == pure_action3)
             # is_equal = (pure_action0 == pure_action1)
-            is_equal = (action0 == action1) * (action0 == action2) * (action0 == action3)
+            cardinal_left = 1*(action0 == 0)+1*(action0 == 1) + 1*(action0 == 2) + 1*(action1 == 0)+1*(action1 == 1) + 1*(action1 == 2) + 1*(action2 == 0)+1*(action2 == 1) + 1*(action2 == 2)\
+                            + 1 * (action3 == 0) + 1 * (action3 == 1) + 1 * (action3 == 2)
+            cardinal_right  = 1*(action0 == 6)+1*(action0 == 7) + 1*(action0 == 8) + 1*(action1 == 6)+1*(action1 == 7) + 1*(action1 == 8) + 1*(action2 == 6)+1*(action2 == 7) + 1*(action2 == 8)\
+                            + 1 * (action3 == 6) + 1 * (action3 == 7) + 1 * (action3 == 8)
+            cardinal_down  = 1*(action0 == 3) + 1*(action1 == 3) + 1*(action2 == 3) + 1*(action3 == 3)
+            cardinal_up  = 1*(action0 == 5) + 1*(action1 == 5) + 1*(action2 == 5) + 1*(action3 == 5)
+            if args.num_ensemble > 4:
+                cardinal_left += 1 * (action4 == 0) + 1 * (action4 == 1) + 1 * (action4 == 2) + 1 * (action5 == 0) + 1 * (action5 == 1) + 1 * (action5 == 2)
+                cardinal_right += 1 * (action4 == 6) + 1 * (action4 == 7) + 1 * (action4 == 8) + 1 * (action5 == 6) + 1 * (action5 == 7) + 1 * (action5 == 8)
+                cardinal_down += 1 * (action4 == 3) + 1 * (action5 == 3)
+                cardinal_up += 1 * (action4 == 5) + 1 * (action5 == 5)
+            if args.num_ensemble > 6:
+                cardinal_left += 1 * (action6 == 0) + 1 * (action6 == 1) + 1 * (action6 == 2) + 1 * (action7 == 0) + 1 * (action7 == 1) + 1 * (action7 == 2)
+                cardinal_right += 1 * (action6 == 6) + 1 * (action6 == 7) + 1 * (action6 == 8) + 1 * (action7 == 6) + 1 * (action7 == 7) + 1 * (action7 == 8)
+                cardinal_down += 1 * (action6 == 3) + 1 * (action7 == 3)
+                cardinal_up += 1 * (action6 == 5) + 1 * (action7 == 5)
+            if args.num_ensemble > 8:
+                cardinal_left += 1 * (action8 == 0) + 1 * (action8 == 1) + 1 * (action8 == 2) + 1 * (action9 == 0) + 1 * (action9 == 1) + 1 * (action9 == 2)
+                cardinal_right += 1 * (action8 == 6) + 1 * (action8 == 7) + 1 * (action8 == 8) + 1 * (action9 == 6) + 1 * (action9 == 7) + 1 * (action9 == 8)
+                cardinal_down += 1 * (action8 == 3) + 1 * (action9 == 3)
+                cardinal_up += 1 * (action8 == 5) + 1 * (action9 == 5)
+
+            directions = torch.cat((cardinal_up, cardinal_right, cardinal_down, cardinal_left), dim=1)
+            cardinal_value = torch.max(directions, dim=1)[0]
+            cardinal_index = torch.max(directions, dim=1)[1]
+            is_equal = (cardinal_value >= args.num_agree).unsqueeze(1)
+            lookup = torch.tensor([5, 7, 3, 1], device=device)
+            action_NN = lookup[cardinal_index].unsqueeze(1)
+
+            # is_equal = (action0 == action1) * (action0 == action2) * (action0 == action3)
             # is_equal = (action0 == action1) * (action0 == action2) * (action0 == action3)
             # step_count = (step_count+1)*is_equal
             # is_maxEnt = (step_count<10)
             # is_pure_action = is_novel*is_equal
-            is_pure_action = is_equal*is_maxEnt_steps_limit
-            maxEnt_steps = (m.sample() + 1).to(device)*is_pure_action + maxEnt_steps*(~is_pure_action)
+            maxEnt_steps_sample = (~is_equal)*(maxEnt_steps<=0)
+            maxEnt_steps = (m.sample() + 1).to(device)*maxEnt_steps_sample + maxEnt_steps*(~maxEnt_steps_sample)
             # maxEnt_steps = (3*torch.ones(num_processes,1, device=device))*is_pure_action + maxEnt_steps*(~is_pure_action)
 
-            action = action0*is_pure_action + action_maxEnt*(~is_pure_action)
+            is_action = is_equal*(maxEnt_steps<=0)
+            action = action_NN*is_action + action_maxEnt*(~is_action)
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(action.squeeze().cpu().numpy())
             # if max(reward) < 10 and max(reward) >0:
@@ -526,8 +669,10 @@ def main():
         eval_dic_rew = {}
         eval_dic_done = {}
         for eval_disp_name in EVAL_ENVS:
-            eval_dic_rew[eval_disp_name], eval_dic_done[eval_disp_name] = evaluate_procgen_ensemble(actor_critic, actor_critic1, actor_critic2, actor_critic3, actor_critic_maxEnt, eval_envs_dic, eval_disp_name,
-                                                          args.num_processes, device, args.num_steps, logger, deterministic=True, num_detEnt=args.num_detEnt, rand_act=args.rand_act)
+            eval_dic_rew[eval_disp_name], eval_dic_done[eval_disp_name] = evaluate_procgen_ensemble(actor_critic, actor_critic1, actor_critic2, actor_critic3, actor_critic4, actor_critic5, actor_critic6, actor_critic7, actor_critic8, actor_critic9,
+                                                                                                    actor_critic_maxEnt, eval_envs_dic, eval_disp_name,
+                                                                                                    args.num_processes, device, args.num_steps, logger, deterministic=True, num_detEnt=args.num_detEnt, rand_act=args.rand_act,
+                                                                                                    num_ensemble=args.num_ensemble, num_agree=args.num_agree)
 
 
                 # if ((args.eval_nondet_interval is not None and j % args.eval_nondet_interval == 0) or j == args.continue_from_epoch):
@@ -538,8 +683,10 @@ def main():
         #                                                                args.num_processes, device, args.num_steps, logger,
         #                                                                attention_features=False, det_masks=False,
         #                                                                deterministic=False)
-        eval_test_nondet_rew, eval_test_nondet_done = evaluate_procgen_ensemble(actor_critic, actor_critic1, actor_critic2, actor_critic3, actor_critic_maxEnt, eval_envs_dic_nondet, 'test_eval_nondet',
-                                                  args.num_processes, device, args.num_steps, logger, attention_features=False, det_masks=False, deterministic=False, num_detEnt=args.num_detEnt, rand_act=args.rand_act)
+        eval_test_nondet_rew, eval_test_nondet_done = evaluate_procgen_ensemble(actor_critic, actor_critic1, actor_critic2, actor_critic3, actor_critic4, actor_critic5, actor_critic6, actor_critic7, actor_critic8, actor_critic9,
+                                                                                actor_critic_maxEnt, eval_envs_dic_nondet, 'test_eval_nondet',
+                                                                                args.num_processes, device, args.num_steps, logger, attention_features=False, det_masks=False, deterministic=False, num_detEnt=args.num_detEnt, rand_act=args.rand_act,
+                                                                                num_ensemble=args.num_ensemble, num_agree=args.num_agree)
 
         logger.feed_eval(eval_dic_rew['train_eval'], eval_dic_done['train_eval'], eval_dic_rew['test_eval'], eval_dic_done['test_eval'], seeds_train, seeds_test,
                          eval_dic_rew['train_eval'], eval_dic_rew['test_eval'], eval_test_nondet_rew, eval_test_nondet_done)
