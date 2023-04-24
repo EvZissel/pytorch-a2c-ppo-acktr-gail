@@ -189,7 +189,7 @@ def main():
                             restrict_themes=args.restrict_themes,
                             use_monochrome_assets=args.use_monochrome_assets,
                             rand_seed=args.seed,
-                            center_agent=True,
+                            center_agent=args.center_agent,
                             mask_size=args.mask_size,
                             normalize_rew=args.normalize_rew,
                             mask_all=args.mask_all,
@@ -222,7 +222,7 @@ def main():
                                                    restrict_themes=args.restrict_themes,
                                                    use_monochrome_assets=args.use_monochrome_assets,
                                                    rand_seed=args.seed,
-                                                   center_agent=True,
+                                                   center_agent=args.center_agent,
                                                    mask_size=args.mask_size,
                                                    normalize_rew=args.normalize_rew,
                                                    mask_all=args.mask_all,
@@ -238,7 +238,7 @@ def main():
                                                   restrict_themes=args.restrict_themes,
                                                   use_monochrome_assets=args.use_monochrome_assets,
                                                   rand_seed=args.seed,
-                                                  center_agent=True,
+                                                  center_agent=args.center_agent,
                                                   mask_size=args.mask_size,
                                                   normalize_rew=args.normalize_rew,
                                                   mask_all=args.mask_all,
@@ -451,6 +451,10 @@ def main():
             #     print(reward)
             int_reward = np.zeros_like(reward)
 
+            next_obs_diff = 1 * ((obs_full - rollouts.obs_full.to(device)).abs() > 1e-5)
+            next_obs_sum = rollouts.obs_sum.to(device) + next_obs_diff
+            next_obs_sum = 1 * (down_sample_avg(next_obs_sum).abs() > 1e-5)
+            obs_sum = 1 * (down_sample_avg(rollouts.obs_sum.to(device)).abs() > 1e-5)
             for i in range(len(done)):
                 if done[i] == 1 or (rollouts.step_env[i] % args.reset_cont == 0):
                     rollouts.obs_sum[i] = torch.zeros_like(rollouts.obs_full[i])
@@ -459,13 +463,11 @@ def main():
                     # rollouts.obs0[i].copy_(obs_full[i].cpu())
                     rollouts.step_env[i] = 0
                     # rollouts.diff_obs[step][i].copy_(torch.zeros_like(obs[i]).cpu())
+                else:
+                    num_zero_obs_sum = (obs_sum[i][0] == 0).sum()
+                    num_zero_next_obs_sum = (next_obs_sum[i][0] == 0).sum()
+                    int_reward[i] = num_zero_obs_sum - num_zero_next_obs_sum
 
-            next_obs_diff = 1 * ((obs_full - rollouts.obs_full.to(device)).abs() > 1e-5)
-            next_obs_sum = rollouts.obs_sum.to(device) + next_obs_diff
-            next_obs_sum = 1 * (down_sample_avg(next_obs_sum).abs() > 1e-5)
-            obs_sum = 1 * (down_sample_avg(rollouts.obs_sum.to(device)).abs() > 1e-5)
-            for i in range(len(reward)):
-                int_reward[i] = (next_obs_sum[i] - obs_sum[i]).sum() / 3  # we normalize by the number of the image channels
 
             for i, info in enumerate(infos):
                 seeds[i] = info["level_seed"]
@@ -570,7 +572,7 @@ def main():
             logger.feed_eval(eval_dic_int_rew['train_eval'], eval_dic_done['train_eval'], eval_dic_int_rew['test_eval'],
                              eval_dic_done['test_eval'],
                              eval_dic_seeds['train_eval'], eval_dic_seeds['test_eval'], eval_dic_rew['train_eval'],
-                             eval_dic_rew['test_eval'], eval_dic_rew['test_eval'], eval_dic_done['test_eval'])
+                             eval_dic_rew['test_eval'], eval_dic_rew['test_eval'], eval_dic_done['test_eval'], eval_dic_seeds['test_eval'])
             episode_statistics = logger.get_episode_statistics()
             print(printout)
             print(episode_statistics)

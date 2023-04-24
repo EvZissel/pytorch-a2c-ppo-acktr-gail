@@ -86,8 +86,8 @@ class RolloutStorage(object):
         self.attn_masks2[self.step + 1].copy_(attn_masks2)
         self.attn_masks3[self.step + 1].copy_(attn_masks3)
         self.info_batch.append(info)
-        # self.obs_sum += 1 * ((obs_full.cpu() - self.obs_full).abs() > 1e-5)
-        self.obs_sum += obs_full.cpu()
+        self.obs_sum += 1 * ((obs_full.cpu() - self.obs_full).abs() > 1e-5) #we sum diffrences
+        # self.obs_sum += obs_full.cpu()
         self.obs_full.copy_(obs_full)
         self.step_env += 1
 
@@ -95,7 +95,8 @@ class RolloutStorage(object):
 
     def after_update(self):
         self.obs[0].copy_(self.obs[-1])
-        self.obs_sum.copy_(self.obs_full)
+        # self.obs_sum.copy_(self.obs_full)
+        self.obs_sum.copy_(torch.zeros_like(self.obs_full))
         self.recurrent_hidden_states[0].copy_(self.recurrent_hidden_states[-1])
         self.masks[0].copy_(self.masks[-1])
         self.bad_masks[0].copy_(self.bad_masks[-1])

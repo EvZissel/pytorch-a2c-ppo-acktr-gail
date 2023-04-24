@@ -1759,7 +1759,10 @@ def evaluate_procgen_maxEnt_avepool_original(actor_critic, eval_envs_dic, eval_e
             next_obs_sum = 1 * (down_sample_avg(next_obs_sum).abs() > 1e-5)
             obs_sum = 1 * (down_sample_avg(logger.obs_sum[env_name].to(device)).abs() > 1e-5)
             for i in range(len(done)):
-                int_reward[i] = (next_obs_sum[i] - obs_sum[i]).sum() / 3  # for RGB images
+                # int_reward[i] = (next_obs_sum[i] - obs_sum[i]).sum() / 3  # for RGB images
+                num_zero_obs_sum = (obs_sum[i][0] == 0).sum()
+                num_zero_next_obs_sum = (next_obs_sum[i][0] == 0).sum()
+                int_reward[i] = num_zero_obs_sum - num_zero_next_obs_sum
 
             rew_batch.append(reward)
             int_rew_batch.append(int_reward)
@@ -1768,7 +1771,7 @@ def evaluate_procgen_maxEnt_avepool_original(actor_critic, eval_envs_dic, eval_e
 
             logger.obs[env_name] = next_obs
             logger.obs_full[env_name] = next_obs_full
-            logger.obs_sum[env_name] = logger.obs_sum[env_name] + next_obs_diff
+            logger.obs_sum[env_name] += next_obs_diff
             logger.last_action[env_name] = action
 
     rew_batch = np.array(rew_batch)

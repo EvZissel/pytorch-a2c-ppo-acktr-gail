@@ -19,7 +19,7 @@ from a2c_ppo_acktr.distributions import Bernoulli, Categorical, DiagGaussian, Fi
 EVAL_ENVS = ['train_eval','test_eval']
 
 # num_processes = 600
-env_name = "jumper"
+env_name = "dodgeball"
 start_level = 2
 num_level = 1
 # num_level_test = 128
@@ -31,17 +31,17 @@ n_steps = 1
 
 device = torch.device("cuda:{}".format(0))
 
-test_env = ProcgenGym3Env(num=1,
-                          env_name=env_name,
-                          start_level=start_level,
-                          num_levels=num_level,
-                          distribution_mode=distribution_mode,
-                          render_mode="rgb_array",
-                          use_generated_assets=False,
-                          center_agent=True,
-                          use_backgrounds=True,
-                          restrict_themes=False,
-                          use_monochrome_assets=False)
+# test_env = ProcgenGym3Env(num=1,
+#                           env_name=env_name,
+#                           start_level=start_level,
+#                           num_levels=num_level,
+#                           distribution_mode=distribution_mode,
+#                           render_mode="rgb_array",
+#                           use_generated_assets=False,
+#                           center_agent=False,
+#                           use_backgrounds=True,
+#                           restrict_themes=False,
+#                           use_monochrome_assets=False)
 
 test_env2 = ProcgenGym3Env(num=1,
                           env_name=env_name,
@@ -51,7 +51,7 @@ test_env2 = ProcgenGym3Env(num=1,
                           render_mode="rgb_array",
                           use_generated_assets=False,
                           center_agent=False,
-                          use_backgrounds=True,
+                          use_backgrounds=False,
                           restrict_themes=False,
                           use_monochrome_assets=False)
 
@@ -66,16 +66,16 @@ average_obs = (obs_sum/num_steps).int()
 diff_obs = average_obs-obs0
 
 
-myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1))
+myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
 plt.show()
 
 
-myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1))
-plt.show()
-# myobj = plt.imshow(test_env.get_info()[0]['rgb'])
+# myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1))
 # plt.show()
+# # myobj = plt.imshow(test_env.get_info()[0]['rgb'])
+# # plt.show()
 
-action = np.array([7])
+action = np.array([9])
 test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
@@ -86,14 +86,14 @@ num_steps += 1
 average_obs = (obs_sum/num_steps)
 diff_obs = torch.tensor((average_obs - obs0))
 
-myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1))
+myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
 plt.show()
-# myobj = plt.imshow(test_env.get_info()[0]['rgb'])
+# # myobj = plt.imshow(test_env.get_info()[0]['rgb'])
+# # plt.show()
+# myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1))
 # plt.show()
-myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1))
-plt.show()
 
-action = np.array([7])
+action = np.array([9])
 test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
@@ -105,13 +105,13 @@ average_obs = (obs_sum/num_steps)
 diff_obs = torch.tensor((average_obs - obs0))
 
 
-myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1))
+myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
 plt.show()
 
-myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1))
-plt.show()
+# myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1))
+# plt.show()
 
-action = np.array([7])
+action = np.array([9])
 test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
@@ -123,13 +123,13 @@ average_obs = (obs_sum/num_steps).int()
 diff_obs = torch.tensor((average_obs - obs0))
 
 
-myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1))
+myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
 plt.show()
 
-myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1))
-plt.show()
+# myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1))
+# plt.show()
 
-action = np.array([7])
+action = np.array([9])
 test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
@@ -141,11 +141,11 @@ average_obs = (obs_sum/num_steps).int()
 diff_obs = torch.tensor((average_obs - obs0))
 
 
-myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1))
+myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
 plt.show()
 
-myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1))
-plt.show()
+# myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1).int())
+# plt.show()
 
 print('stop')
 
