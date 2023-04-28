@@ -382,7 +382,7 @@ class maxEnt_Logger(Logger):
                     train_vs_oracle = np.sum(self.episode_rewards_train[i]) / (max_reward_train_seeds + 1e-4)
                     if train_vs_oracle > 1:
                         print("bug! train sum reward is {} ".format(train_vs_oracle))
-                        train_vs_oracle = 0
+                        train_vs_oracle = 1
                     self.episode_reward_buffer_train_vs_oracle.append(train_vs_oracle)
                     self.episode_reward_buffer_train_completed.append(1*(np.sum(self.episode_rewards_train[i]) == max_reward_train_seeds))
                     self.episode_rewards_train[i] = []
@@ -397,7 +397,7 @@ class maxEnt_Logger(Logger):
                     test_vs_oracle = np.sum(self.episode_rewards_test[i]) / (max_reward_test_seeds + 1e-4)
                     if test_vs_oracle > 1:
                         print("bug! test sum reward is {} ".format(test_vs_oracle))
-                        test_vs_oracle = 0
+                        test_vs_oracle = 1
                     self.episode_reward_buffer_test_vs_oracle.append(test_vs_oracle)
                     self.episode_reward_buffer_test_completed.append(1*(np.sum(self.episode_rewards_test[i]) == max_reward_test_seeds))
                     self.episode_rewards_test[i] = []
@@ -411,7 +411,7 @@ class maxEnt_Logger(Logger):
                     test_vs_oracle_nondet = np.sum(self.episode_rewards_test_nondet[i]) / (max_reward_test_seeds_nondet + 1e-4)
                     if test_vs_oracle_nondet > 1:
                         print("bug! test nondet sum reward is {} ".format(test_vs_oracle_nondet))
-                        test_vs_oracle_nondet = 0
+                        test_vs_oracle_nondet = 1
                     self.episode_reward_buffer_test_vs_oracle_nondet.append(test_vs_oracle_nondet)
                     self.episode_reward_buffer_test_completed_nondet.append(1*(np.sum(self.episode_rewards_test_nondet[i]) == max_reward_test_seeds_nondet))
                     self.episode_rewards_test_nondet[i] = []
@@ -424,7 +424,7 @@ class maxEnt_Logger(Logger):
                     train_vs_oracle_nondet = np.sum(self.episode_rewards_train_nondet[i]) / (max_reward_train_seeds_nondet + 1e-4)
                     if train_vs_oracle_nondet > 1:
                         print("bug! reain nondet sum reward is {} ".format(train_vs_oracle_nondet))
-                        train_vs_oracle_nondet = 0
+                        train_vs_oracle_nondet = 1
                     self.episode_reward_buffer_train_vs_oracle_nondet.append(train_vs_oracle_nondet)
                     self.episode_reward_buffer_train_completed_nondet.append(1*(np.sum(self.episode_rewards_train_nondet[i]) == max_reward_train_seeds_nondet))
                     self.episode_rewards_train_nondet[i] = []

@@ -118,7 +118,7 @@ def main():
         'test_eval': []
     }
 
-    test_start_level = 100000
+    test_start_level = args.start_level + args.num_level + 1
     start_train_test = {
         'train_eval': args.start_level,
         'test_eval': test_start_level
@@ -144,9 +144,9 @@ def main():
             obs = envs.reset()
             obs_sum = obs
             # plot mazes
-            # plt.imshow(obs[0].transpose(0, 2).cpu().numpy())
+            plt.imshow(obs[0].transpose(0, 2).cpu().numpy())
             # plt.savefig("test.png")
-            # plt.show()
+            plt.show()
 
             action = torch.full((1, 1), 5)
             done = torch.full((1, 1), 0)

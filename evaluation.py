@@ -1148,7 +1148,7 @@ def evaluate_procgen_ensemble(actor_critic, actor_critic_1, actor_critic_2, acto
             directions = torch.cat((cardinal_up, cardinal_right, cardinal_down, cardinal_left), dim=1)
             cardinal_value = torch.max(directions, dim=1)[0]
             cardinal_index = torch.max(directions, dim=1)[1]
-            is_equal = (cardinal_value == 4).unsqueeze(1)
+            is_equal = (cardinal_value >= num_agree).unsqueeze(1)
             lookup = torch.tensor([5, 7, 3, 1], device=device)
             action_NN = lookup[cardinal_index].unsqueeze(1)
 
@@ -1756,12 +1756,12 @@ def evaluate_procgen_maxEnt_avepool_original(actor_critic, eval_envs_dic, eval_e
             #     int_reward[i] = num_zero_obs_sum - num_zero_next_obs_sum
             next_obs_diff = 1 * ((next_obs_full - logger.obs_full[env_name].to(device)).abs() > 1e-5)
             next_obs_sum = logger.obs_sum[env_name].to(device) + next_obs_diff
-            next_obs_sum = 1 * (down_sample_avg(next_obs_sum).abs() > 1e-5)
-            obs_sum = 1 * (down_sample_avg(logger.obs_sum[env_name].to(device)).abs() > 1e-5)
+            next_obs_sum = (1 * (down_sample_avg(next_obs_sum).abs() > 1e-5)).sum(1)
+            obs_sum = (1 * (down_sample_avg(logger.obs_sum[env_name].to(device)).abs() > 1e-5)).sum(1)
             for i in range(len(done)):
                 # int_reward[i] = (next_obs_sum[i] - obs_sum[i]).sum() / 3  # for RGB images
-                num_zero_obs_sum = (obs_sum[i][0] == 0).sum()
-                num_zero_next_obs_sum = (next_obs_sum[i][0] == 0).sum()
+                num_zero_obs_sum = (obs_sum[i] == 0).sum()
+                num_zero_next_obs_sum = (next_obs_sum[i] == 0).sum()
                 int_reward[i] = num_zero_obs_sum - num_zero_next_obs_sum
 
             rew_batch.append(reward)

@@ -66,8 +66,8 @@ class VideoRecorderprocess(VideoRecorderWrapper):
 
         return obs
 
-# test_start_level = 21bi maze
-test_start_level = 220
+# test_start_level = 21i maze
+test_start_level = 210
 # test_env  = ProcgenConatEnvs(env_name=env_name,
 #                              num_envs=num_level,
 #                              start_level=test_start_level,
@@ -89,11 +89,11 @@ test_env = ProcgenGym3Env(num=1,
                           num_levels=num_level,
                           distribution_mode=distribution_mode,
                           render_mode="rgb_array",
-                          use_generated_assets=True,
+                          use_generated_assets=False,
                           center_agent=False,
-                          use_backgrounds=False,
-                          restrict_themes=True,
-                          use_monochrome_assets=True,
+                          use_backgrounds=True,
+                          restrict_themes=False,
+                          use_monochrome_assets=False,
                           rand_seed=seed)
 
 test_env_full_obs = ProcgenGym3Env(num=1,
@@ -102,11 +102,11 @@ test_env_full_obs = ProcgenGym3Env(num=1,
                           num_levels=num_level,
                           distribution_mode=distribution_mode,
                           render_mode="rgb_array",
-                          use_generated_assets=True,
+                          use_generated_assets=False,
                           center_agent=False,
-                          use_backgrounds=False,
-                          restrict_themes=True,
-                          use_monochrome_assets=True,
+                          use_backgrounds=True,
+                          restrict_themes=False,
+                          use_monochrome_assets=False,
                           rand_seed=seed)
 
 test_env = VideoRecorderprocess(env=test_env, directory="./videos", info_key="rgb", prefix=str(test_start_level), fps=5, render=True)
@@ -160,33 +160,33 @@ actor_critic6= Policy(
     base_kwargs={'recurrent': False ,'hidden_size': 256})
 actor_critic6.to(device)
 
-# actor_critic7= Policy(
-#     (3,64,64),
-#     spaces.Discrete(15),
-#     base=ImpalaModel,
-#     base_kwargs={'recurrent': False ,'hidden_size': 256})
-# actor_critic7.to(device)
-#
-# actor_critic8= Policy(
-#     (3,64,64),
-#     spaces.Discrete(15),
-#     base=ImpalaModel,
-#     base_kwargs={'recurrent': False ,'hidden_size': 256})
-# actor_critic8.to(device)
-#
-# actor_critic9= Policy(
-#     (3,64,64),
-#     spaces.Discrete(15),
-#     base=ImpalaModel,
-#     base_kwargs={'recurrent': False ,'hidden_size': 256})
-# actor_critic9.to(device)
-#
-# actor_critic10= Policy(
-#     (3,64,64),
-#     spaces.Discrete(15),
-#     base=ImpalaModel,
-#     base_kwargs={'recurrent': False ,'hidden_size': 256})
-# actor_critic10.to(device)
+actor_critic7= Policy(
+    (3,64,64),
+    spaces.Discrete(15),
+    base=ImpalaModel,
+    base_kwargs={'recurrent': False ,'hidden_size': 256})
+actor_critic7.to(device)
+
+actor_critic8= Policy(
+    (3,64,64),
+    spaces.Discrete(15),
+    base=ImpalaModel,
+    base_kwargs={'recurrent': False ,'hidden_size': 256})
+actor_critic8.to(device)
+
+actor_critic9= Policy(
+    (3,64,64),
+    spaces.Discrete(15),
+    base=ImpalaModel,
+    base_kwargs={'recurrent': False ,'hidden_size': 256})
+actor_critic9.to(device)
+
+actor_critic10= Policy(
+    (3,64,64),
+    spaces.Discrete(15),
+    base=ImpalaModel,
+    base_kwargs={'recurrent': False ,'hidden_size': 256})
+actor_critic10.to(device)
 
 # # training agent
 # agent = algo.PPO(
@@ -204,7 +204,7 @@ actor_critic6.to(device)
 #     weight_decay=0)
 
 # Load previous model
-saved_epoch = 1524
+saved_epoch = 3050
 #
 # # # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_58967_num_env_200_entro_0.01_gama_0.5_05-02-2023_22-24-49_original"
 # # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_58967_num_env_200_entro_0.01_gama_0.5_05-02-2023_18-15-27_original"
@@ -215,7 +215,8 @@ saved_epoch = 1524
 # # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_58967_num_env_200_entro_0.01_gama_0.5_04-02-2023_15-46-16_original"
 # # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_3569_num_env_200_entro_0.01_gama_0.5_08-02-2023_23-48-07_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_7945_num_env_200_entro_0.01_gama_0.99_06-04-2023_16-01-01" #hard
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.5_11-04-2023_12-21-22"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.5_11-04-2023_12-21-22"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.5_24-04-2023_13-36-20_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
@@ -225,74 +226,78 @@ if (saved_epoch > 0) and save_dir != "":
 saved_epoch = 1524
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_0_num_env_200_entro_0.01_gama_0.999_24-01-2023_18-15-01_noRNN"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_23456_num_env_200_entro_0.01_gama_0.999_10-04-2023_18-12-26_noRNN" #hard
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1547_num_env_200_entro_0.01_gama_0.999_10-04-2023_15-29-37_noRNN"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1547_num_env_200_entro_0.01_gama_0.999_10-04-2023_15-29-37_noRNN"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_63957_num_env_200_entro_0.01_gama_0.999_01-02-2023_13-55-44_noRNN_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic1.load_state_dict(actor_critic_weighs['state_dict'])
 
 saved_epoch = 1524
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_25478_num_env_200_entro_0.01_gama_0.999_10-04-2023_15-30-04_noRNN"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_25478_num_env_200_entro_0.01_gama_0.999_10-04-2023_15-30-04_noRNN"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_25698_num_env_200_entro_0.01_gama_0.999_01-02-2023_14-02-43_noRNN_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic2.load_state_dict(actor_critic_weighs['state_dict'])
 
-saved_epoch = 1524
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_44678_num_env_200_entro_0.01_gama_0.999_10-04-2023_15-30-49_noRNN" #hard
+saved_epoch = 2000
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_44678_num_env_200_entro_0.01_gama_0.999_10-04-2023_15-30-49_noRNN"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_58965_num_env_200_entro_0.01_gama_0.999_02-02-2023_12-52-47_noRNN_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic3.load_state_dict(actor_critic_weighs['state_dict'])
 
-saved_epoch = 1524
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_9745_num_env_200_entro_0.01_gama_0.999_10-04-2023_15-31-16_noRNN" #hard
+saved_epoch = 2000
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_9745_num_env_200_entro_0.01_gama_0.999_10-04-2023_15-31-16_noRNN"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_4926_num_env_200_entro_0.01_gama_0.999_02-02-2023_12-53-12_noRNN_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic4.load_state_dict(actor_critic_weighs['state_dict'])
 
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_5896_num_env_200_entro_0.01_gama_0.999_11-04-2023_12-22-03_noRNN"
+saved_epoch = 1524
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_5896_num_env_200_entro_0.01_gama_0.999_11-04-2023_12-22-03_noRNN"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1296_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-47-44_noRNN_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic5.load_state_dict(actor_critic_weighs['state_dict'])
 
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_6334_num_env_200_entro_0.01_gama_0.999_11-04-2023_12-22-26_noRNN"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_6334_num_env_200_entro_0.01_gama_0.999_11-04-2023_12-22-26_noRNN"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_26987_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-48-04_noRNN_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic6.load_state_dict(actor_critic_weighs['state_dict'])
 
-# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_0_num_env_50_entro_0.01_gama_0.999_15-01-2023_15-55-35_noRNN"
-# if (saved_epoch > 0) and save_dir != "":
-#     save_path = save_dir
-#     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
-#     actor_critic6.load_state_dict(actor_critic_weighs['state_dict'])
-#
-# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_0_num_env_50_entro_0.01_gama_0.999_15-01-2023_15-56-03_noRNN"
-# if (saved_epoch > 0) and save_dir != "":
-#     save_path = save_dir
-#     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
-#     actor_critic7.load_state_dict(actor_critic_weighs['state_dict'])
-#
-# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_0_num_env_50_entro_0.01_gama_0.999_15-01-2023_15-56-31_noRNN"
-# if (saved_epoch > 0) and save_dir != "":
-#     save_path = save_dir
-#     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
-#     actor_critic8.load_state_dict(actor_critic_weighs['state_dict'])
-#
-# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_0_num_env_50_entro_0.01_gama_0.999_15-01-2023_16-06-03_noRNN"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_8877_num_env_200_entro_0.01_gama_0.999_20-04-2023_22-31-25_noRNN"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_3875_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-48-25_noRNN_original"
+if (saved_epoch > 0) and save_dir != "":
+    save_path = save_dir
+    actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
+    actor_critic7.load_state_dict(actor_critic_weighs['state_dict'])
+
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_97645_num_env_200_entro_0.01_gama_0.999_20-04-2023_22-32-27_noRNN"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_4976_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-48-46_noRNN_original"
+if (saved_epoch > 0) and save_dir != "":
+    save_path = save_dir
+    actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
+    actor_critic8.load_state_dict(actor_critic_weighs['state_dict'])
+
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_110110_num_env_200_entro_0.01_gama_0.999_20-04-2023_22-32-54_noRNN"
 # if (saved_epoch > 0) and save_dir != "":
 #     save_path = save_dir
 #     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
 #     actor_critic9.load_state_dict(actor_critic_weighs['state_dict'])
 #
-# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_0_num_env_50_entro_0.01_gama_0.999_15-01-2023_16-06-10_noRNN"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_27854_num_env_200_entro_0.01_gama_0.999_20-04-2023_22-33-48_noRNN"
 # if (saved_epoch > 0) and save_dir != "":
 #     save_path = save_dir
 #     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
 #     actor_critic10.load_state_dict(actor_critic_weighs['state_dict'])
+
 
 # obs = test_env.reset()
 
@@ -411,17 +416,17 @@ while not done[0] and iter<1000:
             deterministic=True,
             reuse_masks=False)
 
-        dist_probs1[:, 1] += dist_probs1[:, 0]
-        dist_probs1[:, 1] += dist_probs1[:, 2]
-        dist_probs1[:, 0] = 0
-        dist_probs1[:, 2] = 0
-
-        dist_probs1[:, 7] += dist_probs1[:, 6]
-        dist_probs1[:, 7] += dist_probs1[:, 8]
-        dist_probs1[:, 6] = 0
-        dist_probs1[:, 8] = 0
-        pure_action1 = dist_probs1.max(1)[1].unsqueeze(1)
-        prob_pure_action1 = dist_probs1.max(1)[0].unsqueeze(1)
+        # dist_probs1[:, 1] += dist_probs1[:, 0]
+        # dist_probs1[:, 1] += dist_probs1[:, 2]
+        # dist_probs1[:, 0] = 0
+        # dist_probs1[:, 2] = 0
+        #
+        # dist_probs1[:, 7] += dist_probs1[:, 6]
+        # dist_probs1[:, 7] += dist_probs1[:, 8]
+        # dist_probs1[:, 6] = 0
+        # dist_probs1[:, 8] = 0
+        # pure_action1 = dist_probs1.max(1)[1].unsqueeze(1)
+        # prob_pure_action1 = dist_probs1.max(1)[0].unsqueeze(1)
 
         #
         # if (prob_pure_action1 > 0.9):
@@ -440,17 +445,17 @@ while not done[0] and iter<1000:
             deterministic=True,
             reuse_masks=False)
 
-        dist_probs2[:, 1] += dist_probs2[:, 0]
-        dist_probs2[:, 1] += dist_probs2[:, 2]
-        dist_probs2[:, 0] = 0
-        dist_probs2[:, 2] = 0
-
-        dist_probs2[:, 7] += dist_probs2[:, 6]
-        dist_probs2[:, 7] += dist_probs2[:, 8]
-        dist_probs2[:, 6] = 0
-        dist_probs2[:, 8] = 0
-        pure_action2 = dist_probs2.max(1)[1].unsqueeze(1)
-        prob_pure_action2 = dist_probs2.max(1)[0].unsqueeze(1)
+        # dist_probs2[:, 1] += dist_probs2[:, 0]
+        # dist_probs2[:, 1] += dist_probs2[:, 2]
+        # dist_probs2[:, 0] = 0
+        # dist_probs2[:, 2] = 0
+        #
+        # dist_probs2[:, 7] += dist_probs2[:, 6]
+        # dist_probs2[:, 7] += dist_probs2[:, 8]
+        # dist_probs2[:, 6] = 0
+        # dist_probs2[:, 8] = 0
+        # pure_action2 = dist_probs2.max(1)[1].unsqueeze(1)
+        # prob_pure_action2 = dist_probs2.max(1)[0].unsqueeze(1)
 
         # if (prob_pure_action2 > 0.9):
         #     moving_average_prob2 = (1 - beta) * moving_average_prob2 + beta * prob_pure_action2
@@ -468,17 +473,17 @@ while not done[0] and iter<1000:
             deterministic=True,
             reuse_masks=False)
 
-        dist_probs3[:, 1] += dist_probs3[:, 0]
-        dist_probs3[:, 1] += dist_probs3[:, 2]
-        dist_probs3[:, 0] = 0
-        dist_probs3[:, 2] = 0
-
-        dist_probs3[:, 7] += dist_probs3[:, 6]
-        dist_probs3[:, 7] += dist_probs3[:, 8]
-        dist_probs3[:, 6] = 0
-        dist_probs3[:, 8] = 0
-        pure_action3 = dist_probs3.max(1)[1].unsqueeze(1)
-        prob_pure_action3 = dist_probs3.max(1)[0].unsqueeze(1)
+        # dist_probs3[:, 1] += dist_probs3[:, 0]
+        # dist_probs3[:, 1] += dist_probs3[:, 2]
+        # dist_probs3[:, 0] = 0
+        # dist_probs3[:, 2] = 0
+        #
+        # dist_probs3[:, 7] += dist_probs3[:, 6]
+        # dist_probs3[:, 7] += dist_probs3[:, 8]
+        # dist_probs3[:, 6] = 0
+        # dist_probs3[:, 8] = 0
+        # pure_action3 = dist_probs3.max(1)[1].unsqueeze(1)
+        # prob_pure_action3 = dist_probs3.max(1)[0].unsqueeze(1)
 
         value4, action4, _, dist_probs4, _, _, _, _, _ = actor_critic4.act(
             obs.float().to(device),
@@ -491,17 +496,17 @@ while not done[0] and iter<1000:
             deterministic=True,
             reuse_masks=False)
 
-        dist_probs4[:, 1] += dist_probs4[:, 0]
-        dist_probs4[:, 1] += dist_probs4[:, 2]
-        dist_probs4[:, 0] = 0
-        dist_probs4[:, 2] = 0
-
-        dist_probs4[:, 7] += dist_probs4[:, 6]
-        dist_probs4[:, 7] += dist_probs4[:, 8]
-        dist_probs4[:, 6] = 0
-        dist_probs4[:, 8] = 0
-        pure_action4 = dist_probs4.max(1)[1].unsqueeze(1)
-        prob_pure_action4 = dist_probs4.max(1)[0].unsqueeze(1)
+        # dist_probs4[:, 1] += dist_probs4[:, 0]
+        # dist_probs4[:, 1] += dist_probs4[:, 2]
+        # dist_probs4[:, 0] = 0
+        # dist_probs4[:, 2] = 0
+        #
+        # dist_probs4[:, 7] += dist_probs4[:, 6]
+        # dist_probs4[:, 7] += dist_probs4[:, 8]
+        # dist_probs4[:, 6] = 0
+        # dist_probs4[:, 8] = 0
+        # pure_action4 = dist_probs4.max(1)[1].unsqueeze(1)
+        # prob_pure_action4 = dist_probs4.max(1)[0].unsqueeze(1)
 
         _, action5, _, dist_probs5, _, _, _, _, _ = actor_critic5.act(
             obs.float().to(device),
@@ -514,17 +519,17 @@ while not done[0] and iter<1000:
             deterministic=True,
             reuse_masks=False)
 
-        dist_probs5[:, 1] += dist_probs5[:, 0]
-        dist_probs5[:, 1] += dist_probs5[:, 2]
-        dist_probs5[:, 0] = 0
-        dist_probs5[:, 2] = 0
-
-        dist_probs5[:, 7] += dist_probs5[:, 6]
-        dist_probs5[:, 7] += dist_probs5[:, 8]
-        dist_probs5[:, 6] = 0
-        dist_probs5[:, 8] = 0
-        pure_action5 = dist_probs5.max(1)[1].unsqueeze(1)
-        prob_pure_action5 = dist_probs5.max(1)[0].unsqueeze(1)
+        # dist_probs5[:, 1] += dist_probs5[:, 0]
+        # dist_probs5[:, 1] += dist_probs5[:, 2]
+        # dist_probs5[:, 0] = 0
+        # dist_probs5[:, 2] = 0
+        #
+        # dist_probs5[:, 7] += dist_probs5[:, 6]
+        # dist_probs5[:, 7] += dist_probs5[:, 8]
+        # dist_probs5[:, 6] = 0
+        # dist_probs5[:, 8] = 0
+        # pure_action5 = dist_probs5.max(1)[1].unsqueeze(1)
+        # prob_pure_action5 = dist_probs5.max(1)[0].unsqueeze(1)
 
         _, action6, _, dist_probs6, _, _, _, _, _ = actor_critic6.act(
             obs.float().to(device),
@@ -549,16 +554,16 @@ while not done[0] and iter<1000:
         # pure_action6 = dist_probs6.max(1)[1].unsqueeze(1)
         # prob_pure_action6 = dist_probs6.max(1)[0].unsqueeze(1)
         #
-        # _, _, _, dist_probs7, _, _, _, _, _ = actor_critic7.act(
-        #     obs.float().to(device),
-        #     eval_recurrent_hidden_states,
-        #     eval_masks,
-        #     attn_masks=eval_attn_masks,
-        #     attn_masks1=eval_attn_masks1,
-        #     attn_masks2=eval_attn_masks2,
-        #     attn_masks3=eval_attn_masks3,
-        #     deterministic=True,
-        #     reuse_masks=False)
+        _, action7, _, dist_probs7, _, _, _, _, _ = actor_critic7.act(
+            obs.float().to(device),
+            eval_recurrent_hidden_states,
+            eval_masks,
+            attn_masks=eval_attn_masks,
+            attn_masks1=eval_attn_masks1,
+            attn_masks2=eval_attn_masks2,
+            attn_masks3=eval_attn_masks3,
+            deterministic=True,
+            reuse_masks=False)
         #
         # dist_probs7[:, 1] += dist_probs7[:, 0]
         # dist_probs7[:, 1] += dist_probs7[:, 2]
@@ -572,16 +577,16 @@ while not done[0] and iter<1000:
         # pure_action7 = dist_probs7.max(1)[1].unsqueeze(1)
         # prob_pure_action7 = dist_probs7.max(1)[0].unsqueeze(1)
         #
-        # _, _, _, dist_probs8, _, _, _, _, _ = actor_critic8.act(
-        #     obs.float().to(device),
-        #     eval_recurrent_hidden_states,
-        #     eval_masks,
-        #     attn_masks=eval_attn_masks,
-        #     attn_masks1=eval_attn_masks1,
-        #     attn_masks2=eval_attn_masks2,
-        #     attn_masks3=eval_attn_masks3,
-        #     deterministic=True,
-        #     reuse_masks=False)
+        _, action8, _, dist_probs8, _, _, _, _, _ = actor_critic8.act(
+            obs.float().to(device),
+            eval_recurrent_hidden_states,
+            eval_masks,
+            attn_masks=eval_attn_masks,
+            attn_masks1=eval_attn_masks1,
+            attn_masks2=eval_attn_masks2,
+            attn_masks3=eval_attn_masks3,
+            deterministic=True,
+            reuse_masks=False)
         #
         # dist_probs8[:, 1] += dist_probs8[:, 0]
         # dist_probs8[:, 1] += dist_probs8[:, 2]
@@ -595,7 +600,7 @@ while not done[0] and iter<1000:
         # pure_action8 = dist_probs8.max(1)[1].unsqueeze(1)
         # prob_pure_action8 = dist_probs8.max(1)[0].unsqueeze(1)
         #
-        # _, _, _, dist_probs9, _, _, _, _, _ = actor_critic9.act(
+        # _, action9, _, dist_probs9, _, _, _, _, _ = actor_critic9.act(
         #     obs.float().to(device),
         #     eval_recurrent_hidden_states,
         #     eval_masks,
@@ -606,19 +611,42 @@ while not done[0] and iter<1000:
         #     deterministic=True,
         #     reuse_masks=False)
         #
-        # dist_probs9[:, 1] += dist_probs9[:, 0]
-        # dist_probs9[:, 1] += dist_probs9[:, 2]
-        # dist_probs9[:, 0] = 0
-        # dist_probs9[:, 2] = 0
+        # # dist_probs9[:, 1] += dist_probs9[:, 0]
+        # # dist_probs9[:, 1] += dist_probs9[:, 2]
+        # # dist_probs9[:, 0] = 0
+        # # dist_probs9[:, 2] = 0
+        # #
+        # # dist_probs9[:, 7] += dist_probs9[:, 6]
+        # # dist_probs9[:, 7] += dist_probs9[:, 8]
+        # # dist_probs9[:, 6] = 0
+        # # dist_probs9[:, 8] = 0
+        # # pure_action9 = dist_probs9.max(1)[1].unsqueeze(1)
+        # # prob_pure_action9 = dist_probs9.max(1)[0].unsqueeze(1)
+        # #
+        # # _, _, _, dist_probs10, _, _, _, _, _ = actor_critic10.act(
+        # #     obs.float().to(device),
+        # #     eval_recurrent_hidden_states,
+        # #     eval_masks,
+        # #     attn_masks=eval_attn_masks,
+        # #     attn_masks1=eval_attn_masks1,
+        # #     attn_masks2=eval_attn_masks2,
+        # #     attn_masks3=eval_attn_masks3,
+        # #     deterministic=True,
+        # #     reuse_masks=False)
+        # #
+        # # dist_probs10[:, 1] += dist_probs10[:, 0]
+        # # dist_probs10[:, 1] += dist_probs10[:, 2]
+        # # dist_probs10[:, 0] = 0
+        # # dist_probs10[:, 2] = 0
+        # #
+        # # dist_probs10[:, 7] += dist_probs10[:, 6]
+        # # dist_probs10[:, 7] += dist_probs10[:, 8]
+        # # dist_probs10[:, 6] = 0
+        # # dist_probs10[:, 8] = 0
+        # # pure_action10 = dist_probs10.max(1)[1].unsqueeze(1)
+        # # prob_pure_action10 = dist_probs10.max(1)[0].unsqueeze(1)
         #
-        # dist_probs9[:, 7] += dist_probs9[:, 6]
-        # dist_probs9[:, 7] += dist_probs9[:, 8]
-        # dist_probs9[:, 6] = 0
-        # dist_probs9[:, 8] = 0
-        # pure_action9 = dist_probs9.max(1)[1].unsqueeze(1)
-        # prob_pure_action9 = dist_probs9.max(1)[0].unsqueeze(1)
-        #
-        # _, _, _, dist_probs10, _, _, _, _, _ = actor_critic10.act(
+        # _, action10, _, dist_probs10, _, _, _, _, _ = actor_critic10.act(
         #     obs.float().to(device),
         #     eval_recurrent_hidden_states,
         #     eval_masks,
@@ -628,18 +656,6 @@ while not done[0] and iter<1000:
         #     attn_masks3=eval_attn_masks3,
         #     deterministic=True,
         #     reuse_masks=False)
-        #
-        # dist_probs10[:, 1] += dist_probs10[:, 0]
-        # dist_probs10[:, 1] += dist_probs10[:, 2]
-        # dist_probs10[:, 0] = 0
-        # dist_probs10[:, 2] = 0
-        #
-        # dist_probs10[:, 7] += dist_probs10[:, 6]
-        # dist_probs10[:, 7] += dist_probs10[:, 8]
-        # dist_probs10[:, 6] = 0
-        # dist_probs10[:, 8] = 0
-        # pure_action10 = dist_probs10.max(1)[1].unsqueeze(1)
-        # prob_pure_action10 = dist_probs10.max(1)[0].unsqueeze(1)
 
         value_maxEnt, action_maxEnt, _, dist_probs_maxEnt, eval_recurrent_hidden_states, _, _, _, _ = actor_critic_maxEnt.act(
             obs.float().to(device),
@@ -652,25 +668,29 @@ while not done[0] and iter<1000:
             deterministic=True,
             reuse_masks=False)
 
-        dist_probs_maxEnt[:, 1] += dist_probs_maxEnt[:, 0]
-        dist_probs_maxEnt[:, 1] += dist_probs_maxEnt[:, 2]
-        dist_probs_maxEnt[:, 0] = 0
-        dist_probs_maxEnt[:, 2] = 0
-
-        dist_probs_maxEnt[:, 7] += dist_probs_maxEnt[:, 6]
-        dist_probs_maxEnt[:, 7] += dist_probs_maxEnt[:, 8]
-        dist_probs_maxEnt[:, 6] = 0
-        dist_probs_maxEnt[:, 8] = 0
-        pure_action_maxEnt = dist_probs_maxEnt.max(1)[1].unsqueeze(1)
-        prob_pure_action_maxEnt = dist_probs_maxEnt.max(1)[0].unsqueeze(1)
+        # dist_probs_maxEnt[:, 1] += dist_probs_maxEnt[:, 0]
+        # dist_probs_maxEnt[:, 1] += dist_probs_maxEnt[:, 2]
+        # dist_probs_maxEnt[:, 0] = 0
+        # dist_probs_maxEnt[:, 2] = 0
+        #
+        # dist_probs_maxEnt[:, 7] += dist_probs_maxEnt[:, 6]
+        # dist_probs_maxEnt[:, 7] += dist_probs_maxEnt[:, 8]
+        # dist_probs_maxEnt[:, 6] = 0
+        # dist_probs_maxEnt[:, 8] = 0
+        # pure_action_maxEnt = dist_probs_maxEnt.max(1)[1].unsqueeze(1)
+        # prob_pure_action_maxEnt = dist_probs_maxEnt.max(1)[0].unsqueeze(1)
 
     action_hist = torch.zeros(15)
     action_hist[action1] += 1
     action_hist[action2] += 1
     action_hist[action3] += 1
     action_hist[action4] += 1
-    # action_hist[action5] += 1
-    # action_hist[action6] += 1
+    action_hist[action5] += 1
+    action_hist[action6] += 1
+    action_hist[action7] += 1
+    action_hist[action8] += 1
+    # action_hist[action9] += 1
+    # action_hist[action10] += 1
 
     # 1-NN
     cardinal_left = action_hist[0] + action_hist[1] + action_hist[2]
@@ -697,7 +717,7 @@ while not done[0] and iter<1000:
 
     # if (maxEnt_steps <= 0) and pure_action1 == pure_action2 == pure_action3 == pure_action4:
     # if (maxEnt_steps <= 0) and torch.var(torch.cat((value1,value2,value3,value4))) < 0.02:
-    if (maxEnt_steps <= 0) and cardinal_value >= 4:
+    if (maxEnt_steps <= 0) and cardinal_value >= 6:
     # if novel and pure_action1 == pure_action2 == pure_action3 == pure_action4:
     # if novel and pure_action1 == pure_action2 == pure_action3 == pure_action4 == pure_action5 == pure_action6 == pure_action7 == pure_action8 == pure_action9 == pure_action10:
     # if novel:

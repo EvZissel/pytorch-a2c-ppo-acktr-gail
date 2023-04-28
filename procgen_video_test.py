@@ -25,13 +25,12 @@ from gym import spaces
 EVAL_ENVS = ['train_eval','test_eval']
 
 # num_processes = 600
-env_name = "dodgeball"
+env_name = "miner"
 start_level = 0
 num_level = 1
 distribution_mode = "easy"
 seed = 0
-normalize_rew = False
-no_normalize = True
+normalize_rew = Falseno_normalize = True
 # n_steps = 1
 
 device = torch.device("cuda:{}".format(0))
@@ -53,11 +52,11 @@ class VideoRecorderprocess(VideoRecorderWrapper):
         # obs[9:13, 9:14, 0] = 127
         # obs[9:13, 9:14, 1] = 127
         # obs[9:13, 9:14, 2] = 255
-        obs = obs.astype(np.uint8)
+        # obs = obs.astype(np.uint8)
 
         return obs
 
-test_start_level = 210
+test_start_level = 230
 # test_env  = ProcgenConatEnvs(env_name=env_name,
 #                              num_envs=num_level,
 #                              start_level=test_start_level,
@@ -83,7 +82,7 @@ test_env = ProcgenGym3Env(num=1,
                           use_backgrounds=True,
                           restrict_themes=False,
                           use_monochrome_assets=False,
-                          center_agent=False)
+                          center_agent=True)
 
 # test_env = ProcgenGym3Env(num=1,
 #                           env_name=env_name,
@@ -194,22 +193,28 @@ actor_critic4.to(device)
 #     weight_decay=0)
 
 # Load previous model
-# saved_epoch = 1524
+saved_epoch = 3050
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_maxEnt__seed_0_num_env_200_entro_0.01_gama_0.9_24-01-2023_22-02-31"
-# # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_0_num_env_200_entro_0.01_gama_0.5_24-01-2023_16-13-17"
-# # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_0_num_env_200_entro_0.01_gama_0.99_25-01-2023_15-56-18"
-# if (saved_epoch > 0) and save_dir != "":
-#     save_path = save_dir
-#     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
-#     actor_critic_maxEnt.load_state_dict(actor_critic_weighs['state_dict'])
-
-saved_epoch = 1524
-# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_0_num_env_200_entro_0.01_gama_0.999_24-01-2023_22-37-10_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/dodgeball_seed_2867_num_env_200_entro_0.01_gama_0.999_19-04-2023_16-41-24_noRNN_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_0_num_env_200_entro_0.01_gama_0.5_24-01-2023_16-13-17"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_0_num_env_200_entro_0.01_gama_0.99_25-01-2023_15-56-18"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.5_11-04-2023_12-21-22"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.5_24-04-2023_21-54-02_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.5_24-04-2023_13-36-20_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_1234_num_env_200_entro_0.01_gama_0.5_24-04-2023_13-40-28_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_4567_num_env_200_entro_0.01_gama_0.99_24-04-2023_12-31-20_original"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_1234_num_env_200_entro_0.01_gama_0.9_24-04-2023_18-19-02_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
-    actor_critic1.load_state_dict(actor_critic_weighs['state_dict'])
+    actor_critic_maxEnt.load_state_dict(actor_critic_weighs['state_dict'])
+
+# saved_epoch = 1524
+# # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_0_num_env_200_entro_0.01_gama_0.999_24-01-2023_22-37-10_noRNN"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/dodgeball_seed_2867_num_env_200_entro_0.01_gama_0.999_19-04-2023_16-41-24_noRNN_original"
+# if (saved_epoch > 0) and save_dir != "":
+#     save_path = save_dir
+#     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
+#     actor_critic1.load_state_dict(actor_critic_weighs['state_dict'])
 
 # saved_epoch = 1524
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_1345_num_env_200_entro_0.01_gama_0.999_24-01-2023_22-38-01_noRNN"
@@ -294,6 +299,7 @@ rew, obs, first = test_env.observe()
 obs = obs['rgb']
 obs = torch.FloatTensor(obs.transpose(0, 3, 1, 2) / 255)
 obs_sum = obs
+obs_sum2 = torch.zeros_like(obs)
 # Change reward location
 # obs = obs['rgb']
 # indexes = np.stack([(obs[:,:,2] == 255), (obs[:,:,2] == 255), (obs[:,:,2]== 255)], axis=2)
@@ -314,8 +320,8 @@ obs_sum = obs
 # hidden_state = torch.FloatTensor(hidden_state).to(device=device)
 done = np.zeros(1)
 step = 0
-myobj = plt.imshow(obs[0].transpose(0, 2))
-plt.show()
+# myobj = plt.imshow(obs[0].transpose(0, 2))
+# plt.show()
 iter = 0
 beta = 0.5
 moving_average_prob1 = 0
@@ -340,7 +346,9 @@ indices_cal = torch.tensor([3, 10, 16, 22, 28, 35, 42, 48, 54, 61])
 
 maxEnt_steps = 0
 int_reward_sum = 0
+int_reward_sum2 = 0
 rew_sum = 0
+down_sample_avg = nn.AvgPool2d(3, stride=3)
 while not done[0] and iter<1000:
     iter +=1
     with torch.no_grad():
@@ -655,7 +663,7 @@ while not done[0] and iter<1000:
     #
     # # if iter < 100:
     # #     action = pure_action1
-    test_env.act(action1[0].cpu().numpy())
+    test_env.act(action_maxEnt[0].cpu().numpy())
     # # steps_remaining -= 1
 
 
@@ -665,13 +673,13 @@ while not done[0] and iter<1000:
         dtype=torch.float32,
         device=device)
 
-    rew, obs, first = test_env.observe()
+    rew, next_obs, first = test_env.observe()
     rew_sum += rew
     done[0] = first
     step += 1
 
-    obs = obs['rgb']
-    obs = torch.FloatTensor(obs.transpose(0, 3, 1, 2) / 255)
+    next_obs = next_obs['rgb']
+    next_obs = torch.FloatTensor(next_obs.transpose(0, 3, 1, 2) / 255)
 
 
     # next_obs_sum = obs_sum + obs
@@ -683,10 +691,10 @@ while not done[0] and iter<1000:
     #     novel = False
     #
     # obs_sum = obs_sum + obs
-    plt.imshow(obs[0].transpose(0, 2))
-    plt.show()
+    # plt.imshow(obs[0].transpose(0, 2))
+    # plt.show()
 
-    next_obs_sum = obs_sum + obs
+    next_obs_sum = obs_sum + next_obs
     # ds_obs_sum = torch.index_select(obs_sum[0][0], 0, indices_row)
     # ds_obs_sum = torch.index_select(ds_obs_sum, 1, indices_cal)
     #
@@ -699,13 +707,29 @@ while not done[0] and iter<1000:
     if num_zero_next_obs_sum < num_zero_obs_sum:
             int_reward = 1
 
-    obs_sum = obs_sum + obs
+    obs_sum = obs_sum + next_obs
     int_reward_sum += int_reward
+
+    next_obs_diff2 = 1 * ((next_obs - obs).abs() > 1e-5)
+    next_obs_sum2 = obs_sum2 + next_obs_diff2
+    next_obs_sum2_ds = 1 * (down_sample_avg(next_obs_sum2).abs() > 1e-5)
+    obs_sum2_ds = 1 * (down_sample_avg(obs_sum2).abs() > 1e-5)
+
+    int_reward2 = 0
+    num_zero_obs_sum2 = (obs_sum2_ds == 0.0).sum()
+    num_zero_next_obs_sum2 = (next_obs_sum2_ds == 0.0).sum()
+    if num_zero_next_obs_sum2 < num_zero_obs_sum2:
+            int_reward2 = 1
+
+    obs_sum2 = next_obs_sum2
+    int_reward_sum2 += int_reward2
+
+    obs = next_obs
 
     # print(f"step {step} reward {rew} first {first} action {action} if pure action {(pure_action1 == pure_action2 == pure_action3 )} novel {novel}")
     # print(f" prob1 {prob_pure_action1} prob2 {prob_pure_action2} prob3 {prob_pure_action3} prob4 {prob_pure_action4}")
 
-    print(f"step {step} reward {rew} int reward {int_reward} first {first} action1 {action1} int_reward_sum {int_reward_sum} reward_sum {rew_sum}")
+    print(f"step {step} reward {rew} int reward {int_reward} int reward2 {int_reward2} first {first} action1 {action1} int_reward_sum {int_reward_sum} int_reward_sum2 {int_reward_sum2} reward_sum {rew_sum}")
 
     # # Change reward location
     # obs = obs['rgb']

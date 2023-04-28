@@ -453,8 +453,8 @@ def main():
 
             next_obs_diff = 1 * ((obs_full - rollouts.obs_full.to(device)).abs() > 1e-5)
             next_obs_sum = rollouts.obs_sum.to(device) + next_obs_diff
-            next_obs_sum = 1 * (down_sample_avg(next_obs_sum).abs() > 1e-5)
-            obs_sum = 1 * (down_sample_avg(rollouts.obs_sum.to(device)).abs() > 1e-5)
+            next_obs_sum = (1 * (down_sample_avg(next_obs_sum).abs() > 1e-5)).sum(1)
+            obs_sum = (1 * (down_sample_avg(rollouts.obs_sum.to(device)).abs() > 1e-5)).sum(1)
             for i in range(len(done)):
                 if done[i] == 1 or (rollouts.step_env[i] % args.reset_cont == 0):
                     rollouts.obs_sum[i] = torch.zeros_like(rollouts.obs_full[i])
@@ -464,8 +464,8 @@ def main():
                     rollouts.step_env[i] = 0
                     # rollouts.diff_obs[step][i].copy_(torch.zeros_like(obs[i]).cpu())
                 else:
-                    num_zero_obs_sum = (obs_sum[i][0] == 0).sum()
-                    num_zero_next_obs_sum = (next_obs_sum[i][0] == 0).sum()
+                    num_zero_obs_sum = (obs_sum[i] == 0).sum()
+                    num_zero_next_obs_sum = (next_obs_sum[i] == 0).sum()
                     int_reward[i] = num_zero_obs_sum - num_zero_next_obs_sum
 
 
