@@ -94,7 +94,7 @@ def get_args():
     parser.add_argument(
         '--num-level', type=int, default=128, help='num level (default: 25)')
     parser.add_argument(
-        '--num-test-level', type=int, default=200, help='num level (default: 25)')
+        '--num-test-level', type=int, default=200, help='num test level (default: 200)')
     parser.add_argument(
         '--distribution-mode', type=str, default='easy', help='distribution mode for environment')
     parser.add_argument(
@@ -589,6 +589,11 @@ def get_args():
         type=int,
         default=4,
         help='number of networks that should agree (default: 4)')
+    parser.add_argument(
+        '--num_agent',
+        type=int,
+        default=0,
+        help='the main agent number for the ensemble (default: 0)')
 
 
     args = parser.parse_args()

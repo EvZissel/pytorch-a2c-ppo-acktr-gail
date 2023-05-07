@@ -25,7 +25,7 @@ from gym import spaces
 EVAL_ENVS = ['train_eval','test_eval']
 
 # num_processes = 600
-env_name = "maze"
+env_name = "bigfish"
 start_level = 0
 num_level = 1
 distribution_mode = "easy"
@@ -67,7 +67,7 @@ class VideoRecorderprocess(VideoRecorderWrapper):
         return obs
 
 # test_start_level = 21i maze
-test_start_level = 210
+test_start_level = 208
 # test_env  = ProcgenConatEnvs(env_name=env_name,
 #                              num_envs=num_level,
 #                              start_level=test_start_level,
@@ -204,7 +204,7 @@ actor_critic10.to(device)
 #     weight_decay=0)
 
 # Load previous model
-saved_epoch = 3050
+saved_epoch = 6100
 #
 # # # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_58967_num_env_200_entro_0.01_gama_0.5_05-02-2023_22-24-49_original"
 # # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_58967_num_env_200_entro_0.01_gama_0.5_05-02-2023_18-15-27_original"
@@ -216,75 +216,90 @@ saved_epoch = 3050
 # # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_3569_num_env_200_entro_0.01_gama_0.5_08-02-2023_23-48-07_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_7945_num_env_200_entro_0.01_gama_0.99_06-04-2023_16-01-01" #hard
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.5_11-04-2023_12-21-22"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.5_24-04-2023_13-36-20_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.5_24-04-2023_13-36-20_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_1234_num_env_200_entro_0.01_gama_0.5_24-04-2023_13-40-28_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_4567_num_env_200_entro_0.01_gama_0.99_28-04-2023_13-38-59_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.5_02-05-2023_17-29-21_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.5_02-05-2023_17-43-16_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/dodgeball_seed_1234_num_env_200_entro_0.01_gama_0.9_02-05-2023_09-43-13_original"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/bigfish_seed_1234_num_env_200_entro_0.01_gama_0.99_02-05-2023_10-29-48_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic_maxEnt.load_state_dict(actor_critic_weighs['state_dict'])
 
 
-saved_epoch = 1524
+saved_epoch = 3048
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_0_num_env_200_entro_0.01_gama_0.999_24-01-2023_18-15-01_noRNN"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_23456_num_env_200_entro_0.01_gama_0.999_10-04-2023_18-12-26_noRNN" #hard
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1547_num_env_200_entro_0.01_gama_0.999_10-04-2023_15-29-37_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_63957_num_env_200_entro_0.01_gama_0.999_01-02-2023_13-55-44_noRNN_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_63957_num_env_200_entro_0.01_gama_0.999_01-02-2023_13-55-44_noRNN_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_9465_num_env_200_entro_0.01_gama_0.999_07-03-2023_23-40-30_noRNN_original"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/bigfish_seed_1258_num_env_200_entro_0.01_gama_0.999_02-05-2023_10-39-29_noRNN_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic1.load_state_dict(actor_critic_weighs['state_dict'])
 
-saved_epoch = 1524
-# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_25478_num_env_200_entro_0.01_gama_0.999_10-04-2023_15-30-04_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_25698_num_env_200_entro_0.01_gama_0.999_01-02-2023_14-02-43_noRNN_original"
-if (saved_epoch > 0) and save_dir != "":
-    save_path = save_dir
-    actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
-    actor_critic2.load_state_dict(actor_critic_weighs['state_dict'])
-
-saved_epoch = 2000
-# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_44678_num_env_200_entro_0.01_gama_0.999_10-04-2023_15-30-49_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_58965_num_env_200_entro_0.01_gama_0.999_02-02-2023_12-52-47_noRNN_original"
-if (saved_epoch > 0) and save_dir != "":
-    save_path = save_dir
-    actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
-    actor_critic3.load_state_dict(actor_critic_weighs['state_dict'])
-
-saved_epoch = 2000
-# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_9745_num_env_200_entro_0.01_gama_0.999_10-04-2023_15-31-16_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_4926_num_env_200_entro_0.01_gama_0.999_02-02-2023_12-53-12_noRNN_original"
-if (saved_epoch > 0) and save_dir != "":
-    save_path = save_dir
-    actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
-    actor_critic4.load_state_dict(actor_critic_weighs['state_dict'])
-
-saved_epoch = 1524
-# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_5896_num_env_200_entro_0.01_gama_0.999_11-04-2023_12-22-03_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1296_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-47-44_noRNN_original"
-if (saved_epoch > 0) and save_dir != "":
-    save_path = save_dir
-    actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
-    actor_critic5.load_state_dict(actor_critic_weighs['state_dict'])
-
-# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_6334_num_env_200_entro_0.01_gama_0.999_11-04-2023_12-22-26_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_26987_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-48-04_noRNN_original"
-if (saved_epoch > 0) and save_dir != "":
-    save_path = save_dir
-    actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
-    actor_critic6.load_state_dict(actor_critic_weighs['state_dict'])
-
-# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_8877_num_env_200_entro_0.01_gama_0.999_20-04-2023_22-31-25_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_3875_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-48-25_noRNN_original"
-if (saved_epoch > 0) and save_dir != "":
-    save_path = save_dir
-    actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
-    actor_critic7.load_state_dict(actor_critic_weighs['state_dict'])
-
-# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_97645_num_env_200_entro_0.01_gama_0.999_20-04-2023_22-32-27_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_4976_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-48-46_noRNN_original"
-if (saved_epoch > 0) and save_dir != "":
-    save_path = save_dir
-    actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
-    actor_critic8.load_state_dict(actor_critic_weighs['state_dict'])
+# saved_epoch = 1524
+# # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_25478_num_env_200_entro_0.01_gama_0.999_10-04-2023_15-30-04_noRNN"
+# # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_25698_num_env_200_entro_0.01_gama_0.999_01-02-2023_14-02-43_noRNN_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_8312_num_env_200_entro_0.01_gama_0.999_07-03-2023_23-39-20_noRNN_original"
+# if (saved_epoch > 0) and save_dir != "":
+#     save_path = save_dir
+#     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
+#     actor_critic2.load_state_dict(actor_critic_weighs['state_dict'])
+#
+# saved_epoch = 1524
+# # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_44678_num_env_200_entro_0.01_gama_0.999_10-04-2023_15-30-49_noRNN"
+# # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_58965_num_env_200_entro_0.01_gama_0.999_02-02-2023_12-52-47_noRNN_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_7985_num_env_200_entro_0.01_gama_0.999_07-03-2023_23-38-04_noRNN_original"
+# if (saved_epoch > 0) and save_dir != "":
+#     save_path = save_dir
+#     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
+#     actor_critic3.load_state_dict(actor_critic_weighs['state_dict'])
+#
+# saved_epoch = 1524
+# # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_9745_num_env_200_entro_0.01_gama_0.999_10-04-2023_15-31-16_noRNN"
+# # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_4926_num_env_200_entro_0.01_gama_0.999_02-02-2023_12-53-12_noRNN_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_6487_num_env_200_entro_0.01_gama_0.999_07-03-2023_23-25-59_noRNN_original"
+# if (saved_epoch > 0) and save_dir != "":
+#     save_path = save_dir
+#     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
+#     actor_critic4.load_state_dict(actor_critic_weighs['state_dict'])
+#
+# saved_epoch = 1524
+# # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_5896_num_env_200_entro_0.01_gama_0.999_11-04-2023_12-22-03_noRNN"
+# # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1296_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-47-44_noRNN_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_5194_num_env_200_entro_0.01_gama_0.999_07-03-2023_23-37-24_noRNN_original"
+# if (saved_epoch > 0) and save_dir != "":
+#     save_path = save_dir
+#     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
+#     actor_critic5.load_state_dict(actor_critic_weighs['state_dict'])
+#
+# # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_6334_num_env_200_entro_0.01_gama_0.999_11-04-2023_12-22-26_noRNN"
+# # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_26987_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-48-04_noRNN_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_4589_num_env_200_entro_0.01_gama_0.999_07-03-2023_23-25-12_noRNN_original"
+# if (saved_epoch > 0) and save_dir != "":
+#     save_path = save_dir
+#     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
+#     actor_critic6.load_state_dict(actor_critic_weighs['state_dict'])
+#
+# # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_8877_num_env_200_entro_0.01_gama_0.999_20-04-2023_22-31-25_noRNN"
+# # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_3875_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-48-25_noRNN_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_3978_num_env_200_entro_0.01_gama_0.999_07-03-2023_23-24-08_noRNN_original"
+# if (saved_epoch > 0) and save_dir != "":
+#     save_path = save_dir
+#     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
+#     actor_critic7.load_state_dict(actor_critic_weighs['state_dict'])
+#
+# # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_97645_num_env_200_entro_0.01_gama_0.999_20-04-2023_22-32-27_noRNN"
+# # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_4976_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-48-46_noRNN_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_1569_num_env_200_entro_0.01_gama_0.999_07-03-2023_23-20-30_noRNN_original"
+# if (saved_epoch > 0) and save_dir != "":
+#     save_path = save_dir
+#     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
+#     actor_critic8.load_state_dict(actor_critic_weighs['state_dict'])
 
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_110110_num_env_200_entro_0.01_gama_0.999_20-04-2023_22-32-54_noRNN"
 # if (saved_epoch > 0) and save_dir != "":
@@ -402,8 +417,6 @@ while not done[0] and iter<1000:
         # log_prob_act = dist.log_prob(act)
         # plt.imshow(u.transpose(1, 2, 0))
         # plt.show()
-
-
 
         value1, action1, _, dist_probs1, _, _, _, _, _ = actor_critic1.act(
             obs.float().to(device),
@@ -665,7 +678,7 @@ while not done[0] and iter<1000:
             attn_masks1=eval_attn_masks1,
             attn_masks2=eval_attn_masks2,
             attn_masks3=eval_attn_masks3,
-            deterministic=True,
+            deterministic=False,
             reuse_masks=False)
 
         # dist_probs_maxEnt[:, 1] += dist_probs_maxEnt[:, 0]
@@ -692,19 +705,24 @@ while not done[0] and iter<1000:
     # action_hist[action9] += 1
     # action_hist[action10] += 1
 
-    # 1-NN
-    cardinal_left = action_hist[0] + action_hist[1] + action_hist[2]
-    cardinal_right = action_hist[6] + action_hist[7] + action_hist[8]
+    # # 1-NN
+    # cardinal_left = action_hist[0] + action_hist[1] + action_hist[2]
+    # cardinal_right = action_hist[6] + action_hist[7] + action_hist[8]
     # cardinal_up = action_hist[2] + action_hist[5] + action_hist[8]
-    cardinal_up =  action_hist[5]
+    # # cardinal_up =  action_hist[5]
     # cardinal_down = action_hist[0] + action_hist[3] + action_hist[6]
-    cardinal_down =  action_hist[3]
+    # # cardinal_down =  action_hist[3]
+    # cardinal_fire =  action_hist[9]
+    #
+    # directions = torch.tensor([cardinal_up, cardinal_right, cardinal_down, cardinal_left, cardinal_fire])
+    # cardinal_index = torch.argmax(directions)
+    # cardinal_value = directions[cardinal_index]
+    # lookup = torch.tensor([5, 7, 3, 1, 9])
+    # action_NN = torch.tensor(lookup[cardinal_index]).unsqueeze(0).unsqueeze(0)
 
-    directions = torch.tensor([cardinal_up, cardinal_right, cardinal_down, cardinal_left])
-    cardinal_index = torch.argmax(directions)
-    cardinal_value = directions[cardinal_index]
-    lookup = torch.tensor([5, 7, 3, 1])
-    action_NN = torch.tensor(lookup[cardinal_index]).unsqueeze(0).unsqueeze(0)
+    cardinal_index = torch.argmax(action_hist)
+    cardinal_value = action_hist[cardinal_index]
+    action_NN = torch.tensor(cardinal_index).unsqueeze(0).unsqueeze(0)
 
     # next_obs, rew, done, info = test_env.step(act.cpu().numpy())
     # action = pure_action4
@@ -723,7 +741,8 @@ while not done[0] and iter<1000:
     # if novel:
         # if step_count > 5:
         # action = action_NN
-        action = action_NN
+        # action = action_NN
+        action = action1
     else:
         maxEnt_steps = m.sample()
     #         max_ent_step +=1
@@ -736,8 +755,8 @@ while not done[0] and iter<1000:
 
     # if iter < 100:
     #     action = pure_action1
-    test_env.act(action[0].cpu().numpy())
-    test_env_full_obs.act(action[0].cpu().numpy())
+    test_env.act(action_maxEnt[0].cpu().numpy())
+    test_env_full_obs.act(action_maxEnt[0].cpu().numpy())
     # steps_remaining -= 1
 
 
@@ -800,9 +819,9 @@ while not done[0] and iter<1000:
 
     # print(f"step {step} reward {rew} first {first}")
     print(f"t={step} action={action.item()} is_action_max={cardinal_value} maxEnt_steps={maxEnt_steps} int_reward_sum={int_reward_sum}")
-    print(f"a1={action1.item()}, a2={action2.item()}, a3={action3.item()}, a4={action4.item()}, a5={action5.item()}, a6={action6.item()}, maxEnt={action_maxEnt.item()}")
-    print(f"v1={value1.item()}, v2={value2.item()}, v3={value3.item()}, v4={value4.item()}, v_maxEnt={value_maxEnt.item()}")
-    print(f"variance={torch.var(torch.cat((value1,value2,value3,value4)))}")
+    print(f"a1={action1.item()}, a2={action2.item()}, a3={action3.item()}, a4={action4.item()}, a5={action5.item()}, a6={action6.item()}, a7={action7.item()}, a8={action8.item()}, maxEnt={action_maxEnt.item()}")
+    # print(f"v1={value1.item()}, v2={value2.item()}, v3={value3.item()}, v4={value4.item()}, v_maxEnt={value_maxEnt.item()}")
+    # print(f"variance={torch.var(torch.cat((value1,value2,value3,value4)))}")
     if first:
         print(f"reward {rew}")
     # print(f" prob1 {prob_pure_action1} prob2 {prob_pure_action2} prob3 {prob_pure_action3} prob4 {prob_pure_action4}")

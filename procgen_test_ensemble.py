@@ -530,48 +530,110 @@ def main():
                         rollouts_maxEnt.attn_masks1[step].to(device), rollouts_maxEnt.attn_masks2[step].to(device),
                         rollouts_maxEnt.attn_masks3[step].to(device))
 
-            maxEnt_steps = maxEnt_steps - 1
-            # is_equal = (pure_action0 == pure_action1) * (pure_action0 == pure_action2) * (pure_action0 == pure_action3)
-            # is_equal = (pure_action0 == pure_action1)
-            cardinal_left = 1*(action0 == 0)+1*(action0 == 1) + 1*(action0 == 2) + 1*(action1 == 0)+1*(action1 == 1) + 1*(action1 == 2) + 1*(action2 == 0)+1*(action2 == 1) + 1*(action2 == 2)\
+            # actions_vec = torch.zeros([args.num_processes, envs.action_space.n], device=device)
+            # for i in range(args.num_processes):
+            #     actions_vec[i, action0[i]] += 1
+            #     actions_vec[i, action1[i]] += 1
+            #     actions_vec[i, action2[i]] += 1
+            #     actions_vec[i, action3[i]] += 1
+            #     if args.num_ensemble > 4:
+            #         actions_vec[i, action4[i]] += 1
+            #         actions_vec[i, action5[i]] += 1
+            #     if args.num_ensemble > 6:
+            #         actions_vec[i, action6[i]] += 1
+            #         actions_vec[i, action7[i]] += 1
+            #     if args.num_ensemble > 8:
+            #         actions_vec[i, action8[i]] += 1
+            #         actions_vec[i, action9[i]] += 1
+            #
+            # actions_max = actions_vec.max(1)
+            # cardinal_value = actions_max[0]
+            # cardinal_index = actions_max[1]
+            # is_majority = (cardinal_value >= args.num_agree).unsqueeze(1)
+            # # action_NN = cardinal_index.unsqueeze(1)
+            # action_NN = action0
+
+            actions = []
+            actions.append(action0)
+            actions.append(action1)
+            actions.append(action2)
+            actions.append(action3)
+            cardinal_left = 1*(action0 == 0)+ 1*(action0 == 1) + 1*(action0 == 2) + 1*(action1 == 0)+1*(action1 == 1) + 1*(action1 == 2) + 1*(action2 == 0)+1*(action2 == 1) + 1*(action2 == 2)\
                             + 1 * (action3 == 0) + 1 * (action3 == 1) + 1 * (action3 == 2)
             cardinal_right  = 1*(action0 == 6)+1*(action0 == 7) + 1*(action0 == 8) + 1*(action1 == 6)+1*(action1 == 7) + 1*(action1 == 8) + 1*(action2 == 6)+1*(action2 == 7) + 1*(action2 == 8)\
                             + 1 * (action3 == 6) + 1 * (action3 == 7) + 1 * (action3 == 8)
-            cardinal_down  = 1*(action0 == 3) + 1*(action1 == 3) + 1*(action2 == 3) + 1*(action3 == 3)
-            cardinal_up  = 1*(action0 == 5) + 1*(action1 == 5) + 1*(action2 == 5) + 1*(action3 == 5)
+            if (args.env_name=="maze" or args.env_name=="miner"):
+                cardinal_down = 1 * (action0 == 3) + 1 * (action1 == 3) + 1 * (action2 == 3) + 1 * (action3 == 3)
+                cardinal_up = 1 * (action0 == 5) + 1 * (action1 == 5) + 1 * (action2 == 5) + 1 * (action3 == 5)
+            else:
+                cardinal_down  = 1*(action0 == 3) + 1*(action1 == 3) + 1*(action2 == 3) + 1*(action3 == 3) + 1*(action0 == 0) + 1*(action1 == 0) + 1*(action2 == 0) + 1*(action3 == 0)\
+                                + 1*(action0 == 6) + 1*(action1 == 6) + 1*(action2 == 6) + 1*(action3 == 6)
+                cardinal_up  = 1*(action0 == 5) + 1*(action1 == 5) + 1*(action2 == 5) + 1*(action3 == 5) + 1*(action0 == 2) + 1*(action1 == 2) + 1*(action2 == 2) + 1*(action3 == 2) \
+                               + 1 * (action0 == 8) + 1 * (action1 == 8) + 1 * (action2 == 8) + 1 * (action3 == 8)
+                cardinal_fire  = 1*(action0 == 9) + 1*(action1 == 9) + 1*(action2 == 9) + 1*(action3 == 9)
+
             if args.num_ensemble > 4:
+                actions.append(action4)
+                actions.append(action5)
                 cardinal_left += 1 * (action4 == 0) + 1 * (action4 == 1) + 1 * (action4 == 2) + 1 * (action5 == 0) + 1 * (action5 == 1) + 1 * (action5 == 2)
                 cardinal_right += 1 * (action4 == 6) + 1 * (action4 == 7) + 1 * (action4 == 8) + 1 * (action5 == 6) + 1 * (action5 == 7) + 1 * (action5 == 8)
-                cardinal_down += 1 * (action4 == 3) + 1 * (action5 == 3)
-                cardinal_up += 1 * (action4 == 5) + 1 * (action5 == 5)
+                if (args.env_name == "maze" or args.env_name == "miner"):
+                    cardinal_down += 1 * (action4 == 3) + 1 * (action5 == 3)
+                    cardinal_up += 1 * (action4 == 5) + 1 * (action5 == 5)
+                else:
+                    cardinal_down += 1 * (action4 == 3) + 1 * (action5 == 3) + 1 * (action4 == 0) + 1 * (action5 == 0) + 1 * (action4 == 6) + 1 * (action5 == 6)
+                    cardinal_up += 1 * (action4 == 5) + 1 * (action5 == 5) + 1 * (action4 == 2) + 1 * (action5 == 2) + 1 * (action4 == 8) + 1 * (action5 == 8)
+                    cardinal_fire += 1 * (action4 == 9) + 1 * (action5 == 9)
+
             if args.num_ensemble > 6:
+                actions.append(action6)
+                actions.append(action7)
                 cardinal_left += 1 * (action6 == 0) + 1 * (action6 == 1) + 1 * (action6 == 2) + 1 * (action7 == 0) + 1 * (action7 == 1) + 1 * (action7 == 2)
                 cardinal_right += 1 * (action6 == 6) + 1 * (action6 == 7) + 1 * (action6 == 8) + 1 * (action7 == 6) + 1 * (action7 == 7) + 1 * (action7 == 8)
-                cardinal_down += 1 * (action6 == 3) + 1 * (action7 == 3)
-                cardinal_up += 1 * (action6 == 5) + 1 * (action7 == 5)
+                if (args.env_name == "maze" or args.env_name == "miner"):
+                    cardinal_down += 1 * (action6 == 3) + 1 * (action7 == 3)
+                    cardinal_up += 1 * (action6 == 5) + 1 * (action7 == 5)
+                else:
+                    cardinal_down += 1 * (action6 == 3) + 1 * (action7 == 3) + 1 * (action6 == 0) + 1 * (action7 == 0) + 1 * (action6 == 6) + 1 * (action7 == 6)
+                    cardinal_up += 1 * (action6 == 5) + 1 * (action7 == 5) + 1 * (action6 == 2) + 1 * (action7 == 2) + 1 * (action6 == 8) + 1 * (action7 == 8)
+                    cardinal_fire += 1 * (action6 == 9) + 1 * (action7 == 9)
+
             if args.num_ensemble > 8:
+                actions.append(action8)
+                actions.append(action9)
                 cardinal_left += 1 * (action8 == 0) + 1 * (action8 == 1) + 1 * (action8 == 2) + 1 * (action9 == 0) + 1 * (action9 == 1) + 1 * (action9 == 2)
                 cardinal_right += 1 * (action8 == 6) + 1 * (action8 == 7) + 1 * (action8 == 8) + 1 * (action9 == 6) + 1 * (action9 == 7) + 1 * (action9 == 8)
-                cardinal_down += 1 * (action8 == 3) + 1 * (action9 == 3)
-                cardinal_up += 1 * (action8 == 5) + 1 * (action9 == 5)
+                if (args.env_name == "maze" or args.env_name == "miner"):
+                    cardinal_down += 1 * (action8 == 3) + 1 * (action9 == 3)
+                    cardinal_up += 1 * (action8 == 5) + 1 * (action9 == 5)
+                else:
+                    cardinal_down += 1 * (action8 == 3) + 1 * (action9 == 3) + 1 * (action8 == 0) + 1 * (action9 == 0) + 1 * (action8 == 6) + 1 * (action9 == 6)
+                    cardinal_up += 1 * (action8 == 5) + 1 * (action9 == 5) + 1 * (action8 == 2) + 1 * (action9 == 2) + 1 * (action8 == 8) + 1 * (action9 == 8)
+                    cardinal_fire += 1 * (action8 == 9) + 1 * (action9 == 9)
 
-            directions = torch.cat((cardinal_up, cardinal_right, cardinal_down, cardinal_left), dim=1)
+            if (args.env_name == "maze" or args.env_name == "miner"):
+                directions = torch.cat((cardinal_up, cardinal_right, cardinal_down, cardinal_left), dim=1)
+            else:
+                directions = torch.cat((cardinal_up, cardinal_right, cardinal_down, cardinal_left, cardinal_fire), dim=1)
             cardinal_value = torch.max(directions, dim=1)[0]
             cardinal_index = torch.max(directions, dim=1)[1]
-            is_equal = (cardinal_value >= args.num_agree).unsqueeze(1)
-            lookup = torch.tensor([5, 7, 3, 1], device=device)
-            action_NN = lookup[cardinal_index].unsqueeze(1)
+            is_majority = (cardinal_value >= args.num_agree).unsqueeze(1)
+            # lookup = torch.tensor([5, 7, 3, 1, 9], device=device)
+            # action_NN = lookup[cardinal_index].unsqueeze(1)
+            action_NN = actions[args.num_agent]
 
-            # is_equal = (action0 == action1) * (action0 == action2) * (action0 == action3)
-            # is_equal = (action0 == action1) * (action0 == action2) * (action0 == action3)
-            # step_count = (step_count+1)*is_equal
+            maxEnt_steps = maxEnt_steps - 1
+
+            # is_majority = (action0 == action1) * (action0 == action2) * (action0 == action3)
+            # is_majority = (action0 == action1) * (action0 == action2) * (action0 == action3)
+            # step_count = (step_count+1)*is_majority
             # is_maxEnt = (step_count<10)
-            # is_pure_action = is_novel*is_equal
-            maxEnt_steps_sample = (~is_equal)*(maxEnt_steps<=0)
+            # is_pure_action = is_novel*is_majority
+            maxEnt_steps_sample = (~is_majority)*(maxEnt_steps<=0)
             maxEnt_steps = (m.sample() + 1).to(device)*maxEnt_steps_sample + maxEnt_steps*(~maxEnt_steps_sample)
             # maxEnt_steps = (3*torch.ones(num_processes,1, device=device))*is_pure_action + maxEnt_steps*(~is_pure_action)
 
-            is_action = is_equal*(maxEnt_steps<=0)
+            is_action = is_majority*(maxEnt_steps<=0)
             action = action_NN*is_action + action_maxEnt*(~is_action)
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(action.squeeze().cpu().numpy())
@@ -668,6 +730,9 @@ def main():
         actor_critic4.eval()
         actor_critic5.eval()
         actor_critic_maxEnt.eval()
+        maze_miner = False
+        if (args.env_name == "maze" or args.env_name == "miner"):
+            maze_miner = True
 
         eval_dic_rew = {}
         eval_dic_done = {}
@@ -675,7 +740,7 @@ def main():
             eval_dic_rew[eval_disp_name], eval_dic_done[eval_disp_name] = evaluate_procgen_ensemble(actor_critic, actor_critic1, actor_critic2, actor_critic3, actor_critic4, actor_critic5, actor_critic6, actor_critic7, actor_critic8, actor_critic9,
                                                                                                     actor_critic_maxEnt, eval_envs_dic, eval_disp_name,
                                                                                                     args.num_processes, device, args.num_steps, logger, deterministic=True, num_detEnt=args.num_detEnt, rand_act=args.rand_act,
-                                                                                                    num_ensemble=args.num_ensemble, num_agree=args.num_agree)
+                                                                                                    num_ensemble=args.num_ensemble, num_agree=args.num_agree, maze_miner=maze_miner, num_agent=args.num_agent)
 
 
                 # if ((args.eval_nondet_interval is not None and j % args.eval_nondet_interval == 0) or j == args.continue_from_epoch):
@@ -689,7 +754,7 @@ def main():
         eval_test_nondet_rew, eval_test_nondet_done = evaluate_procgen_ensemble(actor_critic, actor_critic1, actor_critic2, actor_critic3, actor_critic4, actor_critic5, actor_critic6, actor_critic7, actor_critic8, actor_critic9,
                                                                                 actor_critic_maxEnt, eval_envs_dic_nondet, 'test_eval_nondet',
                                                                                 args.num_processes, device, args.num_steps, logger, attention_features=False, det_masks=False, deterministic=False, num_detEnt=args.num_detEnt, rand_act=args.rand_act,
-                                                                                num_ensemble=args.num_ensemble, num_agree=args.num_agree)
+                                                                                num_ensemble=args.num_ensemble, num_agree=args.num_agree, maze_miner=maze_miner, num_agent=args.num_agent)
 
         logger.feed_eval(eval_dic_rew['train_eval'], eval_dic_done['train_eval'], eval_dic_rew['test_eval'], eval_dic_done['test_eval'], seeds_train, seeds_test,
                          eval_dic_rew['train_eval'], eval_dic_rew['test_eval'], eval_test_nondet_rew, eval_test_nondet_done)
