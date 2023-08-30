@@ -25,7 +25,7 @@ from gym import spaces
 EVAL_ENVS = ['train_eval','test_eval']
 
 # num_processes = 600
-env_name = "miner"
+env_name = "maze"
 start_level = 0
 num_level = 1
 distribution_mode = "easy"
@@ -56,7 +56,7 @@ class VideoRecorderprocess(VideoRecorderWrapper):
 
         return obs
 
-test_start_level = 230
+test_start_level = 120
 # test_env  = ProcgenConatEnvs(env_name=env_name,
 #                              num_envs=num_level,
 #                              start_level=test_start_level,
@@ -78,11 +78,11 @@ test_env = ProcgenGym3Env(num=1,
                           num_levels=num_level,
                           distribution_mode=distribution_mode,
                           render_mode="rgb_array",
-                          use_generated_assets=False,
-                          use_backgrounds=True,
-                          restrict_themes=False,
-                          use_monochrome_assets=False,
-                          center_agent=True)
+                          use_generated_assets=True,
+                          use_backgrounds=False,
+                          restrict_themes=True,
+                          use_monochrome_assets=True,
+                          center_agent=False)
 
 # test_env = ProcgenGym3Env(num=1,
 #                           env_name=env_name,
@@ -202,15 +202,17 @@ saved_epoch = 3050
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.5_24-04-2023_13-36-20_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_1234_num_env_200_entro_0.01_gama_0.5_24-04-2023_13-40-28_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_4567_num_env_200_entro_0.01_gama_0.99_24-04-2023_12-31-20_original"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_1234_num_env_200_entro_0.01_gama_0.9_24-04-2023_18-19-02_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_1234_num_env_200_entro_0.01_gama_0.9_24-04-2023_18-19-02_original"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_maxEnt__seed_98745_num_env_200_entro_0.01_gama_0.9_13-05-2023_12-26-44"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic_maxEnt.load_state_dict(actor_critic_weighs['state_dict'])
 
-# saved_epoch = 1524
+# saved_epoch = 1525
 # # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_0_num_env_200_entro_0.01_gama_0.999_24-01-2023_22-37-10_noRNN"
-# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/dodgeball_seed_2867_num_env_200_entro_0.01_gama_0.999_19-04-2023_16-41-24_noRNN_original"
+# # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/dodgeball_seed_2867_num_env_200_entro_0.01_gama_0.999_19-04-2023_16-41-24_noRNN_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_maxEnt__seed_98745_num_env_200_entro_0.01_gama_0.9_13-05-2023_12-26-44"
 # if (saved_epoch > 0) and save_dir != "":
 #     save_path = save_dir
 #     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
@@ -336,7 +338,7 @@ novel = True
 # m = FixedCategorical(torch.tensor([ 0.55, 0.25, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.0125, 0.0125, 0.0125, 0.0125]))
 # m = FixedCategorical(torch.tensor([ 0.55, 0.25, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025, 0.025]))
 m = FixedCategorical(torch.tensor([ 0.75, 0.15, 0.05, 0.05]))
-# m = FixedCategorical(torch.tensor([ 1.0, 0.0]))
+    # m = FixedCategorical(torch.tensor([ 1.0, 0.0]))
 # m = FixedCategorical(torch.tensor([ 0.55, 0.25, 0.05, 0.05, 0.025, 0.025, 0.025, 0.025]))
 # m = m = FixedCategorical(torch.tensor([ 0.55, 0.25, 0.045, 0.025, 0.025, 0.025, 0.015, 0.015, 0.0125, 0.0125, 0.0125, 0.0125]))
 # rand_policy = FixedCategorical(torch.tensor([ 0.0, 0.25, 0.0, 0.25, 0.0, 0.25, 0.0, 0.25, 0.0, 0.0]))
@@ -701,35 +703,54 @@ while not done[0] and iter<1000:
     # ds_next_obs_sum = torch.index_select(next_obs_sum[0][0], 0, indices_row)
     # ds_next_obs_sum = torch.index_select(ds_next_obs_sum, 1, indices_cal)
 
+    ds_obs_0 = torch.index_select(obs[0][0], 0, indices_row)
+    ds_obs_0 = torch.index_select(ds_obs_0, 1, indices_cal)
+    ds_obs_2 = torch.index_select(obs[0][2], 0, indices_row)
+    ds_obs_2 = torch.index_select(ds_obs_2, 1, indices_cal)
+
+    ds_next_obs_0 = torch.index_select(next_obs[0][0], 0, indices_row)
+    ds_next_obs_0 = torch.index_select(ds_next_obs_0, 1, indices_cal)
+    ds_next_obs_2 = torch.index_select(next_obs[0][2], 0, indices_row)
+    ds_next_obs_2 = torch.index_select(ds_next_obs_2, 1, indices_cal)
+
     int_reward = 0
-    num_zero_obs_sum = (obs_sum == 0.0).sum()
-    num_zero_next_obs_sum = (next_obs_sum == 0.0).sum()
-    if num_zero_next_obs_sum < num_zero_obs_sum:
-            int_reward = 1
+    # num_zero_obs_sum = (obs_sum == 0.0).sum()
+    # num_zero_next_obs_sum = (next_obs_sum == 0.0).sum()
+    # if num_zero_next_obs_sum < num_zero_obs_sum:
+    #         int_reward = 1
+    #
+    # obs_sum = obs_sum + next_obs
+    # int_reward_sum += int_reward
+    #
+    # next_obs_diff2 = 1 * ((next_obs - obs).abs() > 1e-5)
+    # next_obs_sum2 = obs_sum2 + next_obs_diff2
+    # next_obs_sum2_ds = 1 * (down_sample_avg(next_obs_sum2).abs() > 1e-5)
+    # obs_sum2_ds = 1 * (down_sample_avg(obs_sum2).abs() > 1e-5)
+    #
+    # int_reward2 = 0
+    # num_zero_obs_sum2 = (obs_sum2_ds == 0.0).sum()
+    # num_zero_next_obs_sum2 = (next_obs_sum2_ds == 0.0).sum()
+    # if num_zero_next_obs_sum2 < num_zero_obs_sum2:
+    #         int_reward2 = 1
+    #
+    # obs_sum2 = next_obs_sum2
+    # int_reward_sum2 += int_reward2
 
-    obs_sum = obs_sum + next_obs
+    dirt = ds_obs_0 * (ds_obs_2 > 0.1) * (ds_obs_2 < 0.3) * (ds_obs_0 > 0.3)
+    next_dirt = ds_next_obs_0 * (ds_next_obs_2 > 0.1) * (ds_next_obs_2 < 0.3) * (ds_next_obs_0 > 0.3)
+    num_dirt_obs_sum = (dirt > 0).sum()
+    num_dirt_next_obs_sum = (next_dirt > 0).sum()
+    if num_dirt_next_obs_sum < num_dirt_obs_sum:
+        int_reward = 1
+
     int_reward_sum += int_reward
-
-    next_obs_diff2 = 1 * ((next_obs - obs).abs() > 1e-5)
-    next_obs_sum2 = obs_sum2 + next_obs_diff2
-    next_obs_sum2_ds = 1 * (down_sample_avg(next_obs_sum2).abs() > 1e-5)
-    obs_sum2_ds = 1 * (down_sample_avg(obs_sum2).abs() > 1e-5)
-
-    int_reward2 = 0
-    num_zero_obs_sum2 = (obs_sum2_ds == 0.0).sum()
-    num_zero_next_obs_sum2 = (next_obs_sum2_ds == 0.0).sum()
-    if num_zero_next_obs_sum2 < num_zero_obs_sum2:
-            int_reward2 = 1
-
-    obs_sum2 = next_obs_sum2
-    int_reward_sum2 += int_reward2
 
     obs = next_obs
 
     # print(f"step {step} reward {rew} first {first} action {action} if pure action {(pure_action1 == pure_action2 == pure_action3 )} novel {novel}")
     # print(f" prob1 {prob_pure_action1} prob2 {prob_pure_action2} prob3 {prob_pure_action3} prob4 {prob_pure_action4}")
 
-    print(f"step {step} reward {rew} int reward {int_reward} int reward2 {int_reward2} first {first} action1 {action1} int_reward_sum {int_reward_sum} int_reward_sum2 {int_reward_sum2} reward_sum {rew_sum}")
+    print(f"step {step} reward {rew} int reward {int_reward}  first {first} action1 {action1} int_reward_sum {int_reward_sum} int_reward_sum2 {int_reward_sum2} reward_sum {rew_sum}")
 
     # # Change reward location
     # obs = obs['rgb']

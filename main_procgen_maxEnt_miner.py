@@ -121,6 +121,8 @@ def main():
         'train_eval': args.start_level,
         'test_eval': test_start_level
     }
+    indices_row = torch.tensor([3, 9, 16, 22, 28, 35, 41, 48, 54, 61])
+    indices_cal = torch.tensor([3, 10, 16, 22, 28, 35, 42, 48, 54, 61])
 
     for eval_disp_name in EVAL_ENVS:
         for i in range(args.num_test_level):
@@ -129,11 +131,12 @@ def main():
                                     start_level=start_train_test[eval_disp_name] + i,
                                     num_levels=1,
                                     distribution_mode=args.distribution_mode,
-                                    use_generated_assets=False,
-                                    use_backgrounds=False,
-                                    restrict_themes=False,
-                                    use_monochrome_assets=False,
+                                    use_generated_assets=args.use_generated_assets,
+                                    use_backgrounds=args.use_backgrounds,
+                                    restrict_themes=args.restrict_themes,
+                                    use_monochrome_assets=args.use_monochrome_assets,
                                     rand_seed=args.seed,
+                                    center_agent=args.center_agent,
                                     mask_size=args.mask_size,
                                     normalize_rew=args.normalize_rew,
                                     mask_all=args.mask_all)
@@ -145,8 +148,6 @@ def main():
             # plt.show()
 
             only_dirt = (obs[0] * (obs[0][2] > 0.1) * (obs[0][2] < 0.3) * (obs[0][0] > 0.3))[0]
-            indices_row = torch.tensor([3, 9, 16, 22, 28, 35, 41, 48, 54, 61])
-            indices_cal = torch.tensor([3, 10, 16, 22, 28, 35, 42, 48, 54, 61])
             main_num_nonzeros = ((obs[0] * (obs[0][2] > 0.1) * (obs[0][2] < 0.3) * (obs[0][0] > 0.3))[0] == 0).sum()
 
             ds_only_dirt = torch.index_select(only_dirt, 0, indices_row)
@@ -160,11 +161,12 @@ def main():
                       start_level=args.start_level,
                       num_levels=args.num_level,
                       distribution_mode=args.distribution_mode,
-                      use_generated_assets=False,
-                      use_backgrounds=False,
-                      restrict_themes=False,
-                      use_monochrome_assets=False,
+                      use_generated_assets=args.use_generated_assets,
+                      use_backgrounds=args.use_backgrounds,
+                      restrict_themes=args.restrict_themes,
+                      use_monochrome_assets=args.use_monochrome_assets,
                       rand_seed=args.seed,
+                      center_agent=args.center_agent,
                       mask_size=args.mask_size,
                       normalize_rew=args.normalize_rew,
                       mask_all=args.mask_all,
@@ -176,11 +178,12 @@ def main():
                                                    start_level=args.start_level,
                                                    num_levels=args.num_test_level,
                                                    distribution_mode=args.distribution_mode,
-                                                   use_generated_assets=False,
-                                                   use_backgrounds=False,
-                                                   restrict_themes=False,
-                                                   use_monochrome_assets=False,
+                                                   use_generated_assets=args.use_generated_assets,
+                                                   use_backgrounds=args.use_backgrounds,
+                                                   restrict_themes=args.restrict_themes,
+                                                   use_monochrome_assets=args.use_monochrome_assets,
                                                    rand_seed=args.seed,
+                                                   center_agent=args.center_agent,
                                                    mask_size=args.mask_size,
                                                    normalize_rew= args.normalize_rew,
                                                    mask_all=args.mask_all,
@@ -192,11 +195,12 @@ def main():
                                                   start_level=test_start_level,
                                                   num_levels=args.num_test_level,
                                                   distribution_mode=args.distribution_mode,
-                                                  use_generated_assets=False,
-                                                  use_backgrounds=False,
-                                                  restrict_themes=False,
-                                                  use_monochrome_assets=False,
+                                                  use_generated_assets=args.use_generated_assets,
+                                                  use_backgrounds=args.use_backgrounds,
+                                                  restrict_themes=args.restrict_themes,
+                                                  use_monochrome_assets=args.use_monochrome_assets,
                                                   rand_seed=args.seed,
+                                                  center_agent=args.center_agent,
                                                   mask_size=args.mask_size,
                                                   normalize_rew=args.normalize_rew,
                                                   mask_all=args.mask_all,
@@ -234,7 +238,7 @@ def main():
 
     # rollout storage for agent
     rollouts = RolloutStorage(args.num_steps, args.num_processes,
-                              envs.observation_space.shape, envs.action_space,
+                              envs.observation_space.shape, envs.observation_space.shape, envs.action_space,
                               actor_critic.recurrent_hidden_state_size, args.mask_size, device=device)
 
     # Load previous model
@@ -259,7 +263,8 @@ def main():
         # rollouts.num_processes           = actor_critic_weighs['buffer_num_processes']
 
 
-    logger = maxEnt_Logger(args.num_processes, max_reward_seeds, start_train_test, envs.observation_space.shape, actor_critic.recurrent_hidden_state_size, device=device)
+    logger = maxEnt_Logger(args.num_processes, max_reward_seeds, start_train_test, envs.observation_space.shape,
+                           envs.observation_space.shape, actor_critic.recurrent_hidden_state_size, device=device)
 
     obs = envs.reset()
     # rollouts.obs[0].copy_(torch.FloatTensor(obs))
@@ -335,11 +340,16 @@ def main():
             # next_obs_sum =  rollouts.obs_sum * obs.cpu()
             reward = np.zeros_like(reward)
             for i in range(len(reward)):
-                dirt = rollouts.obs[step][i] * (rollouts.obs[step][i][2] > 0.1) * (rollouts.obs[step][i][2] < 0.3) * (rollouts.obs[step][i][0] > 0.3)
-                next_dirt = obs[i] * (obs[i][2] > 0.1) * (obs[i][2] < 0.3) * (obs[i][0] > 0.3)
+                dirt = (rollouts.obs[step][i] * (rollouts.obs[step][i][2] > 0.1) * (rollouts.obs[step][i][2] < 0.3) * (rollouts.obs[step][i][0] > 0.3))[0]
+                next_dirt = (obs[i] * (obs[i][2] > 0.1) * (obs[i][2] < 0.3) * (obs[i][0] > 0.3))[0].cpu()
+
+                dirt_ds =  torch.index_select(dirt, 0, indices_row)
+                dirt_ds =  torch.index_select(dirt_ds, 1, indices_cal)
+                next_dirt_ds = torch.index_select(next_dirt, 0, indices_row)
+                next_dirt_ds = torch.index_select(next_dirt_ds, 1, indices_cal)
                 if done[i] == 0:
-                    num_dirt_obs_sum = (dirt[0] > 0).sum()
-                    num_dirt_next_obs_sum = (next_dirt[0] > 0).sum()
+                    num_dirt_obs_sum = (dirt_ds > 0).sum()
+                    num_dirt_next_obs_sum = (next_dirt_ds > 0).sum()
                     if num_dirt_next_obs_sum < num_dirt_obs_sum:
                         reward[i] = 1
 
@@ -359,7 +369,7 @@ def main():
                 [[0.0] if 'bad_transition' in info.keys() else [1.0]
                  for info in infos])
             rollouts.insert(obs, recurrent_hidden_states, action,
-                            action_log_prob, value, torch.from_numpy(reward).unsqueeze(1), masks, bad_masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, infos)
+                            action_log_prob, value, torch.from_numpy(reward).unsqueeze(1), masks, bad_masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, infos,obs)
 
         with torch.no_grad():
             next_value = actor_critic.get_value(
@@ -398,7 +408,7 @@ def main():
                         # 'buffer_num_processes': rollouts.num_processes}, os.path.join(logdir, args.env_name + "-epoch-{}.pt".format(j)))
 
         # print some stats
-        if j % args.log_interval == 0:
+        if j % args.log_interval == 0 and len(logger.episode_reward_buffer) > 0:
             total_num_steps = (j + 1) * args.num_processes * args.num_steps
             end = time.time()
 
@@ -412,7 +422,7 @@ def main():
                         train_statistics['Rewards_median_episodes'], train_statistics['Rewards_min_episodes'], train_statistics['Rewards_max_episodes'], dist_entropy, value_loss,
                         action_loss, np.unique(rollouts.seeds.squeeze().numpy()).size))
         # evaluate agent on evaluation tasks
-        if ((args.eval_interval is not None and j % args.eval_interval == 0) or j == args.continue_from_epoch):
+        if ((args.eval_interval is not None and j % args.eval_interval == 0) or j == args.continue_from_epoch)  and len(logger.episode_reward_buffer) > 0:
             actor_critic.eval()
             printout = f'Seed {args.seed} Iter {j} '
             eval_dic_rew = {}
@@ -442,7 +452,7 @@ def main():
 
             logger.feed_eval(eval_dic_int_rew['train_eval'], eval_dic_done['train_eval'],eval_dic_int_rew['test_eval'], eval_dic_done['test_eval'],
                              eval_dic_seeds['train_eval'], eval_dic_seeds['test_eval'], eval_dic_rew['train_eval'], eval_dic_rew['test_eval'],
-                             eval_dic_rew['test_eval'], eval_dic_done['test_eval'], eval_test_nondet_int_rew, eval_test_nondet_done)
+                            eval_test_nondet_rew, eval_test_nondet_done, eval_test_nondet_seeds)
             episode_statistics = logger.get_episode_statistics()
             print(printout)
             print(episode_statistics)

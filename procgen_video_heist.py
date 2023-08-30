@@ -28,7 +28,7 @@ from PIL import Image, ImageFont, ImageDraw
 EVAL_ENVS = ['train_eval','test_eval']
 
 # num_processes = 600
-env_name = "maze"
+env_name = "heist"
 start_level = 0
 num_level = 1
 distribution_mode = "easy"
@@ -52,23 +52,43 @@ class VideoRecorderprocess(VideoRecorderWrapper):
 
     def _process_frame(self, frame: np.ndarray) -> np.ndarray:
         obs = frame
-        mouse_crnter = (obs == [100,122,123])
-        x_start = np.where(mouse_crnter.sum(2) == 3)[1][0]
-        y_start = np.where(mouse_crnter.sum(2) == 3)[0][0]
+        heist_crnter = (obs == [255,255,255])
+        x_start = np.where(heist_crnter.sum(2) == 3)[1][int(len(np.where(heist_crnter.sum(2) == 3)[1])/2)]
+        y_start = np.where(heist_crnter.sum(2) == 3)[0][int(len(np.where(heist_crnter.sum(2) == 3)[1])/2)]
         x_end = x_start
         y_end = y_start
-        if self.action == 0 or self.action == 1 or self.action == 2:
-            x_start = x_start - 8
-            x_end   = x_start - 20
+        if self.action == 0:
+            x_start = x_start - 20
+            x_end   = x_start - 30
+            y_start = y_start + 20
+            y_end   = y_start + 30
+        elif self.action == 1:
+            x_start = x_start - 20
+            x_end   = x_start - 35
+        elif self.action == 2:
+            x_start = x_start - 20
+            x_end   = x_start - 30
+            y_start = y_start - 20
+            y_end   = y_start - 30
         elif self.action == 3:
-            y_start = y_start + 8
-            y_end   = y_start + 20
+            y_start = y_start + 20
+            y_end   = y_start + 35
         elif self.action == 5:
-            y_start = y_start - 8
-            y_end   = y_start - 20
-        elif self.action == 6 or self.action == 7 or self.action == 8:
-            x_start = x_start + 8
-            x_end   = x_start + 20
+            y_start = y_start - 20
+            y_end   = y_start - 35
+        elif self.action == 6:
+            x_start = x_start + 20
+            x_end   = x_start + 30
+            y_start = y_start + 20
+            y_end   = y_start + 30
+        elif self.action == 7:
+            x_start = x_start + 20
+            x_end   = x_start + 35
+        elif self.action == 8:
+            x_start = x_start + 20
+            x_end   = x_start + 30
+            y_start = y_start - 20
+            y_end   = y_start - 30
 
 
         image = Image.fromarray(obs)
@@ -89,7 +109,7 @@ class VideoRecorderprocess(VideoRecorderWrapper):
         draw.text((186, 6), text, fill=fill, align ="left", font=font)
 
         na = np.array(image)
-        # na = cv2.arrowedLine(na, (x_start, y_start), (x_end, y_end), color, 2)
+        na = cv2.arrowedLine(na, (x_start, y_start), (x_end, y_end), color, 2)
 
         # obs = obs.astype(np.uint8)
         # myobj = plt.imshow(obs)
@@ -98,7 +118,7 @@ class VideoRecorderprocess(VideoRecorderWrapper):
         return na
 
 # test_start_level = 21i maze
-test_start_level = 210
+test_start_level = 259
 # test_env  = ProcgenConatEnvs(env_name=env_name,
 #                              num_envs=num_level,
 #                              start_level=test_start_level,
@@ -235,7 +255,7 @@ actor_critic10.to(device)
 #     weight_decay=0)
 
 # Load previous model
-saved_epoch = 3050
+saved_epoch = 6102
 #
 # # # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_58967_num_env_200_entro_0.01_gama_0.5_05-02-2023_22-24-49_original"
 # # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_58967_num_env_200_entro_0.01_gama_0.5_05-02-2023_18-15-27_original"
@@ -256,114 +276,124 @@ saved_epoch = 3050
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/bigfish_seed_1234_num_env_200_entro_0.01_gama_0.99_02-05-2023_10-29-48_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_1234_num_env_200_entro_0.01_gama_0.9_01-05-2023_12-56-50_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/starpilot_seed_1234_num_env_200_entro_0.01_gama_0.9_20-05-2023_19-55-30_original"
-# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_1375_num_env_200_entro_0.01_gama_0.999_03-02-2023_00-18-51_noRNN_original"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.5_18-08-2023_14-14-32_original"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_1234_num_env_200_entro_0.01_gama_0.5_28-04-2023_15-30-14_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic_maxEnt.load_state_dict(actor_critic_weighs['state_dict'])
 
 
-saved_epoch = 1524
+saved_epoch = 2000
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_0_num_env_200_entro_0.01_gama_0.999_24-01-2023_18-15-01_noRNN"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_23456_num_env_200_entro_0.01_gama_0.999_10-04-2023_18-12-26_noRNN" #hard
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1547_num_env_200_entro_0.01_gama_0.999_10-04-2023_15-29-37_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_63957_num_env_200_entro_0.01_gama_0.999_01-02-2023_13-55-44_noRNN_original" #last one
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_63957_num_env_200_entro_0.01_gama_0.999_01-02-2023_13-55-44_noRNN_original" #last one
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_9465_num_env_200_entro_0.01_gama_0.999_07-03-2023_23-40-30_noRNN_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/bigfish_seed_1258_num_env_200_entro_0.01_gama_0.999_02-05-2023_10-39-29_noRNN_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/starpilot_seed_1_num_env_200_entro_0.01_gama_0.999_19-05-2023_00-35-58_noRNN_original"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_1375_num_env_200_entro_0.01_gama_0.999_03-02-2023_00-18-51_noRNN_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic1.load_state_dict(actor_critic_weighs['state_dict'])
 
-saved_epoch = 1524
+saved_epoch = 2000
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_25478_num_env_200_entro_0.01_gama_0.999_10-04-2023_15-30-04_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_25698_num_env_200_entro_0.01_gama_0.999_01-02-2023_14-02-43_noRNN_original" #last one
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_25698_num_env_200_entro_0.01_gama_0.999_01-02-2023_14-02-43_noRNN_original" #last one
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_8312_num_env_200_entro_0.01_gama_0.999_07-03-2023_23-39-20_noRNN_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_111555_num_env_200_entro_0.01_gama_0.999_30-04-2023_23-57-06_noRNN_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/starpilot_seed_1234_num_env_200_entro_0.01_gama_0.999_19-05-2023_13-15-17_noRNN_original"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_3569_num_env_200_entro_0.01_gama_0.999_03-02-2023_00-15-25_noRNN_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic2.load_state_dict(actor_critic_weighs['state_dict'])
 
-saved_epoch = 1524
+saved_epoch = 2000
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_44678_num_env_200_entro_0.01_gama_0.999_10-04-2023_15-30-49_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_55664_num_env_200_entro_0.01_gama_0.999_27-04-2023_12-10-47_noRNN_original" #last one
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_55664_num_env_200_entro_0.01_gama_0.999_27-04-2023_12-10-47_noRNN_original" #last one
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_7985_num_env_200_entro_0.01_gama_0.999_07-03-2023_23-38-04_noRNN_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_2457_num_env_200_entro_0.01_gama_0.999_30-04-2023_23-58-09_noRNN_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/starpilot_seed_74185_num_env_200_entro_0.01_gama_0.999_19-05-2023_13-20-03_noRNN_original"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_4967_num_env_200_entro_0.01_gama_0.999_03-02-2023_00-19-07_noRNN_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic3.load_state_dict(actor_critic_weighs['state_dict'])
 
-saved_epoch = 1524
+saved_epoch = 2000
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_9745_num_env_200_entro_0.01_gama_0.999_10-04-2023_15-31-16_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_89456_num_env_200_entro_0.01_gama_0.999_27-04-2023_12-10-19_noRNN_original" #last one
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_89456_num_env_200_entro_0.01_gama_0.999_27-04-2023_12-10-19_noRNN_original" #last one
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_6487_num_env_200_entro_0.01_gama_0.999_07-03-2023_23-25-59_noRNN_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_33441_num_env_200_entro_0.01_gama_0.999_01-05-2023_00-01-11_noRNN_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/starpilot_seed_97415_num_env_200_entro_0.01_gama_0.999_19-05-2023_13-23-13_noRNN_original"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_58965_num_env_200_entro_0.01_gama_0.999_03-02-2023_00-13-15_noRNN_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic4.load_state_dict(actor_critic_weighs['state_dict'])
 
-saved_epoch = 1524
+saved_epoch = 1525
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_5896_num_env_200_entro_0.01_gama_0.999_11-04-2023_12-22-03_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1296_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-47-44_noRNN_original" #last one
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1296_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-47-44_noRNN_original" #last one
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_5194_num_env_200_entro_0.01_gama_0.999_07-03-2023_23-37-24_noRNN_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_441112_num_env_200_entro_0.01_gama_0.999_01-05-2023_00-04-01_noRNN_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/starpilot_seed_2845_num_env_200_entro_0.01_gama_0.999_19-05-2023_13-15-55_noRNN_original"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_1296_num_env_200_entro_0.01_gama_0.999_28-04-2023_22-21-05_noRNN_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic5.load_state_dict(actor_critic_weighs['state_dict'])
 
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_6334_num_env_200_entro_0.01_gama_0.999_11-04-2023_12-22-26_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_26987_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-48-04_noRNN_original" #last one
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_26987_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-48-04_noRNN_original" #last one
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_4589_num_env_200_entro_0.01_gama_0.999_07-03-2023_23-25-12_noRNN_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_5454_num_env_200_entro_0.01_gama_0.999_01-05-2023_00-07-54_noRNN_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/starpilot_seed_3865_num_env_200_entro_0.01_gama_0.999_19-05-2023_13-16-34_noRNN_original"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_23698_num_env_200_entro_0.01_gama_0.999_28-04-2023_22-23-11_noRNN_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic6.load_state_dict(actor_critic_weighs['state_dict'])
 
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_8877_num_env_200_entro_0.01_gama_0.999_20-04-2023_22-31-25_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_3875_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-48-25_noRNN_original" #last one
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_3875_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-48-25_noRNN_original" #last one
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_3978_num_env_200_entro_0.01_gama_0.999_07-03-2023_23-24-08_noRNN_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_654321_num_env_200_entro_0.01_gama_0.999_01-05-2023_00-09-11_noRNN_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/starpilot_seed_4752_num_env_200_entro_0.01_gama_0.999_19-05-2023_13-17-25_noRNN_original"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_38557_num_env_200_entro_0.01_gama_0.999_28-04-2023_22-24-35_noRNN_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic7.load_state_dict(actor_critic_weighs['state_dict'])
 
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_97645_num_env_200_entro_0.01_gama_0.999_20-04-2023_22-32-27_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_4976_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-48-46_noRNN_original" #last one
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_4976_num_env_200_entro_0.01_gama_0.999_05-02-2023_17-48-46_noRNN_original" #last one
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/jumper_seed_1569_num_env_200_entro_0.01_gama_0.999_07-03-2023_23-20-30_noRNN_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_771100_num_env_200_entro_0.01_gama_0.999_01-05-2023_00-10-11_noRNN_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/starpilot_seed_5746_num_env_200_entro_0.01_gama_0.999_19-05-2023_13-18-55_noRNN_original"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_46899_num_env_200_entro_0.01_gama_0.999_28-04-2023_22-25-50_noRNN_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic8.load_state_dict(actor_critic_weighs['state_dict'])
 
+saved_epoch = 1524
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_110110_num_env_200_entro_0.01_gama_0.999_20-04-2023_22-32-54_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1_num_env_200_entro_0.01_gama_0.999_07-05-2023_14-02-06_noRNN_original" #last one
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1_num_env_200_entro_0.01_gama_0.999_07-05-2023_14-02-06_noRNN_original" #last one
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_1_num_env_200_entro_0.01_gama_0.999_07-05-2023_14-05-16_noRNN_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/starpilot_seed_6974_num_env_200_entro_0.01_gama_0.999_19-05-2023_13-19-25_noRNN_original"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_1_num_env_200_entro_0.01_gama_0.999_07-05-2023_14-02-59_noRNN_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
     actor_critic9.load_state_dict(actor_critic_weighs['state_dict'])
 
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_27854_num_env_200_entro_0.01_gama_0.999_20-04-2023_22-33-48_noRNN"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_2_num_env_200_entro_0.01_gama_0.999_07-05-2023_14-02-23_noRNN_original" #last one
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_2_num_env_200_entro_0.01_gama_0.999_07-05-2023_14-02-23_noRNN_original" #last one
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_2_num_env_200_entro_0.01_gama_0.999_07-05-2023_14-05-33_noRNN_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/starpilot_seed_8975_num_env_200_entro_0.01_gama_0.999_19-05-2023_13-20-42_noRNN_original"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_2_num_env_200_entro_0.01_gama_0.999_07-05-2023_14-03-12_noRNN_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
@@ -764,10 +794,10 @@ while not done[0] and iter<1000:
     # 1-NN
     cardinal_left = action_hist[0] + action_hist[1] + action_hist[2]
     cardinal_right = action_hist[6] + action_hist[7] + action_hist[8]
-    # cardinal_up = action_hist[2] + action_hist[5] + action_hist[8]
-    cardinal_up =  action_hist[5]
-    # cardinal_down = action_hist[0] + action_hist[3] + action_hist[6]
-    cardinal_down =  action_hist[3]
+    cardinal_up = action_hist[2] + action_hist[5] + action_hist[8]
+    # cardinal_up =  action_hist[5]
+    cardinal_down = action_hist[0] + action_hist[3] + action_hist[6]
+    # cardinal_down =  action_hist[3]
     cardinal_fire =  action_hist[9]
 
     directions = torch.tensor([cardinal_up, cardinal_right, cardinal_down, cardinal_left, cardinal_fire])
@@ -780,9 +810,9 @@ while not done[0] and iter<1000:
         action_cardinal = torch.tensor([3])
     elif  action1[0] == 6 or action1[0] == 7 or action1[0] == 8:
         action_cardinal = torch.tensor([1])
-    elif action1[0] == 5:
+    elif action1[0] == 5 or action1[0] == 8 or action1[0] == 2:
         action_cardinal = torch.tensor([0])
-    elif action1[0] == 3:
+    elif action1[0] == 3 or action1[0] == 6 or action1[0] == 0:
         action_cardinal = torch.tensor([2])
     else:
         action_cardinal = torch.tensor([4])
@@ -804,7 +834,7 @@ while not done[0] and iter<1000:
 
     # if (maxEnt_steps <= 0) and pure_action1 == pure_action2 == pure_action3 == pure_action4:
     # if (maxEnt_steps <= 0) and torch.var(torch.cat((value1,value2,value3,value4))) < 0.02:
-    if (maxEnt_steps <= 0) and cardinal_value >= 8:
+    if (maxEnt_steps <= 0) and cardinal_value >= 7:
     # if novel and pure_action1 == pure_action2 == pure_action3 == pure_action4:
     # if novel and pure_action1 == pure_action2 == pure_action3 == pure_action4 == pure_action5 == pure_action6 == pure_action7 == pure_action8 == pure_action9 == pure_action10:
     # if novel:
@@ -825,10 +855,9 @@ while not done[0] and iter<1000:
 
     # if iter < 100:
     #     action = pure_action1
-    # test_env.set_is_maxEnt(is_maxEnt, action[0])
-    test_env.set_is_maxEnt(True, action[0])
-    test_env.act(action_maxEnt[0].cpu().numpy())
-    test_env_full_obs.act(action_maxEnt[0].cpu().numpy())
+    test_env.set_is_maxEnt(is_maxEnt, action[0])
+    test_env.act(action[0].cpu().numpy())
+    test_env_full_obs.act(action[0].cpu().numpy())
 
     history.append({'action': action[0].cpu().numpy(), 'is_maxEnt': is_maxEnt})
     # steps_remaining -= 1
@@ -922,24 +951,24 @@ if not first:
 
 print("done")
 
-#
-# env_replay = ProcgenGym3Env(num=1,
-#                           env_name=env_name,
-#                           start_level=test_start_level,
-#                           num_levels=num_level,
-#                           distribution_mode=distribution_mode,
-#                           render_mode="rgb_array",
-#                           use_generated_assets=False,
-#                           center_agent=False,
-#                           use_backgrounds=True,
-#                           restrict_themes=False,
-#                           use_monochrome_assets=False,
-#                           rand_seed=seed)
-#
-# env_recorder = VideoRecorderprocess(env=env_replay, directory="./videos", info_key="rgb", prefix=str(test_start_level), fps=1.5, render=True)
-# for i in range(len(history) - 1):
-#     action = history[i]['action']
-#     transition = history[i + 1]
-#     env_recorder.set_is_maxEnt(transition['is_maxEnt'], transition['action'])
-#     env_recorder.act(action)
-#     env_recorder.observe()
+
+env_replay = ProcgenGym3Env(num=1,
+                          env_name=env_name,
+                          start_level=test_start_level,
+                          num_levels=num_level,
+                          distribution_mode=distribution_mode,
+                          render_mode="rgb_array",
+                          use_generated_assets=False,
+                          center_agent=False,
+                          use_backgrounds=True,
+                          restrict_themes=False,
+                          use_monochrome_assets=False,
+                          rand_seed=seed)
+
+env_recorder = VideoRecorderprocess(env=env_replay, directory="./videos", info_key="rgb", prefix=str(test_start_level), fps=1.5, render=True)
+for i in range(len(history) - 1):
+    action = history[i]['action']
+    transition = history[i + 1]
+    env_recorder.set_is_maxEnt(transition['is_maxEnt'], transition['action'])
+    env_recorder.act(action)
+    env_recorder.observe()

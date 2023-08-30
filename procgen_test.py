@@ -43,17 +43,34 @@ device = torch.device("cuda:{}".format(0))
 #                           restrict_themes=False,
 #                           use_monochrome_assets=False)
 
+envs = make_ProcgenEnvs(num_envs=args.num_processes,
+                        env_name=args.env_name,
+                        start_level=args.start_level,
+                        num_levels=args.num_level,
+                        distribution_mode=args.distribution_mode,
+                        use_generated_assets=args.use_generated_assets,
+                        use_backgrounds=args.use_backgrounds,
+                        restrict_themes=args.restrict_themes,
+                        use_monochrome_assets=args.use_monochrome_assets,
+                        rand_seed=args.seed,
+                        center_agent=args.center_agent,
+                        mask_size=args.mask_size,
+                        normalize_rew=args.normalize_rew,
+                        mask_all=args.mask_all,
+                        device=device)
+
 test_env2 = ProcgenGym3Env(num=1,
                           env_name=env_name,
                           start_level=start_level,
                           num_levels=num_level,
                           distribution_mode=distribution_mode,
                           render_mode="rgb_array",
-                          use_generated_assets=False,
+                          use_generated_assets=True,
                           center_agent=False,
-                          use_backgrounds=True,
-                          restrict_themes=False,
-                          use_monochrome_assets=False)
+                          use_backgrounds=False,
+                          restrict_themes=True,
+                          use_monochrome_assets=True,
+                          mask_all=False)
 
 
 rew, obs, first = test_env2.observe()

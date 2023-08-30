@@ -13,7 +13,9 @@ from a2c_ppo_acktr.arguments import get_args
 from a2c_ppo_acktr.envs import make_ProcgenEnvs
 from procgen import ProcgenEnv
 from a2c_ppo_acktr.model import Policy, MLPAttnBase, MLPHardAttnBase, MLPHardAttnReinforceBase, ImpalaModel
+from a2c_ppo_acktr.model_daac_idaac import IDAACnet, LinearOrderClassifier, NonlinearOrderClassifier
 from a2c_ppo_acktr.storage import RolloutStorage
+from a2c_ppo_acktr.storage_daac_idaac import DAACRolloutStorage, IDAACRolloutStorage
 from evaluation import evaluate_procgen, evaluate_procgen_ensemble
 from a2c_ppo_acktr.utils import save_obj, load_obj
 from a2c_ppo_acktr.procgen_wrappers import *
@@ -61,7 +63,7 @@ def main():
     # logdir = os.path.join(os.path.expanduser(args.log_dir), logdir_)
     # utils.cleanup_log_dir(logdir)
 
-    wandb.init(project=args.env_name + "_PPO_Ensemble", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
+    wandb.init(project=args.env_name + "_PPO_Ensemble_idaac_expgen", entity="ev_zisselman", config=args, name=logdir_, id=logdir_)
 
     # # Ugly but simple logging
     # log_dict = {
@@ -169,79 +171,66 @@ def main():
 
     print('done')
 
-    actor_critic = Policy(
-        eval_envs_dic['train_eval'].observation_space.shape,
-        eval_envs_dic['train_eval'].action_space,
-        base=ImpalaModel,
-        base_kwargs={'recurrent': False,'hidden_size': args.recurrent_hidden_size})
-        # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
+    obs_shape = envs.observation_space.shape
+    actor_critic = IDAACnet(
+        obs_shape,
+        envs.action_space.n,
+        base_kwargs={'hidden_size': args.hidden_size})
     actor_critic.to(device)
 
-    actor_critic1 = Policy(
-        eval_envs_dic['train_eval'].observation_space.shape,
-        eval_envs_dic['train_eval'].action_space,
-        base=ImpalaModel,
-        base_kwargs={'recurrent': False,'hidden_size': args.recurrent_hidden_size})
-        # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
-    actor_critic1.to(device)
+    actor_critic1 = IDAACnet(
+        obs_shape,
+        envs.action_space.n,
+        base_kwargs={'hidden_size': args.hidden_size})
+    actor_critic.to(device)
 
-    actor_critic2 = Policy(
-        eval_envs_dic['train_eval'].observation_space.shape,
-        eval_envs_dic['train_eval'].action_space,
-        base=ImpalaModel,
-        base_kwargs={'recurrent': False,'hidden_size': args.recurrent_hidden_size})
-    # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
-    actor_critic2.to(device)
+    actor_critic2 = IDAACnet(
+        obs_shape,
+        envs.action_space.n,
+        base_kwargs={'hidden_size': args.hidden_size})
+    actor_critic.to(device)
 
-    actor_critic3 = Policy(
-        eval_envs_dic['train_eval'].observation_space.shape,
-        eval_envs_dic['train_eval'].action_space,
-        base=ImpalaModel,
-        base_kwargs={'recurrent': False,'hidden_size': args.recurrent_hidden_size})
-    # base_kwargs={'recurrent': args.recurrent_policy or args.obs_recurrent})
-    actor_critic3.to(device)
+    actor_critic3 = IDAACnet(
+        obs_shape,
+        envs.action_space.n,
+        base_kwargs={'hidden_size': args.hidden_size})
+    actor_critic.to(device)
 
-    actor_critic4 = Policy(
-        eval_envs_dic['train_eval'].observation_space.shape,
-        eval_envs_dic['train_eval'].action_space,
-        base=ImpalaModel,
-        base_kwargs={'recurrent': False, 'hidden_size': args.recurrent_hidden_size})
-    actor_critic4.to(device)
+    actor_critic4 = IDAACnet(
+        obs_shape,
+        envs.action_space.n,
+        base_kwargs={'hidden_size': args.hidden_size})
+    actor_critic.to(device)
 
-    actor_critic5 = Policy(
-        eval_envs_dic['train_eval'].observation_space.shape,
-        eval_envs_dic['train_eval'].action_space,
-        base=ImpalaModel,
-        base_kwargs={'recurrent': False, 'hidden_size': args.recurrent_hidden_size})
-    actor_critic5.to(device)
+    actor_critic5 = IDAACnet(
+        obs_shape,
+        envs.action_space.n,
+        base_kwargs={'hidden_size': args.hidden_size})
+    actor_critic.to(device)
 
-    actor_critic6 = Policy(
-        eval_envs_dic['train_eval'].observation_space.shape,
-        eval_envs_dic['train_eval'].action_space,
-        base=ImpalaModel,
-        base_kwargs={'recurrent': False, 'hidden_size': args.recurrent_hidden_size})
-    actor_critic6.to(device)
+    actor_critic6 = IDAACnet(
+        obs_shape,
+        envs.action_space.n,
+        base_kwargs={'hidden_size': args.hidden_size})
+    actor_critic.to(device)
 
-    actor_critic7 = Policy(
-        eval_envs_dic['train_eval'].observation_space.shape,
-        eval_envs_dic['train_eval'].action_space,
-        base=ImpalaModel,
-        base_kwargs={'recurrent': False, 'hidden_size': args.recurrent_hidden_size})
-    actor_critic7.to(device)
+    actor_critic7 = IDAACnet(
+        obs_shape,
+        envs.action_space.n,
+        base_kwargs={'hidden_size': args.hidden_size})
+    actor_critic.to(device)
 
-    actor_critic8 = Policy(
-        eval_envs_dic['train_eval'].observation_space.shape,
-        eval_envs_dic['train_eval'].action_space,
-        base=ImpalaModel,
-        base_kwargs={'recurrent': False, 'hidden_size': args.recurrent_hidden_size})
-    actor_critic8.to(device)
+    actor_critic8 = IDAACnet(
+        obs_shape,
+        envs.action_space.n,
+        base_kwargs={'hidden_size': args.hidden_size})
+    actor_critic.to(device)
 
-    actor_critic9 = Policy(
-        eval_envs_dic['train_eval'].observation_space.shape,
-        eval_envs_dic['train_eval'].action_space,
-        base=ImpalaModel,
-        base_kwargs={'recurrent': False, 'hidden_size': args.recurrent_hidden_size})
-    actor_critic9.to(device)
+    actor_critic9 = IDAACnet(
+        obs_shape,
+        envs.action_space.n,
+        base_kwargs={'hidden_size': args.hidden_size})
+    actor_critic.to(device)
 
     actor_critic_maxEnt = Policy(
         eval_envs_dic['train_eval'].observation_space.shape,
@@ -293,45 +282,46 @@ def main():
                               actor_critic_maxEnt.recurrent_hidden_state_size, args.mask_size, device=device)
 
     # Load previous model
-    if (args.continue_from_epoch > 0) and args.save_dir != "":
-        save_path = args.save_dir
-        actor_critic_weighs = torch.load(os.path.join(save_path, args.env_name + "-epoch-{}.pt".format(args.continue_from_epoch)), map_location=device)
-        actor_critic.load_state_dict(actor_critic_weighs['state_dict'])
-        agent.optimizer.load_state_dict(actor_critic_weighs['optimizer_state_dict'])
-        # rollouts.obs                            = actor_critic_weighs['buffer_obs']
-        # rollouts.recurrent_hidden_states = actor_critic_weighs['buffer_recurrent_hidden_states']
-        # rollouts.rewards                 = actor_critic_weighs['buffer_rewards']
-        # rollouts.seeds                   = actor_critic_weighs['buffer_seeds']
-        # rollouts.value_preds             = actor_critic_weighs['buffer_value_preds']
-        # rollouts.returns                 = actor_critic_weighs['buffer_returns']
-        # rollouts.action_log_probs        = actor_critic_weighs['buffer_action_log_probs']
-        # rollouts.actions                 = actor_critic_weighs['buffer_actions']
-        # rollouts.masks                   = actor_critic_weighs['buffer_masks']
-        # rollouts.bad_masks               = actor_critic_weighs['buffer_bad_masks']
-        # rollouts.info_batch              = actor_critic_weighs['buffer_info_batch']
-        # rollouts.num_steps               = actor_critic_weighs['buffer_num_steps']
-        # rollouts.step                    = actor_critic_weighs['buffer_step']
-        # rollouts.num_processes           = actor_critic_weighs['buffer_num_processes']
+    # if (args.continue_from_epoch > 0) and args.save_dir != "":
+    #     save_path = args.save_dir
+    #     actor_critic_weighs = torch.load(os.path.join(save_path, args.env_name + "-epoch-{}.pt".format(args.continue_from_epoch)), map_location=device)
+    #     actor_critic.load_state_dict(actor_critic_weighs['state_dict'])
+    #     agent.optimizer.load_state_dict(actor_critic_weighs['optimizer_state_dict'])
+    #     # rollouts.obs                            = actor_critic_weighs['buffer_obs']
+    #     # rollouts.recurrent_hidden_states = actor_critic_weighs['buffer_recurrent_hidden_states']
+    #     # rollouts.rewards                 = actor_critic_weighs['buffer_rewards']
+    #     # rollouts.seeds                   = actor_critic_weighs['buffer_seeds']
+    #     # rollouts.value_preds             = actor_critic_weighs['buffer_value_preds']
+    #     # rollouts.returns                 = actor_critic_weighs['buffer_returns']
+    #     # rollouts.action_log_probs        = actor_critic_weighs['buffer_action_log_probs']
+    #     # rollouts.actions                 = actor_critic_weighs['buffer_actions']
+    #     # rollouts.masks                   = actor_critic_weighs['buffer_masks']
+    #     # rollouts.bad_masks               = actor_critic_weighs['buffer_bad_masks']
+    #     # rollouts.info_batch              = actor_critic_weighs['buffer_info_batch']
+    #     # rollouts.num_steps               = actor_critic_weighs['buffer_num_steps']
+    #     # rollouts.step                    = actor_critic_weighs['buffer_step']
+    #     # rollouts.num_processes           = actor_critic_weighs['buffer_num_processes']
 
     # Load previous model
     if (args.saved_epoch > 0) and args.save_dir != "":
         save_path = args.save_dir
-        actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch)), map_location=device)
+        actor_critic_weighs = torch.load(os.path.join(save_path,  "agent-{}-idaac-s{}iter1525.pt".format(args.env_name, args.seed0)), map_location=device)
         actor_critic.load_state_dict(actor_critic_weighs['state_dict'])
+
 
     if (args.saved_epoch1 > 0) and args.save_dir1 != "":
         save_path = args.save_dir1
-        actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch1)), map_location=device)
+        actor_critic_weighs = torch.load(os.path.join(save_path,  "agent-{}-idaac-s{}iter1525.pt".format(args.env_name, args.seed1)), map_location=device)
         actor_critic1.load_state_dict(actor_critic_weighs['state_dict'])
 
     if (args.saved_epoch2 > 0) and args.save_dir2 != "":
         save_path = args.save_dir2
-        actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch2)), map_location=device)
+        actor_critic_weighs = torch.load(os.path.join(save_path,  "agent-{}-idaac-s{}iter1525.pt".format(args.env_name, args.seed2)), map_location=device)
         actor_critic2.load_state_dict(actor_critic_weighs['state_dict'])
 
     if (args.saved_epoch3 > 0) and args.save_dir3 != "":
         save_path = args.save_dir3
-        actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch3)), map_location=device)
+        actor_critic_weighs = torch.load(os.path.join(save_path,  "agent-{}-idaac-s{}iter1525.pt".format(args.env_name, args.seed3)), map_location=device)
         actor_critic3.load_state_dict(actor_critic_weighs['state_dict'])
 
     if (args.saved_epoch_maxEnt > 0) and args.save_dir_maxEnt != "":
@@ -342,34 +332,34 @@ def main():
     if args.num_ensemble > 4:
         if (args.saved_epoch4 > 0) and args.save_dir4 != "":
             save_path = args.save_dir4
-            actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch4)),map_location=device)
+            actor_critic_weighs = torch.load(os.path.join(save_path,  "agent-{}-idaac-s{}iter1525.pt".format(args.env_name, args.seed4)), map_location=device)
             actor_critic4.load_state_dict(actor_critic_weighs['state_dict'])
 
         if (args.saved_epoch5 > 0) and args.save_dir5 != "":
             save_path = args.save_dir5
-            actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch5)),map_location=device)
+            actor_critic_weighs = torch.load(os.path.join(save_path,  "agent-{}-idaac-s{}iter1525.pt".format(args.env_name, args.seed5)), map_location=device)
             actor_critic5.load_state_dict(actor_critic_weighs['state_dict'])
 
     if args.num_ensemble > 6:
         if (args.saved_epoch6 > 0) and args.save_dir6 != "":
             save_path = args.save_dir6
-            actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch6)),map_location=device)
+            actor_critic_weighs = torch.load(os.path.join(save_path,  "agent-{}-idaac-s{}iter1525.pt".format(args.env_name, args.seed6)), map_location=device)
             actor_critic6.load_state_dict(actor_critic_weighs['state_dict'])
 
         if (args.saved_epoch7 > 0) and args.save_dir7 != "":
             save_path = args.save_dir7
-            actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch7)),map_location=device)
+            actor_critic_weighs = torch.load(os.path.join(save_path,  "agent-{}-idaac-s{}iter1525.pt".format(args.env_name, args.seed7)), map_location=device)
             actor_critic7.load_state_dict(actor_critic_weighs['state_dict'])
 
     if args.num_ensemble > 8:
         if (args.saved_epoch8 > 0) and args.save_dir8 != "":
             save_path = args.save_dir8
-            actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch8)),map_location=device)
+            actor_critic_weighs = torch.load(os.path.join(save_path,  "agent-{}-idaac-s{}iter1525.pt".format(args.env_name, args.seed8)), map_location=device)
             actor_critic8.load_state_dict(actor_critic_weighs['state_dict'])
 
         if (args.saved_epoch9 > 0) and args.save_dir9 != "":
             save_path = args.save_dir9
-            actor_critic_weighs = torch.load(os.path.join(save_path, args.load_env_name + "-epoch-{}.pt".format(args.saved_epoch9)),map_location=device)
+            actor_critic_weighs = torch.load(os.path.join(save_path,  "agent-{}-idaac-s{}iter1525.pt".format(args.env_name, args.seed9)), map_location=device)
             actor_critic9.load_state_dict(actor_critic_weighs['state_dict'])
 
     logger = Logger(args.num_processes, envs.observation_space.shape, envs.observation_space.shape, actor_critic_maxEnt.recurrent_hidden_state_size, device=device)
@@ -461,29 +451,10 @@ def main():
         for step in range(args.num_steps):
             # Sample actions
             with torch.no_grad():
-                value, action0, action_log_prob, _, recurrent_hidden_states, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic.act(
-                    rollouts_maxEnt.obs[step].to(device), rollouts_maxEnt.recurrent_hidden_states[step].to(device),
-                    rollouts_maxEnt.masks[step].to(device), rollouts_maxEnt.attn_masks[step].to(device),
-                    rollouts_maxEnt.attn_masks1[step].to(device), rollouts_maxEnt.attn_masks2[step].to(device),
-                    rollouts_maxEnt.attn_masks3[step].to(device))
-
-                value, action1, action_log_prob, _, recurrent_hidden_states1, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic1.act(
-                    rollouts_maxEnt.obs[step].to(device), rollouts_maxEnt.recurrent_hidden_states[step].to(device),
-                    rollouts_maxEnt.masks[step].to(device), rollouts_maxEnt.attn_masks[step].to(device),
-                    rollouts_maxEnt.attn_masks1[step].to(device), rollouts_maxEnt.attn_masks2[step].to(device),
-                    rollouts_maxEnt.attn_masks3[step].to(device))
-
-                value, action2, action_log_prob, _, recurrent_hidden_states2, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic2.act(
-                    rollouts_maxEnt.obs[step].to(device), rollouts_maxEnt.recurrent_hidden_states[step].to(device),
-                    rollouts_maxEnt.masks[step].to(device), rollouts_maxEnt.attn_masks[step].to(device),
-                    rollouts_maxEnt.attn_masks1[step].to(device), rollouts_maxEnt.attn_masks2[step].to(device),
-                    rollouts_maxEnt.attn_masks3[step].to(device))
-
-                value, action3, action_log_prob, _, recurrent_hidden_states3, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic3.act(
-                    rollouts_maxEnt.obs[step].to(device), rollouts_maxEnt.recurrent_hidden_states[step].to(device),
-                    rollouts_maxEnt.masks[step].to(device), rollouts_maxEnt.attn_masks[step].to(device),
-                    rollouts_maxEnt.attn_masks1[step].to(device), rollouts_maxEnt.attn_masks2[step].to(device),
-                    rollouts_maxEnt.attn_masks3[step].to(device))
+                adv, value, action0, action_log_prob = actor_critic.act(rollouts_maxEnt.obs[step].to(device))
+                adv, value, action1, action_log_prob = actor_critic1.act(rollouts_maxEnt.obs[step].to(device))
+                adv, value, action2, action_log_prob = actor_critic2.act(rollouts_maxEnt.obs[step].to(device))
+                adv, value, action3, action_log_prob = actor_critic3.act(rollouts_maxEnt.obs[step].to(device))
 
                 value, action_maxEnt, action_log_prob, _, recurrent_hidden_states_maxEnt, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic_maxEnt.act(
                     rollouts_maxEnt.obs[step].to(device), rollouts_maxEnt.recurrent_hidden_states[step].to(device),
@@ -492,43 +463,16 @@ def main():
                     rollouts_maxEnt.attn_masks3[step].to(device))
 
                 if args.num_ensemble > 4:
-                    value, action4, action_log_prob, _, _, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic4.act(
-                        rollouts_maxEnt.obs[step].to(device), rollouts_maxEnt.recurrent_hidden_states[step].to(device),
-                        rollouts_maxEnt.masks[step].to(device), rollouts_maxEnt.attn_masks[step].to(device),
-                        rollouts_maxEnt.attn_masks1[step].to(device), rollouts_maxEnt.attn_masks2[step].to(device),
-                        rollouts_maxEnt.attn_masks3[step].to(device))
-
-                    value, action5, action_log_prob, _, _, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic5.act(
-                        rollouts_maxEnt.obs[step].to(device), rollouts_maxEnt.recurrent_hidden_states[step].to(device),
-                        rollouts_maxEnt.masks[step].to(device), rollouts_maxEnt.attn_masks[step].to(device),
-                        rollouts_maxEnt.attn_masks1[step].to(device), rollouts_maxEnt.attn_masks2[step].to(device),
-                        rollouts_maxEnt.attn_masks3[step].to(device))
+                    adv, value, action4, action_log_prob = actor_critic4.act(rollouts_maxEnt.obs[step].to(device))
+                    adv, value, action5, action_log_prob = actor_critic5.act(rollouts_maxEnt.obs[step].to(device))
 
                 if args.num_ensemble > 6:
-                    value, action6, action_log_prob, _, recurrent_hidden_states2, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic6.act(
-                        rollouts_maxEnt.obs[step].to(device), rollouts_maxEnt.recurrent_hidden_states[step].to(device),
-                        rollouts_maxEnt.masks[step].to(device), rollouts_maxEnt.attn_masks[step].to(device),
-                        rollouts_maxEnt.attn_masks1[step].to(device), rollouts_maxEnt.attn_masks2[step].to(device),
-                        rollouts_maxEnt.attn_masks3[step].to(device))
-
-                    value, action7, action_log_prob, _, recurrent_hidden_states3, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic7.act(
-                        rollouts_maxEnt.obs[step].to(device), rollouts_maxEnt.recurrent_hidden_states[step].to(device),
-                        rollouts_maxEnt.masks[step].to(device), rollouts_maxEnt.attn_masks[step].to(device),
-                        rollouts_maxEnt.attn_masks1[step].to(device), rollouts_maxEnt.attn_masks2[step].to(device),
-                        rollouts_maxEnt.attn_masks3[step].to(device))
+                    adv, value, action6, action_log_prob = actor_critic6.act(rollouts_maxEnt.obs[step].to(device))
+                    adv, value, action7, action_log_prob = actor_critic7.act(rollouts_maxEnt.obs[step].to(device))
 
                 if args.num_ensemble > 8:
-                    value, action8, action_log_prob, _, recurrent_hidden_states2, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic8.act(
-                        rollouts_maxEnt.obs[step].to(device), rollouts_maxEnt.recurrent_hidden_states[step].to(device),
-                        rollouts_maxEnt.masks[step].to(device), rollouts_maxEnt.attn_masks[step].to(device),
-                        rollouts_maxEnt.attn_masks1[step].to(device), rollouts_maxEnt.attn_masks2[step].to(device),
-                        rollouts_maxEnt.attn_masks3[step].to(device))
-
-                    value, action9, action_log_prob, _, recurrent_hidden_states3, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic9.act(
-                        rollouts_maxEnt.obs[step].to(device), rollouts_maxEnt.recurrent_hidden_states[step].to(device),
-                        rollouts_maxEnt.masks[step].to(device), rollouts_maxEnt.attn_masks[step].to(device),
-                        rollouts_maxEnt.attn_masks1[step].to(device), rollouts_maxEnt.attn_masks2[step].to(device),
-                        rollouts_maxEnt.attn_masks3[step].to(device))
+                    adv, value, action8, action_log_prob = actor_critic8.act(rollouts_maxEnt.obs[step].to(device))
+                    adv, value, action9, action_log_prob = actor_critic9.act(rollouts_maxEnt.obs[step].to(device))
 
             # actions_vec = torch.zeros([args.num_processes, envs.action_space.n], device=device)
             # for i in range(args.num_processes):
@@ -588,7 +532,7 @@ def main():
                     cardinal_down += 1 * (action4 == 3) + 1 * (action5 == 3) + 1 * (action4 == 0) + 1 * (action5 == 0) + 1 * (action4 == 6) + 1 * (action5 == 6)
                     cardinal_up += 1 * (action4 == 5) + 1 * (action5 == 5) + 1 * (action4 == 2) + 1 * (action5 == 2) + 1 * (action4 == 8) + 1 * (action5 == 8)
                     cardinal_fire += 1 * (action4 == 9) + 1 * (action5 == 9)
-                    cardinal_else += 1 * (action4 == 4) + 1 * (action4 == 10) + 1 * (action4 == 11) + 1 * (action4 == 12) + 1 * (action4 == 13) + 1 * (action4 == 14) \
+                    cardinal_else = 1 * (action4 == 4) + 1 * (action4 == 10) + 1 * (action4 == 11) + 1 * (action4 == 12) + 1 * (action4 == 13) + 1 * (action4 == 14) \
                                   + 1 * (action5 == 9) + 1 * (action5 == 10) + 1 * (action5 == 11) + 1 * (action5 == 12) + 1 * (action5 == 13) + 1 * (action5 == 14)
 
             if args.num_ensemble > 6:
@@ -603,7 +547,7 @@ def main():
                     cardinal_down += 1 * (action6 == 3) + 1 * (action7 == 3) + 1 * (action6 == 0) + 1 * (action7 == 0) + 1 * (action6 == 6) + 1 * (action7 == 6)
                     cardinal_up += 1 * (action6 == 5) + 1 * (action7 == 5) + 1 * (action6 == 2) + 1 * (action7 == 2) + 1 * (action6 == 8) + 1 * (action7 == 8)
                     cardinal_fire += 1 * (action6 == 9) + 1 * (action7 == 9)
-                    cardinal_else += 1 * (action6 == 4) + 1 * (action6 == 10) + 1 * (action6 == 11) + 1 * (action6 == 12) + 1 * (action6 == 13) + 1 * (action6 == 14) \
+                    cardinal_else = 1 * (action6 == 4) + 1 * (action6 == 10) + 1 * (action6 == 11) + 1 * (action6 == 12) + 1 * (action6 == 13) + 1 * (action6 == 14) \
                                   + 1 * (action7 == 9) + 1 * (action7 == 10) + 1 * (action7 == 11) + 1 * (action7 == 12) + 1 * (action7 == 13) + 1 * (action7 == 14)
 
             if args.num_ensemble > 8:
@@ -618,7 +562,7 @@ def main():
                     cardinal_down += 1 * (action8 == 3) + 1 * (action9 == 3) + 1 * (action8 == 0) + 1 * (action9 == 0) + 1 * (action8 == 6) + 1 * (action9 == 6)
                     cardinal_up += 1 * (action8 == 5) + 1 * (action9 == 5) + 1 * (action8 == 2) + 1 * (action9 == 2) + 1 * (action8 == 8) + 1 * (action9 == 8)
                     cardinal_fire += 1 * (action8 == 9) + 1 * (action9 == 9)
-                    cardinal_else += 1 * (action8 == 4) + 1 * (action8 == 10) + 1 * (action8 == 11) + 1 * (action8 == 12) + 1 * (action8 == 13) + 1 * (action8 == 14) \
+                    cardinal_else = 1 * (action8 == 4) + 1 * (action8 == 10) + 1 * (action8 == 11) + 1 * (action8 == 12) + 1 * (action8 == 13) + 1 * (action8 == 14) \
                                   + 1 * (action9 == 9) + 1 * (action9 == 10) + 1 * (action9 == 11) + 1 * (action9 == 12) + 1 * (action9 == 13) + 1 * (action9 == 14)
 
             if (args.env_name == "maze" or args.env_name == "miner"):
@@ -703,10 +647,7 @@ def main():
 
 
         with torch.no_grad():
-            next_value = actor_critic.get_value(
-                rollouts_maxEnt.obs[-1].to(device), rollouts_maxEnt.recurrent_hidden_states[-1].to(device),
-                rollouts_maxEnt.masks[-1].to(device), rollouts_maxEnt.attn_masks[-1].to(device), rollouts_maxEnt.attn_masks1[-1].to(device),
-                rollouts_maxEnt.attn_masks2[-1].to(device), rollouts_maxEnt.attn_masks3[-1].to(device)).detach()
+            next_value = actor_critic.get_value(rollouts_maxEnt.obs[-1]).detach()
 
         actor_critic.train()
         rollouts_maxEnt.compute_returns(next_value, args.use_gae, args.gamma,

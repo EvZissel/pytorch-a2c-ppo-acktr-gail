@@ -442,14 +442,14 @@ class MaskAllFrame(VecEnvWrapper):
 
     def step_wait(self):
         obs, reward, done, info = self.venv.step_wait()
-
+        obs = obs.cpu()
         indexes = np.stack([(obs[:, 1, :, :] == 255), (obs[:, 1, :, :] == 255), (obs[:, 1, :, :] == 255)], axis=1)
         obs = obs * indexes + self.brown * (1 - indexes)
 
         return obs, reward, done, info
 
     def reset(self):
-        obs = self.venv.reset()
+        obs = self.venv.reset().cpu()
 
         brown = np.repeat(self.brown, obs.shape[0], axis=0)
 

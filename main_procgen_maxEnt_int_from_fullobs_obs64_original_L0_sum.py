@@ -64,7 +64,7 @@ def main():
     logdir = os.path.join(os.path.expanduser(args.log_dir), logdir_)
     utils.cleanup_log_dir(logdir)
 
-    wandb.init(project=args.env_name + "_PPO_maximum_entropy", entity="ev_zisselman", config=args, name=logdir_,
+    wandb.init(project=args.env_name + "_PPO_maximum_entropy_L2", entity="ev_zisselman", config=args, name=logdir_,
                id=logdir_)
 
     # Ugly but simple logging
@@ -356,10 +356,12 @@ def main():
 
     obs = envs.reset()
     obs_full = envs_full_obs.reset()
+    obs_ds = down_sample_avg(obs)
 
     # We sum the difference between two consecutive observation
     # rollouts.obs[0].copy_(torch.FloatTensor(obs))
     rollouts.obs[0].copy_(obs)
+    rollouts.obs_ds[0].copy_(obs_ds)
     rollouts.obs_full.copy_(obs_full)
     rollouts.obs_sum.copy_(torch.zeros_like(obs_full))
     rollouts.obs0.copy_(obs_full)
@@ -450,23 +452,48 @@ def main():
             # if max(reward) < 10 and max(reward) >0:
             #     print(reward)
             int_reward = np.zeros_like(reward)
+            obs_ds = down_sample_avg(obs)
+            # next_obs_diff = 1 * ((obs_full - rollouts.obs_full.to(device)).abs() > 1e-5)
+            # next_obs_sum = rollouts.obs_sum.to(device) + next_obs_diff
+            # next_obs_sum = (1 * (down_sample_avg(next_obs_sum).abs() > 1e-5)).sum(1)
+            # obs_sum = (1 * (down_sample_avg(rollouts.obs_sum.to(device)).abs() > 1e-5)).sum(1)
 
-            next_obs_diff = 1 * ((obs_full - rollouts.obs_full.to(device)).abs() > 1e-5)
-            next_obs_sum = rollouts.obs_sum.to(device) + next_obs_diff
-            next_obs_sum = (1 * (down_sample_avg(next_obs_sum).abs() > 1e-5)).sum(1)
-            obs_sum = (1 * (down_sample_avg(rollouts.obs_sum.to(device)).abs() > 1e-5)).sum(1)
+
+            diff_all = obs_ds.unsqueeze(0) - rollouts.obs_ds[rollouts.step].to(device)
+            next_obs_ds_diff_sum = 1*((rollouts.obs_ds_sum[rollouts.step].to(device) + diff_all).abs() > 1e-5)
+            diff_next_obs_ds_diff_sum = next_obs_ds_diff_sum.unsqueeze(0) - rollouts.obs_ds_sum.to(device)
+
             for i in range(len(done)):
-                if done[i] == 1 or (rollouts.step_env[i] % args.reset_cont == 0):
+                if done[i] == 1:
                     rollouts.obs_sum[i] = torch.zeros_like(rollouts.obs_full[i])
-                    rollouts.obs_full[i].copy_(obs_full[i])
+                    # rollouts.obs_full[i].copy_(obs_full[i])
+                    next_obs_ds_diff_sum[i] = torch.zeros_like(next_obs_ds_diff_sum[i])
                     # rollouts.obs_sum[i].copy_(obs[i].cpu())
                     # rollouts.obs0[i].copy_(obs_full[i].cpu())
                     rollouts.step_env[i] = 0
                     # rollouts.diff_obs[step][i].copy_(torch.zeros_like(obs[i]).cpu())
                 else:
-                    num_zero_obs_sum = (obs_sum[i] == 0).sum()
-                    num_zero_next_obs_sum = (next_obs_sum[i] == 0).sum()
-                    int_reward[i] = num_zero_obs_sum - num_zero_next_obs_sum
+                    ind = int(max(0, rollouts.step_env[i] - args.num_buffer))
+                    # index = int(step - (rollouts.step_env[i] - 1) + ind) if int(step - (rollouts.step_env[i] - 1) + ind) >= 0 else int(args.num_steps + int(step - (rollouts.step_env[i] - 1) + ind))
+                    # diff_obs_swin = diff_obs[i] - rollouts.diff_obs[index][i]
+
+                    index = int(step + 1 - rollouts.step_env[i] + ind)
+                    # diff = obs_ds[i].unsqueeze(0) - rollouts.obs_ds[max(0, index):step][:, i, :, :].to(device)
+                    diff = diff_next_obs_ds_diff_sum[max(0, index):step+1][:, i, :, :]
+                    if index < 0:
+                        if not len(diff):
+                            # diff = obs_ds[i].unsqueeze(0) - rollouts.obs_ds[args.num_steps + index:args.num_steps][:, i, :, :].to(device)
+                            diff = diff_next_obs_ds_diff_sum[args.num_steps + index:args.num_steps][:, i, :, :]
+                        else:
+                            # diff = torch.cat((diff, obs_ds[i].unsqueeze(0) - rollouts.obs_ds[args.num_steps + index:args.num_steps][:, i, :, :].to(device)), dim=0)
+                            diff = torch.cat((diff, diff_next_obs_ds_diff_sum[args.num_steps + index:args.num_steps][:, i, :, :].to(device)), dim=0)
+                    # diff = down_sample_avg(diff)
+                    if args.knn == 0:
+                        diff = (1.0 * (diff.abs() > 1e-5)).sum(1)
+                    neighbor_size = args.neighbor_size
+                    if len(diff) < args.neighbor_size:
+                        neighbor_size = len(diff)
+                    int_reward[i] = diff.flatten(start_dim=1).norm(p=args.knn, dim=1).sort().values[int(neighbor_size-1)]
 
 
             for i, info in enumerate(infos):
@@ -486,6 +513,8 @@ def main():
             rollouts.insert(obs, recurrent_hidden_states, action,
                             action_log_prob, value, torch.from_numpy(int_reward).unsqueeze(1), masks, bad_masks,
                             attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, infos, obs_full)
+            rollouts.obs_ds[rollouts.step + 1].copy_(obs_ds)
+            rollouts.obs_ds_sum[rollouts.step + 1].copy_(next_obs_ds_diff_sum)
 
         with torch.no_grad():
             next_value = actor_critic.get_value(

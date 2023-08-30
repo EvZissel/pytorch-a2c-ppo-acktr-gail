@@ -543,7 +543,17 @@ def get_args():
         '--num_buffer',
         type=int,
         default=256,
-        help='number of images to evaluate k-NN (default: 256)')
+        help='number of images to evaluate k-NN (default: 256, maximum: num-steps)')
+    parser.add_argument(
+        '--neighbor_size',
+        type=int,
+        default=1,
+        help='number of k in k-NN (default: 1)')
+    parser.add_argument(
+        '--p_norm',
+        type=int,
+        default=0,
+        help='the norm of the k-NN distance. Supports L0 or L2 (default: 0)')
     parser.add_argument(
         '--num_detEnt',
         type=int,

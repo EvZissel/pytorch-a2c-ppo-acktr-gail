@@ -307,6 +307,9 @@ def evaluate_procgen_maxEnt_miner(actor_critic, eval_envs_dic, env_name, num_pro
     # for _ in range(num_processes):
     #     eval_episode_len_buffer.append(0)
 
+    indices_row = torch.tensor([3, 9, 16, 22, 28, 35, 41, 48, 54, 61])
+    indices_cal = torch.tensor([3, 10, 16, 22, 28, 35, 42, 48, 54, 61])
+
     # obs = eval_envs.reset()
     # obs_sum = obs
     # eval_recurrent_hidden_states = torch.zeros(
@@ -403,12 +406,17 @@ def evaluate_procgen_maxEnt_miner(actor_critic, eval_envs_dic, env_name, num_pro
 
             int_reward = np.zeros_like(reward)
             for i in range(len(reward)):
-                dirt = logger.obs[env_name][i] * (logger.obs[env_name][i][2] > 0.1) * (
-                            logger.obs[env_name][i][2] < 0.3) * (logger.obs[env_name][i][0] > 0.3)
-                next_dirt = next_obs[i] * (next_obs[i][2] > 0.1) * (next_obs[i][2] < 0.3) * (next_obs[i][0] > 0.3)
+                dirt = (logger.obs[env_name][i] * (logger.obs[env_name][i][2] > 0.1) * (logger.obs[env_name][i][2] < 0.3) * (logger.obs[env_name][i][0] > 0.3))[0].cpu()
+                next_dirt = (next_obs[i] * (next_obs[i][2] > 0.1) * (next_obs[i][2] < 0.3) * (next_obs[i][0] > 0.3))[0].cpu()
+
+                dirt_ds = torch.index_select(dirt, 0, indices_row)
+                dirt_ds = torch.index_select(dirt_ds, 1, indices_cal)
+                next_dirt_ds = torch.index_select(next_dirt, 0, indices_row)
+                next_dirt_ds = torch.index_select(next_dirt_ds, 1, indices_cal)
+
                 if done[i] == 0:
-                    num_dirt_obs_sum = (dirt[0] > 0).sum()
-                    num_dirt_next_obs_sum = (next_dirt[0] > 0).sum()
+                    num_dirt_obs_sum = (dirt_ds > 0).sum()
+                    num_dirt_next_obs_sum = (next_dirt_ds > 0).sum()
                     if num_dirt_next_obs_sum < num_dirt_obs_sum:
                         int_reward[i] = 1
 
@@ -695,7 +703,8 @@ def oracle_down(obs_all, action):
 
 def evaluate_procgen_LEEP(actor_critic_0, actor_critic_1, actor_critic_2, actor_critic_3, eval_envs_dic, env_name,
                           num_processes,
-                          device, steps, logger, attention_features=False, det_masks=False, deterministic=True):
+                          device, steps, logger, attention_features=False, det_masks=False, deterministic=True, num_ensemble=4,
+                          actor_critic_4=None, actor_critic_5=None, actor_critic_6=None, actor_critic_7=None, actor_critic_8=None, actor_critic_9=None):
     eval_envs = eval_envs_dic[env_name]
     rew_batch = []
     int_rew_batch = []
@@ -787,7 +796,82 @@ def evaluate_procgen_LEEP(actor_critic_0, actor_critic_1, actor_critic_2, actor_
                 deterministic=deterministic,
                 reuse_masks=det_masks)
 
+            if num_ensemble > 4:
+                _, action_4, _, dist_probs_4, eval_recurrent_hidden_states_4, _, _, _, _ = actor_critic_4.act(
+                    logger.obs[env_name].float().to(device),
+                    logger.eval_recurrent_hidden_states[env_name],
+                    logger.eval_masks[env_name],
+                    attn_masks=eval_attn_masks,
+                    attn_masks1=eval_attn_masks1,
+                    attn_masks2=eval_attn_masks2,
+                    attn_masks3=eval_attn_masks3,
+                    deterministic=deterministic,
+                    reuse_masks=det_masks)
+
+                _, action_5, _, dist_probs_5, eval_recurrent_hidden_states_5, _, _, _, _ = actor_critic_5.act(
+                    logger.obs[env_name].float().to(device),
+                    logger.eval_recurrent_hidden_states[env_name],
+                    logger.eval_masks[env_name],
+                    attn_masks=eval_attn_masks,
+                    attn_masks1=eval_attn_masks1,
+                    attn_masks2=eval_attn_masks2,
+                    attn_masks3=eval_attn_masks3,
+                    deterministic=deterministic,
+                    reuse_masks=det_masks)
+
+                if num_ensemble > 6:
+                    _, action_6, _, dist_probs_6, eval_recurrent_hidden_states_6, _, _, _, _ = actor_critic_6.act(
+                        logger.obs[env_name].float().to(device),
+                        logger.eval_recurrent_hidden_states[env_name],
+                        logger.eval_masks[env_name],
+                        attn_masks=eval_attn_masks,
+                        attn_masks1=eval_attn_masks1,
+                        attn_masks2=eval_attn_masks2,
+                        attn_masks3=eval_attn_masks3,
+                        deterministic=deterministic,
+                        reuse_masks=det_masks)
+
+                    _, action_7, _, dist_probs_7, eval_recurrent_hidden_states_7, _, _, _, _ = actor_critic_7.act(
+                        logger.obs[env_name].float().to(device),
+                        logger.eval_recurrent_hidden_states[env_name],
+                        logger.eval_masks[env_name],
+                        attn_masks=eval_attn_masks,
+                        attn_masks1=eval_attn_masks1,
+                        attn_masks2=eval_attn_masks2,
+                        attn_masks3=eval_attn_masks3,
+                        deterministic=deterministic,
+                        reuse_masks=det_masks)
+
+                if num_ensemble > 8:
+                    _, action_8, _, dist_probs_8, eval_recurrent_hidden_states_8, _, _, _, _ = actor_critic_8.act(
+                        logger.obs[env_name].float().to(device),
+                        logger.eval_recurrent_hidden_states[env_name],
+                        logger.eval_masks[env_name],
+                        attn_masks=eval_attn_masks,
+                        attn_masks1=eval_attn_masks1,
+                        attn_masks2=eval_attn_masks2,
+                        attn_masks3=eval_attn_masks3,
+                        deterministic=deterministic,
+                        reuse_masks=det_masks)
+
+                    _, action_9, _, dist_probs_9, eval_recurrent_hidden_states_9, _, _, _, _ = actor_critic_9.act(
+                        logger.obs[env_name].float().to(device),
+                        logger.eval_recurrent_hidden_states[env_name],
+                        logger.eval_masks[env_name],
+                        attn_masks=eval_attn_masks,
+                        attn_masks1=eval_attn_masks1,
+                        attn_masks2=eval_attn_masks2,
+                        attn_masks3=eval_attn_masks3,
+                        deterministic=deterministic,
+                        reuse_masks=det_masks)
+
             max_policy = torch.max(torch.max(torch.max(dist_probs, dist_probs_1), dist_probs_2), dist_probs_3)
+            if num_ensemble > 4:
+                max_policy = torch.max(torch.max(max_policy, dist_probs_4), dist_probs_5)
+            if num_ensemble > 6:
+                max_policy = torch.max(torch.max(max_policy, dist_probs_6), dist_probs_7)
+            if num_ensemble > 8:
+                max_policy = torch.max(torch.max(max_policy, dist_probs_8), dist_probs_9)
             max_policy = torch.div(max_policy, max_policy.sum(1).unsqueeze(1))
 
             if deterministic:
@@ -820,12 +904,12 @@ def evaluate_procgen_LEEP(actor_critic_0, actor_critic_1, actor_critic_2, actor_
                     logger.obs_sum[env_name][i] = next_obs[i].cpu()
 
             int_reward = np.zeros_like(reward)
-            next_obs_sum = logger.obs_sum[env_name] + next_obs.cpu()
-            for i in range(len(int_reward)):
-                num_zero_obs_sum = (logger.obs_sum[env_name][i][0] == 0).sum()
-                num_zero_next_obs_sum = (next_obs_sum[i][0] == 0).sum()
-                if num_zero_next_obs_sum < num_zero_obs_sum:
-                    int_reward[i] = 1
+            next_obs_sum = logger.obs_sum[env_name] + next_obs
+            # for i in range(len(int_reward)):
+            #     num_zero_obs_sum = (logger.obs_sum[env_name][i][0] == 0).sum()
+            #     num_zero_next_obs_sum = (next_obs_sum[i][0] == 0).sum()
+            #     if num_zero_next_obs_sum < num_zero_obs_sum:
+            #         int_reward[i] = 1
 
             rew_batch.append(reward)
             int_rew_batch.append(int_reward)
@@ -1145,62 +1229,94 @@ def evaluate_procgen_ensemble(actor_critic, actor_critic_1, actor_critic_2, acto
                             + 1 * (action3 == 0) + 1 * (action3 == 1) + 1 * (action3 == 2)
             cardinal_right  = 1*(action0 == 6)+1*(action0 == 7) + 1*(action0 == 8) + 1*(action1 == 6)+1*(action1 == 7) + 1*(action1 == 8) + 1*(action2 == 6)+1*(action2 == 7) + 1*(action2 == 8)\
                             + 1 * (action3 == 6) + 1 * (action3 == 7) + 1 * (action3 == 8)
-            if (~maze_miner):
+            if (maze_miner):  #maze and miner do not have right down/up left down/up
+                cardinal_down = 1 * (action0 == 3) + 1 * (action1 == 3) + 1 * (action2 == 3) + 1 * (action3 == 3)
+                cardinal_up = 1 * (action0 == 5) + 1 * (action1 == 5) + 1 * (action2 == 5) + 1 * (action3 == 5)
+            else:
                 cardinal_down  = 1*(action0 == 3) + 1*(action1 == 3) + 1*(action2 == 3) + 1*(action3 == 3) + 1*(action0 == 0) + 1*(action1 == 0) + 1*(action2 == 0) + 1*(action3 == 0)\
                                 + 1*(action0 == 6) + 1*(action1 == 6) + 1*(action2 == 6) + 1*(action3 == 6)
                 cardinal_up  = 1*(action0 == 5) + 1*(action1 == 5) + 1*(action2 == 5) + 1*(action3 == 5) + 1*(action0 == 2) + 1*(action1 == 2) + 1*(action2 == 2) + 1*(action3 == 2) \
                                + 1 * (action0 == 8) + 1 * (action1 == 8) + 1 * (action2 == 8) + 1 * (action3 == 8)
                 cardinal_fire  = 1*(action0 == 9) + 1*(action1 == 9) + 1*(action2 == 9) + 1*(action3 == 9)
-            else:  #maze and miner do not have right down/up left down/up
-                cardinal_down = 1 * (action0 == 3) + 1 * (action1 == 3) + 1 * (action2 == 3) + 1 * (action3 == 3)
-                cardinal_up = 1 * (action0 == 5) + 1 * (action1 == 5) + 1 * (action2 == 5) + 1 * (action3 == 5)
+                cardinal_else  = 1*(action0 == 4) + 1*(action0 == 10) + 1*(action0 == 11) + 1*(action0 == 12) + 1*(action0 == 13) + 1*(action0 == 14) \
+                               + 1*(action1 == 9) + 1*(action1 == 10) + 1*(action1 == 11) + 1*(action1 == 12) + 1*(action1 == 13) + 1*(action1 == 14)  \
+                               + 1*(action2 == 9) + 1*(action2 == 10) + 1*(action2 == 11) + 1*(action2 == 12) + 1*(action2 == 13) + 1*(action2 == 14)  \
+                               + 1*(action3 == 9) + 1*(action3 == 10) + 1*(action3 == 11) + 1*(action3 == 12) + 1*(action3 == 13) + 1*(action3 == 14)
+
 
             if num_ensemble > 4:
                 actions.append(action4)
                 actions.append(action5)
                 cardinal_left += 1 * (action4 == 0) + 1 * (action4 == 1) + 1 * (action4 == 2) + 1 * (action5 == 0) + 1 * (action5 == 1) + 1 * (action5 == 2)
                 cardinal_right += 1 * (action4 == 6) + 1 * (action4 == 7) + 1 * (action4 == 8) + 1 * (action5 == 6) + 1 * (action5 == 7) + 1 * (action5 == 8)
-                if (~maze_miner):
+                if (maze_miner):
+                    cardinal_down += 1 * (action4 == 3) + 1 * (action5 == 3)
+                    cardinal_up += 1 * (action4 == 5) + 1 * (action5 == 5)
+                else:
                     cardinal_down += 1 * (action4 == 3) + 1 * (action5 == 3) + 1 * (action4 == 0) + 1 * (action5 == 0) + 1 * (action4 == 6) + 1 * (action5 == 6)
                     cardinal_up += 1 * (action4 == 5) + 1 * (action5 == 5) + 1 * (action4 == 2) + 1 * (action5 == 2) + 1 * (action4 == 8) + 1 * (action5 == 8)
                     cardinal_fire += 1 * (action4 == 9) + 1 * (action5 == 9)
-                else:
-                    cardinal_down += 1 * (action4 == 3) + 1 * (action5 == 3)
-                    cardinal_up += 1 * (action4 == 5) + 1 * (action5 == 5)
+                    cardinal_else += 1 * (action4 == 4) + 1 * (action4 == 10) + 1 * (action4 == 11) + 1 * (action4 == 12) + 1 * (action4 == 13) + 1 * (action4 == 14) \
+                                  + 1 * (action5 == 9) + 1 * (action5 == 10) + 1 * (action5 == 11) + 1 * (action5 == 12) + 1 * (action5 == 13) + 1 * (action5 == 14)
+
 
             if num_ensemble > 6:
                 actions.append(action6)
                 actions.append(action7)
                 cardinal_left += 1 * (action6 == 0) + 1 * (action6 == 1) + 1 * (action6 == 2) + 1 * (action7 == 0) + 1 * (action7 == 1) + 1 * (action7 == 2)
                 cardinal_right += 1 * (action6 == 6) + 1 * (action6 == 7) + 1 * (action6 == 8) + 1 * (action7 == 6) + 1 * (action7 == 7) + 1 * (action7 == 8)
-                if (~maze_miner):
+                if (maze_miner):
+                    cardinal_down += 1 * (action6 == 3) + 1 * (action7 == 3)
+                    cardinal_up += 1 * (action6 == 5) + 1 * (action7 == 5)
+                else:
                     cardinal_down += 1 * (action6 == 3) + 1 * (action7 == 3) + 1 * (action6 == 0) + 1 * (action7 == 0) + 1 * (action6 == 6) + 1 * (action7 == 6)
                     cardinal_up += 1 * (action6 == 5) + 1 * (action7 == 5) + 1 * (action6 == 2) + 1 * (action7 == 2) + 1 * (action6 == 8) + 1 * (action7 == 8)
                     cardinal_fire += 1 * (action6 == 9) + 1 * (action7 == 9)
-                else:
-                    cardinal_down += 1 * (action6 == 3) + 1 * (action7 == 3)
-                    cardinal_up += 1 * (action6 == 5) + 1 * (action7 == 5)
+                    cardinal_else += 1 * (action6 == 4) + 1 * (action6 == 10) + 1 * (action6 == 11) + 1 * (action6 == 12) + 1 * (action6 == 13) + 1 * (action6 == 14) \
+                                  + 1 * (action7 == 9) + 1 * (action7 == 10) + 1 * (action7 == 11) + 1 * (action7 == 12) + 1 * (action7 == 13) + 1 * (action7 == 14)
 
             if num_ensemble > 8:
                 actions.append(action8)
                 actions.append(action9)
                 cardinal_left += 1 * (action8 == 0) + 1 * (action8 == 1) + 1 * (action8 == 2) + 1 * (action9 == 0) + 1 * (action9 == 1) + 1 * (action9 == 2)
                 cardinal_right += 1 * (action8 == 6) + 1 * (action8 == 7) + 1 * (action8 == 8) + 1 * (action9 == 6) + 1 * (action9 == 7) + 1 * (action9 == 8)
-                if (~maze_miner):
+                if (maze_miner):
+                    cardinal_down += 1 * (action8 == 3) + 1 * (action9 == 3)
+                    cardinal_up += 1 * (action8 == 5) + 1 * (action9 == 5)
+                else:
                     cardinal_down += 1 * (action8 == 3) + 1 * (action9 == 3) + 1 * (action8 == 0) + 1 * (action9 == 0) + 1 * (action8 == 6) + 1 * (action9 == 6)
                     cardinal_up += 1 * (action8 == 5) + 1 * (action9 == 5) + 1 * (action8 == 2) + 1 * (action9 == 2) + 1 * (action8 == 8) + 1 * (action9 == 8)
                     cardinal_fire += 1 * (action8 == 9) + 1 * (action9 == 9)
-                else:
-                    cardinal_down += 1 * (action8 == 3) + 1 * (action9 == 3)
-                    cardinal_up += 1 * (action8 == 5) + 1 * (action9 == 5)
+                    cardinal_else += 1 * (action8 == 4) + 1 * (action8 == 10) + 1 * (action8 == 11) + 1 * (action8 == 12) + 1 * (action8 == 13) + 1 * (action8 == 14) \
+                                  + 1 * (action9 == 9) + 1 * (action9 == 10) + 1 * (action9 == 11) + 1 * (action9 == 12) + 1 * (action9 == 13) + 1 * (action9 == 14)
 
-            if (~maze_miner):
-                directions = torch.cat((cardinal_up, cardinal_right, cardinal_down, cardinal_left, cardinal_fire), dim=1)
-            else:
+
+            if (maze_miner):
                 directions = torch.cat((cardinal_up, cardinal_right, cardinal_down, cardinal_left), dim=1)
-            cardinal_value = torch.max(directions, dim=1)[0]
-            cardinal_index = torch.max(directions, dim=1)[1]
-            is_equal = (cardinal_value >= num_agree).unsqueeze(1)
+            else:
+                directions = torch.cat((cardinal_up, cardinal_right, cardinal_down, cardinal_left, cardinal_fire, cardinal_else),dim=1)
+
+            # cardinal_value = torch.max(directions, dim=1)[0]
+            # cardinal_index = torch.max(directions, dim=1)[1].unsqueeze(1)
+
+            action_cardinal_left = 1 * (actions[num_agent] == 0) + 1 * (actions[num_agent] == 1) + 1 * (actions[num_agent] == 2)
+            action_cardinal_right = 1 * (actions[num_agent] == 6) + 1 * (actions[num_agent] == 7) + 1 * (actions[num_agent] == 8)
+            if (maze_miner):
+                action_cardinal_down = 1 * (actions[num_agent] == 3)
+                action_cardinal_up = 1 * (actions[num_agent] == 5)
+                action_directions = torch.cat((action_cardinal_up, action_cardinal_right, action_cardinal_down, action_cardinal_left), dim=1)
+            else:
+                action_cardinal_down = 1 * (actions[num_agent] == 3) + 1 * (actions[num_agent] == 0) + 1 * (actions[num_agent] == 6)
+                action_cardinal_up = 1 * (actions[num_agent] == 5) + 1 * (actions[num_agent] == 2) + 1 * (actions[num_agent] == 8)
+                action_cardinal_fire = 1 * (actions[num_agent] == 9)
+                action_cardinal_else = 1 * (actions[num_agent] == 4) + 1 * (actions[num_agent] == 10) + 1 * (actions[num_agent] == 11) + 1 * (actions[num_agent] == 12) + 1 * (actions[num_agent] == 13) + 1 * (actions[num_agent] == 14)
+                action_directions = torch.cat((action_cardinal_up, action_cardinal_right, action_cardinal_down, action_cardinal_left, action_cardinal_fire, action_cardinal_else), dim=1)
+
+            action_cardinal_index = torch.max(action_directions, dim=1)[1]
+
+            is_equal = (directions[torch.arange(32), action_cardinal_index] >= num_agree).unsqueeze(1)
+            # is_equal = ((cardinal_index == action_cardinal_index) * (cardinal_value >= num_agree).unsqueeze(1))
+            # is_equal =  (cardinal_value >= num_agree).unsqueeze(1)
             # lookup = torch.tensor([5, 7, 3, 1], device=device)
             # action_NN = lookup[cardinal_index].unsqueeze(1)
             # action_NN = action0
