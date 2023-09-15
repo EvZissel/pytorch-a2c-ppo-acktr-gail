@@ -519,7 +519,7 @@ def main():
             rollouts.insert(obs, recurrent_hidden_states, action,
                             action_log_prob, value, torch.from_numpy(int_reward).unsqueeze(1), masks, bad_masks,
                             attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, infos, obs_full)
-            rollouts.obs_ds[rollouts.step + 1].copy_(obs_ds)
+            rollouts.obs_ds[rollouts.step].copy_(obs_ds)
 
         with torch.no_grad():
             next_value = actor_critic.get_value(
