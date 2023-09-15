@@ -28,6 +28,7 @@ class Logger(object):
         self.obs_full['train_eval_nondet'] = torch.zeros(self.n_envs, *obs_full_shape)
 
         self.obs_vec = {}
+        self.obs_vec_ds = {}
         self.obs_vec['train_eval'] = []
         for i in range(n_envs):
             self.obs_vec['train_eval'].append([])
@@ -43,6 +44,14 @@ class Logger(object):
         self.obs_vec['test_eval_nondet'] = []
         for i in range(n_envs):
             self.obs_vec['test_eval_nondet'].append([])
+
+        self.obs_vec_ds['train_eval'] = []
+        for i in range(n_envs):
+            self.obs_vec_ds['train_eval'].append([])
+
+        self.obs_vec_ds['test_eval_nondet'] = []
+        for i in range(n_envs):
+            self.obs_vec_ds['test_eval_nondet'].append([])
 
         self.obs['train_eval'] = torch.zeros(self.n_envs, *obs_shape)
         self.obs_sum['train_eval'] = torch.zeros(self.n_envs, *obs_full_shape, device=device)
@@ -326,9 +335,11 @@ class maxEnt_Logger(Logger):
 
         self.episode_rewards_train_ext = []
         self.episode_rewards_test_ext = []
+        self.episode_rewards_test_ext_nondet = []
         for _ in range(self.n_envs):
             self.episode_rewards_train_ext.append([])
             self.episode_rewards_test_ext.append([])
+            self.episode_rewards_test_ext_nondet.append([])
 
         self.episode_reward_buffer_train_vs_oracle = deque(maxlen=self.n_envs)
         self.episode_reward_buffer_train_completed = deque(maxlen=self.n_envs)
@@ -340,6 +351,7 @@ class maxEnt_Logger(Logger):
         self.episode_reward_buffer_test_completed_nondet  = deque(maxlen=self.n_envs)
         self.episode_reward_buffer_train_ext       = deque(maxlen=self.n_envs)
         self.episode_reward_buffer_test_ext        = deque(maxlen=self.n_envs)
+        self.episode_reward_buffer_test_ext_nondat        = deque(maxlen=self.n_envs)
 
 
     def feed_eval(self, rew_batch_train, done_batch_train, rew_batch_test, done_batch_test, seeds_batch_train, seeds_batch_test,
@@ -430,6 +442,42 @@ class maxEnt_Logger(Logger):
                     self.episode_rewards_train_nondet[i] = []
                     self.num_episodes_train_nondet += 1
         # print('debug')
+
+
+    def feed_eval_test_nondet(self, rew_batch_train, done_batch_train, rew_batch_train_ext, rew_batch_test_nondet, done_batch_test_nondet, rew_batch_test_nondet_ext):
+
+
+        steps = rew_batch_test_nondet.shape[0]
+        rew_batch_train = rew_batch_train.T
+        done_batch_train = done_batch_train.T
+        rew_batch_train_ext = rew_batch_train_ext.T
+
+        rew_batch_test_nondet = rew_batch_test_nondet.T
+        done_batch_test_nondet = done_batch_test_nondet.T
+        rew_batch_test_nondet_ext = rew_batch_test_nondet_ext.T
+
+
+        for i in range(self.n_envs):
+            for j in range(steps):
+                self.episode_rewards_test_nondet[i].append(rew_batch_test_nondet[i][j])
+                self.episode_rewards_test_ext_nondet[i].append(rew_batch_test_nondet_ext[i][j])
+                self.episode_rewards_train[i].append(rew_batch_train[i][j])
+                self.episode_rewards_train_ext[i].append(rew_batch_train_ext[i][j])
+                if done_batch_train[i][j]:
+                    self.episode_len_buffer_train.append(len(self.episode_rewards_train[i]))
+                    self.episode_reward_buffer_train.append(np.sum(self.episode_rewards_train[i]))
+                    self.episode_reward_buffer_train_ext.append(np.sum(self.episode_rewards_train_ext[i]))
+                    self.episode_rewards_train[i] = []
+                    self.episode_rewards_train_ext[i] = []
+                    self.num_episodes_train += 1
+
+                if done_batch_test_nondet[i][j]:
+                    self.episode_len_buffer_test_nondet.append(len(self.episode_rewards_test_nondet[i]))
+                    self.episode_reward_buffer_test_nondet.append(np.sum(self.episode_rewards_test_nondet[i]))
+                    self.episode_reward_buffer_test_ext_nondat.append(np.sum(self.episode_rewards_test_ext_nondet[i]))
+                    self.episode_rewards_test_nondet[i] = []
+                    self.episode_rewards_test_ext_nondet[i] = []
+                    self.num_episodes_test_nondet += 1
 
     def get_episode_statistics(self):
         episode_statistics = {}
@@ -562,5 +610,35 @@ class maxEnt_Logger(Logger):
                                                    'test': np.mean(self.episode_len_buffer_test)}
         episode_statistics['Len/min_episodes'] = {'train_eval': np.min(self.episode_len_buffer_train),
                                                   'test': np.min(self.episode_len_buffer_test)}
+
+        return episode_statistics
+
+    def get_episode_statistics_test_nondet(self):
+        episode_statistics = {}
+        episode_statistics['Rewards/max_episodes'] = {'train': np.max(self.episode_reward_buffer),
+                                                      'train_eval': np.max(self.episode_reward_buffer_train),
+                                                      'train_eval_ext': np.max(self.episode_reward_buffer_train_ext),
+                                                      'test_nondet': np.max(self.episode_reward_buffer_test_nondet),
+                                                      'test_nondet_ext': np.max(self.episode_reward_buffer_test_ext_nondat)}
+        episode_statistics['Rewards/mean_episodes'] = {'train': np.mean(self.episode_reward_buffer),
+                                                       'train_eval': np.mean(self.episode_reward_buffer_train),
+                                                       'train_eval_ext': np.mean(self.episode_reward_buffer_train_ext),
+                                                       'test_nondet': np.mean(self.episode_reward_buffer_test_nondet),
+                                                       'test_nondet_ext': np.mean(self.episode_reward_buffer_test_ext_nondat)}
+        episode_statistics['Rewards/min_episodes'] = {'train': np.min(self.episode_reward_buffer),
+                                                      'train_eval': np.min(self.episode_reward_buffer_train),
+                                                      'train_eval_ext': np.min(self.episode_reward_buffer_train_ext),
+                                                      'test_nondet': np.min(self.episode_reward_buffer_test_nondet),
+                                                      'test_nondet_ext': np.min(self.episode_reward_buffer_test_ext_nondat)}
+
+        episode_statistics['Len/max_episodes'] = {'train': np.max(self.episode_len_buffer),
+                                                  'train_eval': np.max(self.episode_reward_buffer_train),
+                                                  'test': np.max(self.episode_len_buffer_test_nondet)}
+        episode_statistics['Len/mean_episodes'] = {'train': np.mean(self.episode_len_buffer),
+                                                   'train_eval': np.mean(self.episode_reward_buffer_train),
+                                                   'test': np.mean(self.episode_len_buffer_test_nondet)}
+        episode_statistics['Len/min_episodes'] = {'train': np.min(self.episode_len_buffer),
+                                                  'train_eval': np.min(self.episode_reward_buffer_train),
+                                                  'test': np.min(self.episode_len_buffer_test_nondet)}
 
         return episode_statistics

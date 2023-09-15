@@ -98,7 +98,7 @@ class VideoRecorderprocess(VideoRecorderWrapper):
         return na
 
 # test_start_level = 21i maze
-test_start_level = 210
+test_start_level = 204
 # test_env  = ProcgenConatEnvs(env_name=env_name,
 #                              num_envs=num_level,
 #                              start_level=test_start_level,
@@ -235,7 +235,7 @@ actor_critic10.to(device)
 #     weight_decay=0)
 
 # Load previous model
-saved_epoch = 3050
+saved_epoch = 6100
 #
 # # # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_58967_num_env_200_entro_0.01_gama_0.5_05-02-2023_22-24-49_original"
 # # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_58967_num_env_200_entro_0.01_gama_0.5_05-02-2023_18-15-27_original"
@@ -257,7 +257,8 @@ saved_epoch = 3050
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_1234_num_env_200_entro_0.01_gama_0.9_01-05-2023_12-56-50_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/starpilot_seed_1234_num_env_200_entro_0.01_gama_0.9_20-05-2023_19-55-30_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_1375_num_env_200_entro_0.01_gama_0.999_03-02-2023_00-18-51_noRNN_original"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.5_18-08-2023_14-14-32_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.5_18-08-2023_14-14-32_original"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.9_11-09-2023_21-50-31_original_L2eval"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
