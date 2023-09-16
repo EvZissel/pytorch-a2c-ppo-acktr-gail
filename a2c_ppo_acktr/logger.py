@@ -632,13 +632,13 @@ class maxEnt_Logger(Logger):
                                                       'test_nondet_ext': np.min(self.episode_reward_buffer_test_ext_nondat)}
 
         episode_statistics['Len/max_episodes'] = {'train': np.max(self.episode_len_buffer),
-                                                  'train_eval': np.max(self.episode_reward_buffer_train),
-                                                  'test': np.max(self.episode_len_buffer_test_nondet)}
+                                                  'train_eval': np.max(self.episode_len_buffer_train),
+                                                  'test_nondet': np.max(self.episode_len_buffer_test_nondet)}
         episode_statistics['Len/mean_episodes'] = {'train': np.mean(self.episode_len_buffer),
-                                                   'train_eval': np.mean(self.episode_reward_buffer_train),
-                                                   'test': np.mean(self.episode_len_buffer_test_nondet)}
+                                                   'train_eval': np.mean(self.episode_len_buffer_train),
+                                                   'test_nondet': np.mean(self.episode_len_buffer_test_nondet)}
         episode_statistics['Len/min_episodes'] = {'train': np.min(self.episode_len_buffer),
-                                                  'train_eval': np.min(self.episode_reward_buffer_train),
-                                                  'test': np.min(self.episode_len_buffer_test_nondet)}
+                                                  'train_eval': np.min(self.episode_len_buffer_train),
+                                                  'test_nondet': np.min(self.episode_len_buffer_test_nondet)}
 
         return episode_statistics
