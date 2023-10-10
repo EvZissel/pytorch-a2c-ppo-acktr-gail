@@ -442,7 +442,7 @@ def evaluate_procgen_maxEnt_miner(actor_critic, eval_envs_dic, env_name, num_pro
 
 
 def maxEnt_oracle(obs_all, action):
-    next_action = torch.tensor(action)
+    next_action = action.clone().detach()
     for i in range(len(action)):
         obs = obs_all[i].cpu().numpy()
         action_i = action[i]

@@ -141,7 +141,7 @@ def main():
     # }
 
     down_sample_avg = nn.AvgPool2d(args.kernel_size, stride=args.stride)
-    # Calculate approximation of max reward per seed
+    # Calculate exact max reward per seed
     for eval_disp_name in EVAL_ENVS:
         for i in range(args.num_test_level):
             envs = make_ProcgenEnvs(num_envs=1,
@@ -149,58 +149,69 @@ def main():
                                     start_level=start_train_test[eval_disp_name] + i,
                                     num_levels=1,
                                     distribution_mode=args.distribution_mode,
-                                    use_generated_assets=args.use_generated_assets,
+                                    use_generated_assets=True,
                                     use_backgrounds=False,
-                                    restrict_themes=args.restrict_themes,
-                                    use_monochrome_assets=args.use_monochrome_assets,
-                                    center_agent=False,
+                                    restrict_themes=True,
+                                    use_monochrome_assets=True,
                                     rand_seed=args.seed,
+                                    center_agent=args.center_agent,
                                     mask_size=args.mask_size,
                                     normalize_rew=args.normalize_rew,
                                     mask_all=args.mask_all)
 
             obs = envs.reset()
+            obs_ds = down_sample_avg(obs[0])
             # obs_sum = obs
-            # plot mazes
+            # # plot mazes
             # plt.imshow(obs[0].transpose(0, 2).cpu().numpy())
-            # plt.savefig("test.png")
+            # # plt.savefig("test.png")
             # plt.show()
 
-            # action = torch.full((1, 1), 5)
-            # done = torch.full((1, 1), 0)
+            action = torch.full((1, 1), 5)
+            done = torch.full((1, 1), 0)
+            int_reward = 0.0
+            step = 0
+            obs_vec_ds = []
+            obs_vec_ds.append(obs_ds)
 
-            obs = down_sample_avg(obs)
-            reward = (obs[0][0] == 0).sum()
+            while not done[0]:
+                with torch.no_grad():
 
-            # while not done[0]:
-            #     with torch.no_grad():
-            #
-            #         action = maxEnt_oracle(obs, action)
-            #
-            #         obs, _, done, infos = envs.step(action[0].cpu().numpy())
-            #         # print(action[0])
-            #         # plt.imshow(obs[0].transpose(0,2).cpu().numpy())
-            #         # plt.show()
-            #
-            #         next_obs_sum = obs_sum + obs
-            #         num_zero_obs_sum = (obs_sum[0] == 0).sum()
-            #         num_zero_next_obs_sum = (next_obs_sum[0] == 0).sum()
-            #         if num_zero_next_obs_sum < num_zero_obs_sum:
-            #             reward += 1
-            #
-            #         obs_sum = next_obs_sum
+                    action = maxEnt_oracle(obs, action)
 
-            max_reward_seeds[eval_disp_name].append(reward)
+                    obs, _, done, infos = envs.step(action[0].cpu().numpy())
+                    # print("action: {}".format(action[0]))
+                    # plt.imshow(obs[0].transpose(0,2).cpu().numpy())
+                    # plt.show()
+
+                    obs_ds = down_sample_avg(obs)
+
+                    if step > 0:
+                        if step > args.num_buffer:
+                            old_obs = torch.stack(obs_vec_ds[step - args.num_buffer:])
+                        else:
+                            old_obs = torch.stack(obs_vec_ds)
+                        neighbor_size_i = min(args.neighbor_size, step)
+                        int_reward += (old_obs - obs_ds.unsqueeze(0)).flatten(start_dim=1).norm(p=args.p_norm,dim=1).sort().values[
+                                int(neighbor_size_i - 1)]
+
+                    step += 1
+                    obs_vec_ds.append(obs_ds.squeeze())
+                    # print("int_reward: {}".format(int_reward))
+
+
+            max_reward_seeds[eval_disp_name].append(int_reward)
+
 
     envs = make_ProcgenEnvs(num_envs=args.num_processes,
                             env_name=args.env_name,
                             start_level=args.start_level,
                             num_levels=args.num_level,
                             distribution_mode=args.distribution_mode,
-                            use_generated_assets=args.use_generated_assets,
-                            use_backgrounds=args.use_backgrounds,
-                            restrict_themes=args.restrict_themes,
-                            use_monochrome_assets=args.use_monochrome_assets,
+                            use_generated_assets=True,
+                            use_backgrounds=False,
+                            restrict_themes=True,
+                            use_monochrome_assets=True,
                             rand_seed=args.seed,
                             center_agent=args.center_agent,
                             mask_size=args.mask_size,
@@ -213,10 +224,10 @@ def main():
                                      start_level=args.start_level,
                                      num_levels=args.num_level,
                                      distribution_mode=args.distribution_mode,
-                                     use_generated_assets=args.use_generated_assets,
-                                     use_backgrounds=args.use_backgrounds,
-                                     restrict_themes=args.restrict_themes,
-                                     use_monochrome_assets=args.use_monochrome_assets,
+                                     use_generated_assets=True,
+                                     use_backgrounds=False,
+                                     restrict_themes=True,
+                                     use_monochrome_assets=True,
                                      rand_seed=args.seed,
                                      center_agent=False,
                                      mask_size=args.mask_size,
@@ -230,10 +241,10 @@ def main():
                                                    start_level=args.start_level,
                                                    num_levels=args.num_test_level,
                                                    distribution_mode=args.distribution_mode,
-                                                   use_generated_assets=args.use_generated_assets,
-                                                   use_backgrounds=args.use_backgrounds,
-                                                   restrict_themes=args.restrict_themes,
-                                                   use_monochrome_assets=args.use_monochrome_assets,
+                                                   use_generated_assets=True,
+                                                   use_backgrounds=False,
+                                                   restrict_themes=True,
+                                                   use_monochrome_assets=True,
                                                    rand_seed=args.seed,
                                                    center_agent=args.center_agent,
                                                    mask_size=args.mask_size,
@@ -246,10 +257,10 @@ def main():
                                                   start_level=test_start_level,
                                                   num_levels=args.num_test_level,
                                                   distribution_mode=args.distribution_mode,
-                                                  use_generated_assets=args.use_generated_assets,
-                                                  use_backgrounds=args.use_backgrounds,
-                                                  restrict_themes=args.restrict_themes,
-                                                  use_monochrome_assets=args.use_monochrome_assets,
+                                                  use_generated_assets=True,
+                                                  use_backgrounds=False,
+                                                  restrict_themes=True,
+                                                  use_monochrome_assets=True,
                                                   rand_seed=args.seed,
                                                   center_agent=args.center_agent,
                                                   mask_size=args.mask_size,
@@ -280,10 +291,10 @@ def main():
                                                             start_level=args.start_level,
                                                             num_levels=args.num_test_level,
                                                             distribution_mode=args.distribution_mode,
-                                                            use_generated_assets=args.use_generated_assets,
-                                                            use_backgrounds=args.use_backgrounds,
-                                                            restrict_themes=args.restrict_themes,
-                                                            use_monochrome_assets=args.use_monochrome_assets,
+                                                            use_generated_assets=True,
+                                                            use_backgrounds=False,
+                                                            restrict_themes=True,
+                                                            use_monochrome_assets=True,
                                                             rand_seed=args.seed,
                                                             center_agent=False,
                                                             mask_size=args.mask_size,
@@ -296,10 +307,10 @@ def main():
                                                            start_level=test_start_level,
                                                            num_levels=args.num_test_level,
                                                            distribution_mode=args.distribution_mode,
-                                                           use_generated_assets=args.use_generated_assets,
-                                                           use_backgrounds=args.use_backgrounds,
-                                                           restrict_themes=args.restrict_themes,
-                                                           use_monochrome_assets=args.use_monochrome_assets,
+                                                           use_generated_assets=True,
+                                                           use_backgrounds=False,
+                                                           restrict_themes=True,
+                                                           use_monochrome_assets=True,
                                                            rand_seed=args.seed,
                                                            center_agent=False,
                                                            mask_size=args.mask_size,
