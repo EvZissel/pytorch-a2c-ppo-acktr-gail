@@ -2066,8 +2066,8 @@ def evaluate_procgen_maxEnt_avepool_original_L2(actor_critic, eval_envs_dic, eva
                             old_obs = torch.stack(logger.obs_vec_ds[env_name][i][env_steps-num_buffer:])
                         else:
                             old_obs = torch.stack(logger.obs_vec_ds[env_name][i])
-                        neighbor_size_i = min(neighbor_size, len(logger.obs_vec_ds[env_name][i]))
-                        int_reward[i]  = (old_obs - next_obs_ds[i].unsqueeze(0)).flatten(start_dim=1).norm(p=p_norm, dim=1).sort().values[int(neighbor_size_i - 1)]
+                        neighbor_size_i = int(min(neighbor_size, len(logger.obs_vec_ds[env_name][i])) -1)
+                        int_reward[i]  = (old_obs - next_obs_ds[i].unsqueeze(0)).flatten(start_dim=1).norm(p=p_norm, dim=1).sort().values[neighbor_size_i]
 
                 logger.obs_vec_ds[env_name][i].append(next_obs_ds[i])
 

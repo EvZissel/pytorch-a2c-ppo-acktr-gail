@@ -161,11 +161,12 @@ def main():
 
             obs = envs.reset()
             obs_ds = down_sample_avg(obs[0])
-            # obs_sum = obs
+
             # # plot mazes
-            # plt.imshow(obs[0].transpose(0, 2).cpu().numpy())
-            # # plt.savefig("test.png")
-            # plt.show()
+            # if (i == 73):
+            #     plt.imshow(obs[0].transpose(0, 2).cpu().numpy())
+            #     # plt.savefig("test.png")
+            #     plt.show()
 
             action = torch.full((1, 1), 5)
             done = torch.full((1, 1), 0)
@@ -180,22 +181,23 @@ def main():
                     action = maxEnt_oracle(obs, action)
 
                     obs, _, done, infos = envs.step(action[0].cpu().numpy())
-                    # print("action: {}".format(action[0]))
-                    # plt.imshow(obs[0].transpose(0,2).cpu().numpy())
-                    # plt.show()
+                    # if (i == 73) and done[0] == 1:
+                    #     print("action: {}".format(action[0]))
+                    #     plt.imshow(obs[0].transpose(0,2).cpu().numpy())
+                    #     plt.show()
 
                     obs_ds = down_sample_avg(obs)
 
-                    if step > 0:
-                        if step > args.num_buffer:
-                            old_obs = torch.stack(obs_vec_ds[step - args.num_buffer:])
-                        else:
-                            old_obs = torch.stack(obs_vec_ds)
-                        neighbor_size_i = min(args.neighbor_size, step)
-                        int_reward += (old_obs - obs_ds.unsqueeze(0)).flatten(start_dim=1).norm(p=args.p_norm,dim=1).sort().values[
-                                int(neighbor_size_i - 1)]
-
                     step += 1
+                    if done[0] == 1:
+                        break
+                    if step > args.num_buffer:
+                        old_obs = torch.stack(obs_vec_ds[step - args.num_buffer:])
+                    else:
+                        old_obs = torch.stack(obs_vec_ds)
+                    neighbor_size_i = min(args.neighbor_size, step) - 1
+                    int_reward += (old_obs - obs_ds).flatten(start_dim=1).norm(p=args.p_norm,dim=1).sort().values[neighbor_size_i]
+
                     obs_vec_ds.append(obs_ds.squeeze())
                     # print("int_reward: {}".format(int_reward))
 
