@@ -67,7 +67,7 @@ def main():
     logdir = os.path.join(os.path.expanduser(args.log_dir), logdir_)
     utils.cleanup_log_dir(logdir)
 
-    wandb.init(project=args.env_name + "_PPO_maximum_entropy_L2", entity="ev_zisselman", config=args, name=logdir_,
+    wandb.init(project=args.env_name + "_PPO_maxEnt_L2+_reward", entity="ev_zisselman", config=args, name=logdir_,
                id=logdir_)
 
     # Ugly but simple logging
@@ -517,8 +517,11 @@ def main():
             bad_masks = torch.FloatTensor(
                 [[0.0] if 'bad_transition' in info.keys() else [1.0]
                  for info in infos])
+            # rollouts.insert(obs, recurrent_hidden_states, action,
+            #                 action_log_prob, value, torch.from_numpy(int_reward).unsqueeze(1), masks, bad_masks,
+            #                 attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, infos, obs_full)
             rollouts.insert(obs, recurrent_hidden_states, action,
-                            action_log_prob, value, torch.from_numpy(int_reward).unsqueeze(1), masks, bad_masks,
+                            action_log_prob, value, torch.from_numpy(args.beta_int*int_reward + (1-args.beta_int)*reward).unsqueeze(1), masks, bad_masks,
                             attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, infos, obs_full)
             rollouts.obs_ds[rollouts.step].copy_(obs_ds)
 

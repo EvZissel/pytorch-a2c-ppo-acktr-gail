@@ -51,54 +51,55 @@ class VideoRecorderprocess(VideoRecorderWrapper):
 
 
     def _process_frame(self, frame: np.ndarray) -> np.ndarray:
-        obs = frame
-        mouse_crnter = (obs == [100,122,123])
-        x_start = np.where(mouse_crnter.sum(2) == 3)[1][0]
-        y_start = np.where(mouse_crnter.sum(2) == 3)[0][0]
-        x_end = x_start
-        y_end = y_start
-        if self.action == 0 or self.action == 1 or self.action == 2:
-            x_start = x_start - 8
-            x_end   = x_start - 20
-        elif self.action == 3:
-            y_start = y_start + 8
-            y_end   = y_start + 20
-        elif self.action == 5:
-            y_start = y_start - 8
-            y_end   = y_start - 20
-        elif self.action == 6 or self.action == 7 or self.action == 8:
-            x_start = x_start + 8
-            x_end   = x_start + 20
+        # obs = frame
+        # mouse_crnter = (obs == [100,122,123])
+        # x_start = np.where(mouse_crnter.sum(2) == 3)[1][0]
+        # y_start = np.where(mouse_crnter.sum(2) == 3)[0][0]
+        # x_end = x_start
+        # y_end = y_start
+        # if self.action == 0 or self.action == 1 or self.action == 2:
+        #     x_start = x_start - 8
+        #     x_end   = x_start - 20
+        # elif self.action == 3:
+        #     y_start = y_start + 8
+        #     y_end   = y_start + 20
+        # elif self.action == 5:
+        #     y_start = y_start - 8
+        #     y_end   = y_start - 20
+        # elif self.action == 6 or self.action == 7 or self.action == 8:
+        #     x_start = x_start + 8
+        #     x_end   = x_start + 20
+        #
+        #
+        # image = Image.fromarray(obs)
+        # draw = ImageDraw.Draw(image)
+        #
+        # font_path = os.path.join(cv2.__path__[0], 'qt', 'fonts', 'DejaVuSans.ttf')
+        # font = ImageFont.truetype(font_path, size=20)
+        #
+        # text = "ExpGen: "
+        # if self.is_maxEnt:
+        #     text += "MaxEnt"
+        #     fill = "red"
+        #     color = (255, 0, 0)
+        # else:
+        #     text += "Reward Policy"
+        #     fill = "blue"
+        #     color = (0, 0, 255)
+        # draw.text((186, 6), text, fill=fill, align ="left", font=font)
+        #
+        # na = np.array(image)
+        # # na = cv2.arrowedLine(na, (x_start, y_start), (x_end, y_end), color, 2)
+        #
+        # # obs = obs.astype(np.uint8)
+        # # myobj = plt.imshow(obs)
+        # # plt.show()
 
-
-        image = Image.fromarray(obs)
-        draw = ImageDraw.Draw(image)
-
-        font_path = os.path.join(cv2.__path__[0], 'qt', 'fonts', 'DejaVuSans.ttf')
-        font = ImageFont.truetype(font_path, size=20)
-
-        text = "ExpGen: "
-        if self.is_maxEnt:
-            text += "MaxEnt"
-            fill = "red"
-            color = (255, 0, 0)
-        else:
-            text += "Reward Policy"
-            fill = "blue"
-            color = (0, 0, 255)
-        draw.text((186, 6), text, fill=fill, align ="left", font=font)
-
-        na = np.array(image)
-        # na = cv2.arrowedLine(na, (x_start, y_start), (x_end, y_end), color, 2)
-
-        # obs = obs.astype(np.uint8)
-        # myobj = plt.imshow(obs)
-        # plt.show()
-
+        na = frame
         return na
 
 # test_start_level = 21i maze
-test_start_level = 204
+test_start_level = 205
 # test_env  = ProcgenConatEnvs(env_name=env_name,
 #                              num_envs=num_level,
 #                              start_level=test_start_level,
@@ -114,18 +115,44 @@ test_start_level = 204
 #                              mask_size=0,
 #                              mask_all=False=4
 
+# test_env = ProcgenGym3Env(num=1,
+#                           env_name=env_name,
+#                           start_level=test_start_level,
+#                           num_levels=num_level,
+#                           distribution_mode=distribution_mode,
+#                           render_mode="rgb_array",
+#                           use_generated_assets=False,
+#                           center_agent=False,
+#                           use_backgrounds=True,
+#                           restrict_themes=False,
+#                           use_monochrome_assets=False,
+#                           rand_seed=seed)
+
 test_env = ProcgenGym3Env(num=1,
                           env_name=env_name,
                           start_level=test_start_level,
                           num_levels=num_level,
                           distribution_mode=distribution_mode,
                           render_mode="rgb_array",
-                          use_generated_assets=False,
+                          use_generated_assets=True,
+                          use_backgrounds=False,
+                          restrict_themes=True,
+                          use_monochrome_assets=True,
                           center_agent=False,
-                          use_backgrounds=True,
-                          restrict_themes=False,
-                          use_monochrome_assets=False,
                           rand_seed=seed)
+
+# test_env_full_obs = ProcgenGym3Env(num=1,
+#                           env_name=env_name,
+#                           start_level=test_start_level,
+#                           num_levels=num_level,
+#                           distribution_mode=distribution_mode,
+#                           render_mode="rgb_array",
+#                           use_generated_assets=False,
+#                           center_agent=False,
+#                           use_backgrounds=True,
+#                           restrict_themes=False,
+#                           use_monochrome_assets=False,
+#                           rand_seed=seed)
 
 test_env_full_obs = ProcgenGym3Env(num=1,
                           env_name=env_name,
@@ -133,11 +160,11 @@ test_env_full_obs = ProcgenGym3Env(num=1,
                           num_levels=num_level,
                           distribution_mode=distribution_mode,
                           render_mode="rgb_array",
-                          use_generated_assets=False,
+                          use_generated_assets=True,
+                          use_backgrounds=False,
+                          restrict_themes=True,
+                          use_monochrome_assets=True,
                           center_agent=False,
-                          use_backgrounds=True,
-                          restrict_themes=False,
-                          use_monochrome_assets=False,
                           rand_seed=seed)
 
 test_env = VideoRecorderprocess(env=test_env, directory="./videos", info_key="rgb", prefix=str(test_start_level), fps=1, render=True)
@@ -235,7 +262,7 @@ actor_critic10.to(device)
 #     weight_decay=0)
 
 # Load previous model
-saved_epoch = 3050
+saved_epoch = 6102
 #
 # # # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_58967_num_env_200_entro_0.01_gama_0.5_05-02-2023_22-24-49_original"
 # # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_58967_num_env_200_entro_0.01_gama_0.5_05-02-2023_18-15-27_original"
@@ -258,7 +285,9 @@ saved_epoch = 3050
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/starpilot_seed_1234_num_env_200_entro_0.01_gama_0.9_20-05-2023_19-55-30_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_1375_num_env_200_entro_0.01_gama_0.999_03-02-2023_00-18-51_noRNN_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.5_18-08-2023_14-14-32_original"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.9_16-09-2023_17-36-37_original_L2eval"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.9_16-09-2023_17-36-37_original_L2eval"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.5_13-10-2023_14-43-26_original_L2eval"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/maze_seed_1234_num_env_200_entro_0.01_gama_0.5_13-10-2023_14-51-01_original_L2eval"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
