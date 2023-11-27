@@ -19,8 +19,8 @@ from a2c_ppo_acktr.distributions import Bernoulli, Categorical, DiagGaussian, Fi
 EVAL_ENVS = ['train_eval','test_eval']
 
 # num_processes = 600
-env_name = "maze"
-start_level = 1
+env_name = "bigfish"
+start_level = 3
 num_level = 1
 # num_level_test = 128
 distribution_mode = "easy"
@@ -43,47 +43,48 @@ device = torch.device("cuda:{}".format(0))
 #                           restrict_themes=False,
 #                           use_monochrome_assets=False)
 
-envs = make_ProcgenEnvs(num_envs=args.num_processes,
-                        env_name=args.env_name,
-                        start_level=args.start_level,
-                        num_levels=args.num_level,
-                        distribution_mode=args.distribution_mode,
-                        use_generated_assets=args.use_generated_assets,
-                        use_backgrounds=args.use_backgrounds,
-                        restrict_themes=args.restrict_themes,
-                        use_monochrome_assets=args.use_monochrome_assets,
-                        rand_seed=args.seed,
-                        center_agent=args.center_agent,
-                        mask_size=args.mask_size,
-                        normalize_rew=args.normalize_rew,
-                        mask_all=args.mask_all,
-                        device=device)
+# envs = make_ProcgenEnvs(num_envs=args.num_processes,
+#                         env_name=args.env_name,
+#                         start_level=args.start_level,
+#                         num_levels=args.num_level,
+#                         distribution_mode=args.distribution_mode,
+#                         use_generated_assets=args.use_generated_assets,
+#                         use_backgrounds=args.use_backgrounds,
+#                         restrict_themes=args.restrict_themes,
+#                         use_monochrome_assets=args.use_monochrome_assets,
+#                         rand_seed=args.seed,
+#                         center_agent=args.center_agent,
+#                         mask_size=args.mask_size,
+#                         normalize_rew=args.normalize_rew,
+#                         mask_all=args.mask_all,
+#                         device=device)
 
 test_env2 = ProcgenGym3Env(num=1,
                           env_name=env_name,
                           start_level=start_level,
                           num_levels=num_level,
                           distribution_mode=distribution_mode,
-                          render_mode="rgb_array",
-                          use_generated_assets=True,
-                          center_agent=False,
-                          use_backgrounds=False,
-                          restrict_themes=True,
-                          use_monochrome_assets=True,
-                          mask_all=False)
+                          use_generated_assets=False,
+                          center_agent=True,
+                          use_backgrounds=True,
+                          restrict_themes=False,
+                          use_monochrome_assets=False,
+                           render_mode="rgb_array")
 
 
 rew, obs, first = test_env2.observe()
-obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = test_env2._info['rgb'].transpose(0, 3, 1, 2)
 obs = torch.tensor(obs).float()
 obs0 = obs.clone()
 obs_sum = obs.clone()
 num_steps = 1
 average_obs = (obs_sum/num_steps).int()
-diff_obs = average_obs-obs0
+# diff_obs = average_obs-obs0
 
 
 myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
+plt.axis('off')
+plt.savefig("{}_seed{}.png".format(env_name,start_level), format='png', dpi=300)
 plt.show()
 
 
@@ -91,19 +92,21 @@ plt.show()
 # plt.show()
 # # myobj = plt.imshow(test_env.get_info()[0]['rgb'])
 # # plt.show()
-
-action = np.array([5])
-test_env2.act(action)
+for i in range(250):
+    action = np.array([5])
+    test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
-obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = test_env2._info['rgb'].transpose(0, 3, 1, 2)
 obs = torch.tensor(obs).float()
 obs_sum += obs
 num_steps += 1
 average_obs = (obs_sum/num_steps)
-diff_obs = torch.tensor((average_obs - obs0))
+# diff_obs = torch.tensor((average_obs - obs0))
 
 myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
+plt.axis('off')
+plt.savefig("{}_seed{}.png".format(env_name,start_level), format='png', dpi=300)
 plt.show()
 # # myobj = plt.imshow(test_env.get_info()[0]['rgb'])
 # # plt.show()
@@ -114,15 +117,17 @@ action = np.array([5])
 test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
-obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = test_env2._info['rgb'].transpose(0, 3, 1, 2)
 obs = torch.tensor(obs).float()
 obs_sum += obs
 num_steps += 1
 average_obs = (obs_sum/num_steps)
-diff_obs = torch.tensor((average_obs - obs0))
+# diff_obs = torch.tensor((average_obs - obs0))
 
 
 myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
+plt.axis('off')
+plt.savefig("{}_seed{}.png".format(env_name,start_level), format='png', dpi=300)
 plt.show()
 
 # myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1))
@@ -132,15 +137,17 @@ action = np.array([6])
 test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
-obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = test_env2._info['rgb'].transpose(0, 3, 1, 2)
 obs = torch.tensor(obs)
 obs_sum += obs
 num_steps += 1
 average_obs = (obs_sum/num_steps).int()
-diff_obs = torch.tensor((average_obs - obs0))
+# diff_obs = torch.tensor((average_obs - obs0))
 
 
 myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
+plt.axis('off')
+plt.savefig("{}_seed{}.png".format(env_name,start_level), format='png', dpi=300)
 plt.show()
 
 # myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1))
@@ -150,15 +157,17 @@ action = np.array([8])
 test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
-obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = test_env2._info['rgb'].transpose(0, 3, 1, 2)
 obs = torch.tensor(obs)
 obs_sum += obs
 num_steps += 1
 average_obs = (obs_sum/num_steps).int()
-diff_obs = torch.tensor((average_obs - obs0))
+# diff_obs = torch.tensor((average_obs - obs0))
 
 
 myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
+plt.axis('off')
+plt.savefig("{}_seed{}.png".format(env_name,start_level), format='png', dpi=300)
 plt.show()
 
 # myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1).int())
@@ -168,15 +177,17 @@ action = np.array([4])
 test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
-obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = test_env2._info['rgb'].transpose(0, 3, 1, 2)
 obs = torch.tensor(obs)
 obs_sum += obs
 num_steps += 1
 average_obs = (obs_sum/num_steps).int()
-diff_obs = torch.tensor((average_obs - obs0))
+# diff_obs = torch.tensor((average_obs - obs0))
 
 
 myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
+plt.axis('off')
+plt.savefig("{}_seed{}.png".format(env_name,start_level), format='png', dpi=300)
 plt.show()
 
 # myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1).int())
@@ -186,15 +197,17 @@ action = np.array([5])
 test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
-obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = test_env2._info['rgb'].transpose(0, 3, 1, 2)
 obs = torch.tensor(obs)
 obs_sum += obs
 num_steps += 1
 average_obs = (obs_sum/num_steps).int()
-diff_obs = torch.tensor((average_obs - obs0))
+# diff_obs = torch.tensor((average_obs - obs0))
 
 
 myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
+plt.axis('off')
+plt.savefig("{}_seed{}.png".format(env_name,start_level), format='png', dpi=300)
 plt.show()
 
 # myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1).int())
@@ -204,15 +217,17 @@ action = np.array([6])
 test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
-obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = test_env2._info['rgb'].transpose(0, 3, 1, 2)
 obs = torch.tensor(obs)
 obs_sum += obs
 num_steps += 1
 average_obs = (obs_sum/num_steps).int()
-diff_obs = torch.tensor((average_obs - obs0))
+# diff_obs = torch.tensor((average_obs - obs0))
 
 
 myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
+plt.axis('off')
+plt.savefig("{}_seed{}.png".format(env_name,start_level), format='png', dpi=300)
 plt.show()
 
 # myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1).int())
@@ -222,15 +237,17 @@ action = np.array([7])
 test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
-obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = test_env2._info['rgb'].transpose(0, 3, 1, 2)
 obs = torch.tensor(obs)
 obs_sum += obs
 num_steps += 1
 average_obs = (obs_sum/num_steps).int()
-diff_obs = torch.tensor((average_obs - obs0))
+# diff_obs = torch.tensor((average_obs - obs0))
 
 
 myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
+plt.axis('off')
+plt.savefig("{}_seed{}.png".format(env_name,start_level), format='png', dpi=300)
 plt.show()
 
 # myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1).int())
@@ -240,15 +257,17 @@ action = np.array([8])
 test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
-obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = test_env2._info['rgb'].transpose(0, 3, 1, 2)
 obs = torch.tensor(obs)
 obs_sum += obs
 num_steps += 1
 average_obs = (obs_sum/num_steps).int()
-diff_obs = torch.tensor((average_obs - obs0))
+# diff_obs = torch.tensor((average_obs - obs0))
 
 
 myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
+plt.axis('off')
+plt.savefig("{}_seed{}.png".format(env_name,start_level), format='png', dpi=300)
 plt.show()
 
 # myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1).int())
@@ -258,15 +277,17 @@ action = np.array([9])
 test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
-obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = test_env2._info['rgb'].transpose(0, 3, 1, 2)
 obs = torch.tensor(obs)
 obs_sum += obs
 num_steps += 1
 average_obs = (obs_sum/num_steps).int()
-diff_obs = torch.tensor((average_obs - obs0))
+# diff_obs = torch.tensor((average_obs - obs0))
 
 
 myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
+plt.axis('off')
+plt.savefig("{}_seed{}.png".format(env_name,start_level), format='png', dpi=300)
 plt.show()
 
 # myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1).int())
@@ -276,15 +297,17 @@ action = np.array([10])
 test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
-obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = test_env2._info['rgb'].transpose(0, 3, 1, 2)
 obs = torch.tensor(obs)
 obs_sum += obs
 num_steps += 1
 average_obs = (obs_sum/num_steps).int()
-diff_obs = torch.tensor((average_obs - obs0))
+# diff_obs = torch.tensor((average_obs - obs0))
 
 
 myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
+plt.axis('off')
+plt.savefig("{}_seed{}.png".format(env_name,start_level), format='png', dpi=300)
 plt.show()
 
 # myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1).int())
@@ -294,15 +317,17 @@ action = np.array([11])
 test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
-obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = test_env2._info['rgb'].transpose(0, 3, 1, 2)
 obs = torch.tensor(obs)
 obs_sum += obs
 num_steps += 1
 average_obs = (obs_sum/num_steps).int()
-diff_obs = torch.tensor((average_obs - obs0))
+# diff_obs = torch.tensor((average_obs - obs0))
 
 
 myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
+plt.axis('off')
+plt.savefig("{}_seed{}.png".format(env_name,start_level), format='png', dpi=300)
 plt.show()
 
 # myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1).int())
@@ -312,15 +337,17 @@ action = np.array([12])
 test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
-obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = test_env2._info['rgb'].transpose(0, 3, 1, 2)
 obs = torch.tensor(obs)
 obs_sum += obs
 num_steps += 1
 average_obs = (obs_sum/num_steps).int()
-diff_obs = torch.tensor((average_obs - obs0))
+# diff_obs = torch.tensor((average_obs - obs0))
 
 
 myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
+plt.axis('off')
+plt.savefig("{}_seed{}.png".format(env_name,start_level), format='png', dpi=300)
 plt.show()
 
 # myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1).int())
@@ -330,15 +357,17 @@ action = np.array([13])
 test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
-obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = test_env2._info['rgb'].transpose(0, 3, 1, 2)
 obs = torch.tensor(obs)
 obs_sum += obs
 num_steps += 1
 average_obs = (obs_sum/num_steps).int()
-diff_obs = torch.tensor((average_obs - obs0))
+# diff_obs = torch.tensor((average_obs - obs0))
 
 
 myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
+plt.axis('off')
+plt.savefig("{}_seed{}.png".format(env_name,start_level), format='png', dpi=300)
 plt.show()
 
 # myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1).int())
@@ -348,15 +377,17 @@ action = np.array([14])
 test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
-obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = test_env2._info['rgb'].transpose(0, 3, 1, 2)
 obs = torch.tensor(obs)
 obs_sum += obs
 num_steps += 1
 average_obs = (obs_sum/num_steps).int()
-diff_obs = torch.tensor((average_obs - obs0))
+# diff_obs = torch.tensor((average_obs - obs0))
 
 
 myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
+plt.axis('off')
+plt.savefig("{}_seed{}.png".format(env_name,start_level), format='png', dpi=300)
 plt.show()
 
 # myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1).int())
@@ -366,15 +397,17 @@ action = np.array([15])
 test_env2.act(action)
 
 rew, obs, first = test_env2.observe()
-obs = obs['rgb'].transpose(0, 3, 1, 2)
+obs = test_env2._info['rgb'].transpose(0, 3, 1, 2)
 obs = torch.tensor(obs)
 obs_sum += obs
 num_steps += 1
 average_obs = (obs_sum/num_steps).int()
-diff_obs = torch.tensor((average_obs - obs0))
+# diff_obs = torch.tensor((average_obs - obs0))
 
 
 myobj = plt.imshow(obs[0].transpose(0, 2).transpose(0, 1).int())
+plt.axis('off')
+plt.savefig("{}_seed{}.png".format(env_name,start_level), format='png', dpi=300)
 plt.show()
 
 # myobj = plt.imshow(diff_obs[0].transpose(0, 2).transpose(0, 1).int())

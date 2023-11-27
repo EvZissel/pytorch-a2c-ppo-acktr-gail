@@ -118,7 +118,7 @@ class VideoRecorderprocess(VideoRecorderWrapper):
         return na
 
 # test_start_level = 21i maze
-test_start_level = 259
+test_start_level = 263
 # test_env  = ProcgenConatEnvs(env_name=env_name,
 #                              num_envs=num_level,
 #                              start_level=test_start_level,
@@ -276,7 +276,8 @@ saved_epoch = 6102
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/bigfish_seed_1234_num_env_200_entro_0.01_gama_0.99_02-05-2023_10-29-48_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/miner_seed_1234_num_env_200_entro_0.01_gama_0.9_01-05-2023_12-56-50_original"
 # save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/starpilot_seed_1234_num_env_200_entro_0.01_gama_0.9_20-05-2023_19-55-30_original"
-save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_1234_num_env_200_entro_0.01_gama_0.5_28-04-2023_15-30-14_original"
+# save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_1234_num_env_200_entro_0.01_gama_0.5_28-04-2023_15-30-14_original"
+save_dir = "/home/ev/Desktop/pytorch-a2c-ppo-acktr-gail/ppo_log/heist_seed_1_num_env_200_entro_0.01_gama_0.5_18-08-2023_14-15-05_original"
 if (saved_epoch > 0) and save_dir != "":
     save_path = save_dir
     actor_critic_weighs = torch.load(os.path.join(save_path, env_name + "-epoch-{}.pt".format(saved_epoch)), map_location=device)
@@ -834,14 +835,14 @@ while not done[0] and iter<1000:
 
     # if (maxEnt_steps <= 0) and pure_action1 == pure_action2 == pure_action3 == pure_action4:
     # if (maxEnt_steps <= 0) and torch.var(torch.cat((value1,value2,value3,value4))) < 0.02:
-    if (maxEnt_steps <= 0) and cardinal_value >= 7:
+    if (maxEnt_steps <= 0) and cardinal_value >= 8:
     # if novel and pure_action1 == pure_action2 == pure_action3 == pure_action4:
     # if novel and pure_action1 == pure_action2 == pure_action3 == pure_action4 == pure_action5 == pure_action6 == pure_action7 == pure_action8 == pure_action9 == pure_action10:
     # if novel:
         # if step_count > 5:
         # action = action_NN
         # action = action_NN
-        action = action1
+        action = action5
         is_maxEnt = False
     else:
         maxEnt_steps = m.sample()
