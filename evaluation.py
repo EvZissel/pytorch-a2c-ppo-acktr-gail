@@ -30,15 +30,15 @@ def evaluate(actor_critic, obs_rms, eval_envs_dic, env_name, seed, num_processes
         # while len(eval_episode_rewards) < 1:
         for t in range(kwargs["steps"]):
             with torch.no_grad():
-                _, action, _, eval_recurrent_hidden_states, eval_attn_masks = actor_critic.act(
-                    obs,
+                _, action, _, _, eval_recurrent_hidden_states, eval_attn_masks, _, _, _ = actor_critic.act(
+                    obs.to(device),
                     eval_recurrent_hidden_states,
                     eval_masks,
                     attn_masks=eval_attn_masks,
                     deterministic=True)
 
             # Obser reward and next obs
-            obs, _, done, infos = eval_envs.step(action)
+            obs, _, done, infos = eval_envs.step(action.cpu())
             # if len(eval_episode_rewards) > 98:
             #     print(action)
             eval_masks = torch.tensor(

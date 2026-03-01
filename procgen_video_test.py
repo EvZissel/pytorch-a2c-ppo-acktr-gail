@@ -30,7 +30,8 @@ start_level = 0
 num_level = 1
 distribution_mode = "easy"
 seed = 0
-normalize_rew = Falseno_normalize = True
+normalize_rew = False
+no_normalize = True
 # n_steps = 1
 
 device = torch.device("cuda:{}".format(0))

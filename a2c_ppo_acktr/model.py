@@ -710,7 +710,7 @@ class MLPBase(NNBase):
 
         self.train()
 
-    def forward(self, inputs, rnn_hxs, masks, att_mask, reuse_masks=False):
+    def forward(self, inputs, rnn_hxs, masks, att_mask, attn_masks1, attn_masks2, attn_masks3, reuse_masks=False):
         x = inputs
 
         if self.is_recurrent:
@@ -719,7 +719,7 @@ class MLPBase(NNBase):
         hidden_critic = self.critic(x)
         hidden_actor = self.actor(x)
 
-        return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs, None, att_mask
+        return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs, None, att_mask, attn_masks1, attn_masks2, attn_masks3
 
 
 class MLPAttnBase(NNBase):

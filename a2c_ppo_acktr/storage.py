@@ -12,8 +12,9 @@ class RolloutStorage(object):
     def __init__(self, num_steps, num_processes, obs_shape, obs_shape_full, action_space,
                  recurrent_hidden_state_size, att_size=0, attention_features=False, device="cpu"):
         self.obs = torch.zeros(num_steps + 1, num_processes, *obs_shape)
-        self.obs_ds = torch.zeros(num_steps + 1, num_processes, *(obs_shape[0],int(obs_shape[1]/3),int(obs_shape[2]/3)))
-        self.obs_ds_sum = torch.zeros(num_steps + 1, num_processes, *(obs_shape[0],int(obs_shape[1]/3),int(obs_shape[2]/3)))
+        if len(obs_shape) > 1:
+            self.obs_ds = torch.zeros(num_steps + 1, num_processes, *(obs_shape[0],int(obs_shape[1]/3),int(obs_shape[2]/3)))
+            self.obs_ds_sum = torch.zeros(num_steps + 1, num_processes, *(obs_shape[0],int(obs_shape[1]/3),int(obs_shape[2]/3)))
         self.recurrent_hidden_states = torch.zeros(
             num_steps + 1, num_processes, recurrent_hidden_state_size)
         self.rewards = torch.zeros(num_steps, num_processes, 1)
@@ -56,8 +57,9 @@ class RolloutStorage(object):
 
     def to(self, device):
         self.obs = self.obs.to(device)
-        self.obs_ds = self.obs_ds.to(device)
-        self.obs_ds_sum = self.obs_ds_sum.to(device)
+        if hasattr(self, 'obs_ds') and self.obs_ds is not None:
+            self.obs_ds = self.obs_ds.to(device)
+            self.obs_ds_sum = self.obs_ds_sum.to(device)
         self.recurrent_hidden_states = self.recurrent_hidden_states.to(device)
         self.rewards = self.rewards.to(device)
         self.seeds = self.seeds.to(device)
@@ -84,32 +86,35 @@ class RolloutStorage(object):
         self.seeds[self.step].copy_(seeds)
         self.masks[self.step + 1].copy_(masks)
         self.bad_masks[self.step + 1].copy_(bad_masks)
-        # if attn_masks:
         self.attn_masks[self.step + 1].copy_(attn_masks)
-        self.attn_masks1[self.step + 1].copy_(attn_masks1)
-        self.attn_masks2[self.step + 1].copy_(attn_masks2)
-        self.attn_masks3[self.step + 1].copy_(attn_masks3)
+        if attn_masks1:
+            self.attn_masks1[self.step + 1].copy_(attn_masks1)
+            self.attn_masks2[self.step + 1].copy_(attn_masks2)
+            self.attn_masks3[self.step + 1].copy_(attn_masks3)
         self.info_batch.append(info)
-        self.obs_sum += 1 * ((obs_full.cpu() - self.obs_full).abs() > 1e-5) #we sum diffrences
-        # self.obs_sum += obs_full.cpu()
-        self.obs_full.copy_(obs_full)
+        if obs_full:
+            self.obs_sum += 1 * ((obs_full.cpu() - self.obs_full).abs() > 1e-5) #we sum diffrences
+            # self.obs_sum += obs_full.cpu()
+            self.obs_full.copy_(obs_full)
         self.step_env += 1
 
         self.step = (self.step + 1) % self.num_steps
 
     def after_update(self):
         self.obs[0].copy_(self.obs[-1])
-        self.obs_ds[0].copy_(self.obs_ds[-1])
-        self.obs_ds_sum[0].copy_(self.obs_ds_sum[-1])
+        if hasattr(self, 'obs_ds') and self.obs_ds is not None:
+            self.obs_ds[0].copy_(self.obs_ds[-1])
+            self.obs_ds_sum[0].copy_(self.obs_ds_sum[-1])
         # self.obs_sum.copy_(self.obs_full)
         self.obs_sum.copy_(torch.zeros_like(self.obs_full))
         self.recurrent_hidden_states[0].copy_(self.recurrent_hidden_states[-1])
         self.masks[0].copy_(self.masks[-1])
         self.bad_masks[0].copy_(self.bad_masks[-1])
         self.attn_masks[0].copy_(self.attn_masks[-1])
-        self.attn_masks1[0].copy_(self.attn_masks1[-1])
-        self.attn_masks2[0].copy_(self.attn_masks2[-1])
-        self.attn_masks3[0].copy_(self.attn_masks3[-1])
+        if hasattr(self, 'attn_masks1') and self.attn_masks1 is not None:
+            self.attn_masks1[0].copy_(self.attn_masks1[-1])
+            self.attn_masks2[0].copy_(self.attn_masks2[-1])
+            self.attn_masks3[0].copy_(self.attn_masks3[-1])
 
     def compute_returns(self,
                         next_value,

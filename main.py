@@ -23,8 +23,8 @@ from a2c_ppo_acktr.utils import save_obj, load_obj
 #              'ten_arms': ['h_bandit-randchoose-v5', 10],
 #              'many_arms': ['h_bandit-randchoose-v1', 100]}
 
-EVAL_ENVS = {'ten_arms': ['h_bandit-obs-randchoose-v5', 10],
-             'many_arms': ['h_bandit-obs-randchoose-v1', 100]}
+EVAL_ENVS = {'ten_arms': ['h_bandit-obs-weighted-v5', 10],
+             'many_arms': ['h_bandit-obs-weighted-v1', 100]}
 
 
 def main():
@@ -100,14 +100,14 @@ def main():
 
     print('making envs...')
     envs = make_vec_envs(args.env_name, args.seed, args.num_processes,
-                         args.gamma, args.log_dir, device, False, steps=args.task_steps,
+                         args.gamma, args.log_dir,  torch.device("cpu"), True, steps=args.task_steps,
                          free_exploration=args.free_exploration, recurrent=args.recurrent_policy,
                          obs_recurrent=args.obs_recurrent, multi_task=True)
 
     eval_envs_dic = {}
     for eval_disp_name, eval_env_name in EVAL_ENVS.items():
         eval_envs_dic[eval_disp_name] = make_vec_envs(eval_env_name[0], args.seed, args.num_processes,
-                                                      None, logdir, device, True, steps=args.task_steps,
+                                                      None, logdir, torch.device("cpu"), True, steps=args.task_steps,
                                                       recurrent=args.recurrent_policy,
                                                       obs_recurrent=args.obs_recurrent, multi_task=True,
                                                       free_exploration=args.free_exploration)
@@ -158,8 +158,8 @@ def main():
         weight_decay=args.weight_decay)
 
     rollouts = RolloutStorage(args.num_steps, args.num_processes,
-                              envs.observation_space.shape, envs.action_space,
-                              actor_critic.recurrent_hidden_state_size)
+                              envs.observation_space.shape, envs.observation_space.shape, envs.action_space,
+                              actor_critic.recurrent_hidden_state_size, device=device)
 
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
@@ -179,13 +179,13 @@ def main():
             # Sample actions
             actor_critic.eval()
             with torch.no_grad():
-                value, action, action_log_prob, recurrent_hidden_states, attn_masks = actor_critic.act(
+                value, action, action_log_prob, dist_probs, recurrent_hidden_states, attn_masks, attn_masks1, attn_masks2, attn_masks3 = actor_critic.act(
                     rollouts.obs[step], rollouts.recurrent_hidden_states[step],
                     rollouts.masks[step], rollouts.attn_masks[step])
             actor_critic.train()
 
             # Obser reward and next obs
-            obs, reward, done, infos = envs.step(action)
+            obs, reward, done, infos = envs.step(action.cpu())
 
             for info in infos:
                 if 'episode' in info.keys():
@@ -200,13 +200,13 @@ def main():
                 [[0.0] if 'bad_transition' in info.keys() else [1.0]
                  for info in infos])
             rollouts.insert(obs, recurrent_hidden_states, action,
-                            action_log_prob, value, reward, masks, bad_masks, attn_masks, seeds)
+                            action_log_prob, value, torch.from_numpy(reward).unsqueeze(1), masks, bad_masks, attn_masks, attn_masks1, attn_masks2, attn_masks3, seeds, infos, None)
 
         actor_critic.eval()
         with torch.no_grad():
             next_value = actor_critic.get_value(
                 rollouts.obs[-1], rollouts.recurrent_hidden_states[-1],
-                rollouts.masks[-1], rollouts.attn_masks[-1]).detach()
+                rollouts.masks[-1], rollouts.attn_masks[-1], attn_masks1, attn_masks2, attn_masks3).detach()
         actor_critic.train()
 
         rollouts.compute_returns(next_value, args.use_gae, args.gamma,
@@ -216,7 +216,7 @@ def main():
             prev_opt_state = copy.deepcopy(agent.optimizer.state_dict())
             save_copy = False
 
-        value_loss, action_loss, dist_entropy = agent.update(rollouts)
+        value_loss, action_loss, dist_entropy, _ = agent.update(rollouts)
 
         rollouts.after_update()
 
